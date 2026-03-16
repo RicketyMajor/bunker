@@ -1,0 +1,11 @@
+annotated-doc==0.0.4
+asgiref==3.11.1
+click==8.3.1
+Django==6.0.3
+markdown-it-py==4.0.0
+mdurl==0.1.2
+Pygments==2.19.2
+rich==14.3.3
+shellingham==1.5.4
+sqlparse==0.5.5
+typer==0.24.1
