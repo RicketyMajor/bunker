@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Escáner de Biblioteca</title>
+    <script
+      src="https://unpkg.com/html5-qrcode"
+      type="text/javascript"
+    ></script>
+
     <style>
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -19,33 +24,69 @@
       p {
         color: #aaaaaa;
       }
-      /* El contenedor donde vivirá la cámara */
+
+      /* Contenedor del escáner */
       #reader {
         width: 100%;
         max-width: 500px;
         margin: 20px auto;
-        border: 2px dashed #00d2ff;
+        background: #ffffff; /* Fondo blanco para que los controles de la cámara se vean bien */
+        color: #000000;
         border-radius: 10px;
-        background: #2d2d2d;
-        min-height: 300px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        overflow: hidden;
       }
+
       #status {
         margin-top: 20px;
         font-size: 1.2rem;
         font-weight: bold;
         color: #ffcc00;
+        padding: 10px;
       }
     </style>
   </head>
   <body>
     <h1>📚 Escáner de Biblioteca</h1>
-    <p>Apunta la cámara de tu teléfono al código de barras del libro.</p>
+    <p>Apunta la cámara al código de barras o sube una imagen.</p>
 
-    <div id="reader">Cargando cámara...</div>
+    <div id="reader"></div>
 
-    <p id="status">Esperando escanear...</p>
+    <div id="status">Esperando escáner...</div>
+
+    <script>
+      // 2. Función que se ejecuta cuando el escáner lee algo con éxito
+      function onScanSuccess(decodedText, decodedResult) {
+        // Cambiamos el texto de la pantalla para mostrar el código
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerText = "✅ ISBN Detectado: " + decodedText;
+        statusDiv.style.color = "#00ff00";
+
+        // Detenemos el escáner para que no lea el mismo código 20 veces por segundo
+        html5QrcodeScanner
+          .clear()
+          .then(() => {
+            console.log("Escáner detenido tras lectura exitosa.");
+            // NOTA: Aquí es donde, en la Fase 7.3, enviaremos 'decodedText' a Django
+          })
+          .catch((error) => {
+            console.error("Fallo al detener el escáner.", error);
+          });
+      }
+
+      // 3. Configuración del escáner
+      let html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        {
+          fps: 10, // Cuadros por segundo (balance entre velocidad y batería)
+          qrbox: { width: 250, height: 150 }, // El área de escaneo (rectangular para libros)
+          // Restringimos al formato EAN_13 (El estándar mundial para ISBNs de libros modernos)
+          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+        },
+        /* verbose= */ false,
+      );
+
+      // 4. Iniciamos el escáner en la pantalla
+      html5QrcodeScanner.render(onScanSuccess, undefined);
+    </script>
   </body>
 </html>
