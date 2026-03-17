@@ -31,6 +31,15 @@ services:
       - POSTGRES_HOST=db  # ¡Magia de Docker! El host es el nombre del servicio 'db'
       - POSTGRES_PORT=5432
 
+# --- Microservicio Node.js ---
+  scraper:
+    build: ./scraper # Le indicamos que busque el Dockerfile en la carpeta scraper
+    volumes:
+      - ./scraper:/app # Sincronizamos los archivos en vivo para desarrollo
+      - /app/node_modules # Evitamos sobreescribir los módulos de Node del contenedor
+    depends_on:
+      - web # El scraper necesita que Django esté vivo para poder enviarle datos
+
 # Definimos el volumen persistente para que los datos sobrevivan a reinicios
 volumes:
   postgres_data:
