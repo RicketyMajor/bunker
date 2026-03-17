@@ -46,8 +46,8 @@ class Book(models.Model):
     # Sistema de control para Cómics/Mangas
     is_series = models.BooleanField(default=False)
     total_volumes = models.IntegerField(null=True, blank=True)
-    owned_volumes = models.CharField(
-        max_length=255, null=True, blank=True)
+    owned_volumes = models.CharField(max_length=255, null=True, blank=True)
+    anthology_stories = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return self.title

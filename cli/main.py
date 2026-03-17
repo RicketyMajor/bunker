@@ -1,24 +1,28 @@
 from cli.loans import loan_app
-from cli.books import book_app
+from cli.books_write import app as write_app
+from cli.books_read import app as read_app
 import os
 import django
 import typer
 
-# 1. Configuración de Django (Debe ir estrictamente al principio)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'library_manager.settings')
 django.setup()
 
-# 2. Importaciones Locales (Solo se importan después de configurar Django)
-# Al ejecutar desde la raíz, Python reconoce la carpeta 'cli' como un paquete
+# Importamos las "mini-apps" que creamos
 
-# 3. Inicializar Typer principal
+# 1. Inicializar Typer principal
 app = typer.Typer(
     help="CLI tool to manage my personal library.", no_args_is_help=True)
 
-# 4. Conectar los submódulos
+# 2. Unimos los módulos de libros en un solo comando unificado llamado "book"
+book_app = typer.Typer(
+    help="Manage your books, comics, and mangas.", no_args_is_help=True)
+book_app.add_typer(read_app, name="")  # Funciones de lista y detalles
+book_app.add_typer(write_app, name="")  # Funciones de agregar, editar, borrar
+
+# 3. Conectamos los subcomandos al CLI principal
 app.add_typer(book_app, name="book")
 app.add_typer(loan_app, name="loan")
 
-# 5. Ejecución
 if __name__ == "__main__":
     app()

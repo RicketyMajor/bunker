@@ -69,10 +69,12 @@ def list_books(
         author_name = book.author.name if book.author else "Unknown"
         is_read_status = "[bold green]✅[/bold green]" if book.is_read else "[bold red]❌[/bold red]"
 
+        # Construcción visual del título
         title_display = f"[bold]{book.title}[/bold]"
         if book.is_series:
             title_display += f"\n[dim cyan]↳ Serie (Vols: {book.owned_volumes or 'N/A'})[/dim cyan]"
-
+        elif book.format_type == 'ANTHOLOGY' and book.anthology_stories:
+            title_display += f"\n[dim cyan]↳ Antología ({len(book.anthology_stories)} cuentos)[/dim cyan]"
         active_loan = book.loan_set.filter(returned=False).first()
         if active_loan:
             status_display = f"[bold yellow]Lent to: {active_loan.friend.name}[/bold yellow]"
@@ -118,23 +120,38 @@ def add_book():
             owned_volumes = Prompt.ask(
                 "Which volumes do you own? (e.g., 1, 2, 3 or 1-5)")
 
-    genres_input = Prompt.ask("Genres (comma-separated)")
-    is_read = Confirm.ask("Have you read this completely?")
-
     author, _ = Author.objects.get_or_create(
         name=author_name.strip()) if author_name else (None, False)
+
+    # --- NUEVA LÓGICA DE ANTOLOGÍAS ---
+    anthology_stories = []
+    if format_type == "ANTHOLOGY":
+        num_stories = IntPrompt.ask(
+            "How many stories/tales are in this anthology?", default=0)
+        if num_stories > 0:
+            console.print("[dim]Please enter the title of each story:[/dim]")
+            for i in range(num_stories):
+                story_title = Prompt.ask(f"  Story {i+1}")
+                if story_title.strip():
+                    anthology_stories.append(story_title.strip())
+
+    # Y en el Book.objects.create(), asegúrate de añadir el campo:
+    # anthology_stories=anthology_stories
 
     book = Book.objects.create(
         title=title.strip(), author=author, publisher=publisher,
         format_type=format_type, is_read=is_read,
-        is_series=is_series, total_volumes=total_volumes, owned_volumes=owned_volumes
+        is_series=is_series, total_volumes=total_volumes, owned_volumes=owned_volumes, anthology_stories=anthology_stories
     )
+
+    genres_input = Prompt.ask("Genres (comma-separated)")
 
     if genres_input:
         for g_name in [g.strip() for g in genres_input.split(',') if g.strip()]:
             genre, _ = Genre.objects.get_or_create(name=g_name)
             book.genres.add(genre)
 
+    is_read = Confirm.ask("Have you read this completely?")
     console.print(
         f"\n[bold green]✅ Successfully added '{book.title}'![/bold green]\n")
 
@@ -209,11 +226,17 @@ def show_details(book_id: int = typer.Argument(..., help="The ID of the book/ser
     if book.page_count:
         content += f"[bold]Pages:[/bold] {book.page_count} pages\n"
 
-    # Información si es cómic/manga
+   # Información si es cómic/manga
     if book.is_series:
         content += f"\n[bold cyan]--- Series Info ---[/bold cyan]\n"
         content += f"[bold]Total Volumes Released:[/bold] {book.total_volumes or 'Unknown'}\n"
         content += f"[bold]Volumes Owned:[/bold] {book.owned_volumes or 'None'}\n"
+
+    # Información si es antología
+    if book.format_type == 'ANTHOLOGY' and book.anthology_stories:
+        content += f"\n[bold cyan]--- Anthology Stories ---[/bold cyan]\n"
+        for idx, story in enumerate(book.anthology_stories, 1):
+            content += f"[dim]{idx}. {story}[/dim]\n"
 
     # Agregamos la descripción/sinopsis si existe
     if book.description:
@@ -270,10 +293,24 @@ def fetch_book(isbn: str = typer.Argument(..., help="The ISBN of the book to fet
     # Preguntamos cosas que la API no sabe (si lo leíste y el formato)
     format_type = Prompt.ask(
         "Format", choices=["NOVEL", "COMIC", "MANGA", "ANTHOLOGY"], default="NOVEL")
-    is_read = Confirm.ask("Have you read this book?")
 
     # Guardamos en la base de datos con los nuevos campos
     author, _ = Author.objects.get_or_create(name=book_data['author'].strip())
+
+    # --- NUEVA LÓGICA DE ANTOLOGÍAS ---
+    anthology_stories = []
+    if format_type == "ANTHOLOGY":
+        num_stories = IntPrompt.ask(
+            "How many stories/tales are in this anthology?", default=0)
+        if num_stories > 0:
+            console.print("[dim]Please enter the title of each story:[/dim]")
+            for i in range(num_stories):
+                story_title = Prompt.ask(f"  Story {i+1}")
+                if story_title.strip():
+                    anthology_stories.append(story_title.strip())
+
+    # Y en el Book.objects.create(), asegúrate de añadir el campo:
+    # anthology_stories=anthology_stories
 
     book = Book.objects.create(
         title=book_data['title'].strip(),
@@ -285,7 +322,8 @@ def fetch_book(isbn: str = typer.Argument(..., help="The ISBN of the book to fet
         page_count=book_data['page_count'] or None,
         publish_date=book_data['publish_date'],
         cover_url=book_data['cover_url'],
-        description=book_data['description']
+        description=book_data['description'],
+        anthology_stories=anthology_stories
     )
 
     # Procesamos los géneros que trajo la API
@@ -296,5 +334,33 @@ def fetch_book(isbn: str = typer.Argument(..., help="The ISBN of the book to fet
         genre, _ = Genre.objects.get_or_create(name=clean_category)
         book.genres.add(genre)
 
+    is_read = Confirm.ask("Have you read this book?")
+
     console.print(
         f"\n[bold green]✅ Successfully auto-imported '{book.title}'![/bold green]\n")
+
+
+@book_app.command(name="delete")
+def delete_book(book_id: int = typer.Argument(..., help="The ID of the book to delete")):
+    """Permanently delete a book from your library."""
+    from catalog.models import Book
+
+    try:
+        book = Book.objects.get(id=book_id)
+    except Book.DoesNotExist:
+        console.print("[bold red]❌ Book not found.[/bold red]")
+        return
+
+    # Imprimimos una advertencia clara
+    console.print(
+        f"\n[bold red]⚠️  WARNING: You are about to delete '{book.title}'.[/bold red]")
+    console.print(
+        "[dim]This action cannot be undone and will erase all loan records for this book.[/dim]\n")
+
+    if Confirm.ask("Are you absolutely sure you want to delete this book?"):
+        book.delete()
+        console.print(
+            "\n[bold green]✅ Book permanently deleted from your library.[/bold green]\n")
+    else:
+        console.print(
+            "\n[yellow]Operation cancelled. Your book is safe.[/yellow]\n")

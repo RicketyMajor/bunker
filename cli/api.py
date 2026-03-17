@@ -29,9 +29,19 @@ def fetch_book_by_isbn(isbn: str) -> Optional[Dict]:
         publishers = book_info.get("publishers", [{"name": ""}])
         subjects = book_info.get("subjects", [])
 
-        notes = book_info.get("notes", "")
-        if isinstance(notes, dict):
-            notes = notes.get("value", "")
+        # Buscamos la descripción real primero
+        description_data = book_info.get("description", "")
+        if isinstance(description_data, dict):
+            description_data = description_data.get("value", "")
+
+        # Buscamos las notas como respaldo
+        notes_data = book_info.get("notes", "")
+        if isinstance(notes_data, dict):
+            notes_data = notes_data.get("value", "")
+
+        # Nos quedamos con la descripción si existe, sino usamos las notas
+        final_description = description_data.strip(
+        ) if description_data else notes_data.strip()
 
         cover_info = book_info.get("cover", {})
         cover_url = cover_info.get("large") or cover_info.get("medium") or ""
@@ -45,7 +55,7 @@ def fetch_book_by_isbn(isbn: str) -> Optional[Dict]:
             "page_count": book_info.get("number_of_pages", 0),
             "publish_date": book_info.get("publish_date", ""),
             "cover_url": cover_url,
-            "description": notes,
+            "description": final_description,  # Usamos nuestra nueva variable mejorada
         }
 
     except requests.exceptions.Timeout:
