@@ -36,6 +36,13 @@ class Book(models.Model):
     publisher = models.CharField(
         max_length=200, null=True, blank=True)  # Editorial
 
+    # --- NUEVOS CAMPOS DE METADATOS ---
+    subtitle = models.CharField(max_length=255, null=True, blank=True)
+    page_count = models.IntegerField(null=True, blank=True)
+    publish_date = models.CharField(max_length=50, null=True, blank=True)
+    cover_url = models.URLField(max_length=500, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+
     # Sistema de control para Cómics/Mangas
     is_series = models.BooleanField(default=False)
     total_volumes = models.IntegerField(null=True, blank=True)
