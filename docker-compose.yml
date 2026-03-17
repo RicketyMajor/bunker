@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # 1. El contenedor de la base de datos
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=library_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=supersecret
+    ports:
+      - "5433:5432"
+
+  # 2. El contenedor de tu aplicación Django / CLI
+  web:
+    build: .
+    # Sincronizamos la carpeta actual con el contenedor para no tener que reconstruir 
+    # la imagen cada vez que edites una línea de código en Python.
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - POSTGRES_DB=library_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=supersecret
+      - POSTGRES_HOST=db  # ¡Magia de Docker! El host es el nombre del servicio 'db'
+      - POSTGRES_PORT=5432
+
+# Definimos el volumen persistente para que los datos sobrevivan a reinicios
+volumes:
+  postgres_data:
