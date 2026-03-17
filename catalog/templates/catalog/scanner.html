@@ -54,38 +54,71 @@
     <div id="status">Esperando escáner...</div>
 
     <script>
-      // 2. Función que se ejecuta cuando el escáner lee algo con éxito
-      function onScanSuccess(decodedText, decodedResult) {
-        // Cambiamos el texto de la pantalla para mostrar el código
-        const statusDiv = document.getElementById("status");
-        statusDiv.innerText = "✅ ISBN Detectado: " + decodedText;
-        statusDiv.style.color = "#00ff00";
+      // Inyectamos el token de seguridad de Django directamente en JavaScript
+      const csrfToken = "{{ csrf_token }}";
 
-        // Detenemos el escáner para que no lea el mismo código 20 veces por segundo
+      // Función que se ejecuta cuando el escáner lee algo con éxito
+      function onScanSuccess(decodedText, decodedResult) {
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerText = "⏳ Procesando ISBN: " + decodedText + "...";
+        statusDiv.style.color = "#00d2ff";
+
+        // 1. Detenemos la cámara
         html5QrcodeScanner
           .clear()
           .then(() => {
-            console.log("Escáner detenido tras lectura exitosa.");
-            // NOTA: Aquí es donde, en la Fase 7.3, enviaremos 'decodedText' a Django
+            // 2. Enviamos el ISBN a nuestro servidor Django (El Backend)
+            fetch("/api/books/scan/", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken, // El token de seguridad de Django
+              },
+              body: JSON.stringify({
+                isbn: decodedText,
+              }),
+            })
+              .then((response) =>
+                response
+                  .json()
+                  .then((data) => ({ status: response.status, body: data })),
+              )
+              .then((res) => {
+                // 3. Manejamos la respuesta del servidor
+                if (res.status === 201 || res.status === 200) {
+                  // Éxito: El libro se guardó o ya existía
+                  statusDiv.innerText =
+                    res.body.message || "✅ Libro agregado con éxito.";
+                  statusDiv.style.color = "#00ff00";
+                } else {
+                  // Error: No se encontró en OpenLibrary o faltó un dato
+                  statusDiv.innerText =
+                    "❌ Error: " +
+                    (res.body.error || "No se pudo agregar el libro.");
+                  statusDiv.style.color = "#ff4444";
+                }
+              })
+              .catch((error) => {
+                console.error("Error en la petición:", error);
+                statusDiv.innerText = "❌ Error de conexión con el servidor.";
+                statusDiv.style.color = "#ff4444";
+              });
           })
           .catch((error) => {
             console.error("Fallo al detener el escáner.", error);
           });
       }
 
-      // 3. Configuración del escáner
       let html5QrcodeScanner = new Html5QrcodeScanner(
         "reader",
         {
-          fps: 10, // Cuadros por segundo (balance entre velocidad y batería)
-          qrbox: { width: 250, height: 150 }, // El área de escaneo (rectangular para libros)
-          // Restringimos al formato EAN_13 (El estándar mundial para ISBNs de libros modernos)
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
           formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
         },
-        /* verbose= */ false,
+        false,
       );
 
-      // 4. Iniciamos el escáner en la pantalla
       html5QrcodeScanner.render(onScanSuccess, undefined);
     </script>
   </body>
