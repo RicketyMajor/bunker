@@ -1,33 +1,14 @@
-import os
-import django
 import typer
-from typing import Optional  # <-- NUEVO
+from typing import Optional
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, Confirm, IntPrompt
 from rich import box
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'library_manager.settings')
-django.setup()
-
-# --- INICIALIZAR TYPER Y RICH ---
-# La app principal que contendrá los subcomandos
-app = typer.Typer(
-    help="CLI tool to manage my personal library.", no_args_is_help=True)
-
-# Creamos los grupos lógicos
+# Inicializamos el grupo de comandos y la consola para este archivo
 book_app = typer.Typer(
     help="Manage your books, comics, and mangas.", no_args_is_help=True)
-loan_app = typer.Typer(
-    help="Manage book loans to friends.", no_args_is_help=True)
-
-# Conectamos los grupos a la app principal
-app.add_typer(book_app, name="book")
-app.add_typer(loan_app, name="loan")
-
 console = Console()
-
-# --- 1. LEER (LISTA GENERAL Y BÚSQUEDA) ---
 
 
 @book_app.command(name="list")
@@ -46,12 +27,9 @@ def list_books(
     """Fetches, filters, and displays books in the library."""
     from catalog.models import Book
 
-    # 1. Consulta base
     query = Book.objects.all()
 
-    # 2. Aplicar filtros dinámicos si el usuario pasó argumentos
     if search:
-        # icontains busca coincidencias ignorando mayúsculas
         query = query.filter(title__icontains=search)
     if author:
         query = query.filter(author__name__icontains=author)
@@ -62,17 +40,13 @@ def list_books(
     if unread:
         query = query.filter(is_read=False)
 
-    # 3. Orden alfabético por título y eliminar duplicados (por si un libro tiene varios géneros)
     books = query.order_by('title').distinct()
-
-    # ... código anterior de list_books (filtros y query) ...
 
     if not books:
         console.print(
             "[bold yellow]No books found matching your criteria.[/bold yellow]")
         return
 
-    # 4. Diseño de tabla mejorado con estilo ROUNDED y contador
     table = Table(
         title="📚 [bold gold1]My Personal Library[/bold gold1]",
         title_justify="center",
@@ -84,9 +58,8 @@ def list_books(
     table.add_column("ID", style="cyan", justify="right")
     table.add_column("Title", style="magenta")
     table.add_column("Author", style="green")
-    table.add_column("Publisher", style="yellow")  # <-- NUEVA COLUMNA
+    table.add_column("Publisher", style="yellow")
     table.add_column("Format", style="blue")
-    # <-- NUEVA COLUMNA (Prestado/En Biblioteca)
     table.add_column("Status", justify="center")
     table.add_column("Read", justify="center")
 
@@ -94,34 +67,24 @@ def list_books(
         author_name = book.author.name if book.author else "Unknown"
         is_read_status = "[bold green]✅[/bold green]" if book.is_read else "[bold red]❌[/bold red]"
 
-        # Construcción visual del título
         title_display = f"[bold]{book.title}[/bold]"
         if book.is_series:
             title_display += f"\n[dim cyan]↳ Serie (Vols: {book.owned_volumes or 'N/A'})[/dim cyan]"
 
-        # Lógica para determinar el estado del préstamo
-        # Buscamos si hay algún préstamo asociado a este libro que NO haya sido devuelto
         active_loan = book.loan_set.filter(returned=False).first()
-
         if active_loan:
             status_display = f"[bold yellow]Lent to: {active_loan.friend.name}[/bold yellow]"
         else:
             status_display = "[dim green]In Library[/dim green]"
 
         table.add_row(
-            str(book.id),
-            title_display,
-            author_name,
-            book.publisher or "-",  # Muestra "-" si no hay editorial
-            book.get_format_type_display(),
-            status_display,
-            is_read_status
+            str(book.id), title_display, author_name,
+            book.publisher or "-", book.get_format_type_display(),
+            status_display, is_read_status
         )
 
     console.print(table)
     print("\n")
-
-# --- 2. AÑADIR ---
 
 
 @book_app.command(name="add")
@@ -141,7 +104,6 @@ def add_book():
     format_type = Prompt.ask(
         "Format", choices=["NOVEL", "COMIC", "MANGA", "ANTHOLOGY"], default="NOVEL")
 
-    # Lógica condicional para Mangas y Cómics
     is_series = False
     total_volumes = None
     owned_volumes = ""
@@ -174,8 +136,6 @@ def add_book():
     console.print(
         f"\n[bold green]✅ Successfully added '{book.title}'![/bold green]\n")
 
-# --- 3. EDITAR ---
-
 
 @book_app.command(name="edit")
 def edit_book(book_id: int = typer.Argument(..., help="The ID of the book to edit")):
@@ -191,7 +151,6 @@ def edit_book(book_id: int = typer.Argument(..., help="The ID of the book to edi
 
     console.print(f"\n[bold cyan]✏️  Editing: {book.title}[/bold cyan]\n")
 
-    # Se pide la nueva información, usando la actual como valor por defecto
     new_title = Prompt.ask("Title", default=book.title)
     current_author = book.author.name if book.author else ""
     new_author = Prompt.ask("Author", default=current_author)
@@ -204,8 +163,6 @@ def edit_book(book_id: int = typer.Argument(..., help="The ID of the book to edi
     book.save()
     console.print(
         f"\n[bold green]✅ Book ID {book.id} successfully updated![/bold green]\n")
-
-# --- 4. DETALLES DE SERIE ---
 
 
 @book_app.command(name="details")
@@ -231,98 +188,3 @@ def show_details(book_id: int = typer.Argument(..., help="The ID of the book/ser
         console.print(
             f"[bold green]Volumes Owned:[/bold green] {book.owned_volumes or 'None'}")
     print("\n")
-
-# --- GRUPO: PRÉSTAMOS (LOANS) ---
-
-
-@loan_app.command(name="lend")
-def lend_book():
-    """Lend a book to a friend."""
-    from catalog.models import Book, Friend, Loan
-
-    console.print("\n[bold cyan]🤝 Lend a Book[/bold cyan]\n")
-
-    book_id = typer.prompt("Enter the Book ID you want to lend", type=int)
-    try:
-        book = Book.objects.get(id=book_id)
-    except Book.DoesNotExist:
-        console.print("[bold red]❌ Book not found.[/bold red]")
-        return
-
-    friend_name = Prompt.ask("Friend's Name")
-
-    # Buscamos al amigo o lo creamos
-    friend, _ = Friend.objects.get_or_create(name=friend_name.strip())
-
-    # Registramos el préstamo
-    Loan.objects.create(book=book, friend=friend)
-
-    console.print(
-        f"\n[bold green]✅ '{book.title}' has been lent to {friend.name}![/bold green]")
-    console.print("[dim]They have 30 days to return it.[/dim]\n")
-
-
-@loan_app.command(name="status")
-def loan_status():
-    """View all active loans and due dates."""
-    from catalog.models import Loan
-    from django.utils import timezone
-
-    # Filtramos los préstamos que aún no han sido devueltos
-    active_loans = Loan.objects.filter(returned=False).order_by('due_date')
-
-    if not active_loans:
-        console.print(
-            "[bold green]No active loans. All your books are safely home![/bold green]")
-        return
-
-    table = Table(title="🤝 Active Loans", box=box.ROUNDED,
-                  header_style="bold cyan")
-    table.add_column("Loan ID", justify="right", style="cyan")
-    table.add_column("Book", style="magenta")
-    table.add_column("Friend", style="green")
-    table.add_column("Due Date", justify="center")
-    table.add_column("Status", justify="center")
-
-    today = timezone.now().date()
-
-    for loan in active_loans:
-        # Lógica visual para saber si un préstamo está atrasado
-        if loan.due_date < today:
-            status = "[bold red]OVERDUE![/bold red]"
-            due_str = f"[bold red]{loan.due_date}[/bold red]"
-        else:
-            status = "[green]On time[/green]"
-            due_str = str(loan.due_date)
-
-        table.add_row(
-            str(loan.id), loan.book.title, loan.friend.name, due_str, status
-        )
-
-    console.print(table)
-    print("\n")
-
-
-@loan_app.command(name="return")
-def return_book(loan_id: int = typer.Argument(..., help="The ID of the loan to mark as returned")):
-    """Mark a lent book as returned."""
-    from catalog.models import Loan
-
-    try:
-        loan = Loan.objects.get(id=loan_id)
-        if loan.returned:
-            console.print(
-                "[bold yellow]This book was already returned.[/bold yellow]")
-            return
-
-        loan.returned = True
-        loan.save()
-        console.print(
-            f"[bold green]✅ Awesome! '{loan.book.title}' has been returned by {loan.friend.name}.[/bold green]")
-
-    except Loan.DoesNotExist:
-        console.print("[bold red]❌ Loan ID not found.[/bold red]")
-
-
-if __name__ == "__main__":
-    app()
