@@ -1,21 +1,29 @@
 import typer
+import httpx
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
 from rich import box
-from rich.panel import Panel
 
 console = Console()
 wishlist_app = typer.Typer(
     help="Manage your Wishlist and Scraper Watchers.", no_args_is_help=True)
 
+# Las URLs de nuestra nueva API automática
+API_WISHLIST = "http://localhost:8000/api/books/wishlist-crud/"
+API_WATCHERS = "http://localhost:8000/api/books/watchers-crud/"
+
 
 @wishlist_app.command(name="list")
 def list_wishlist():
-    """Muestra los lanzamientos atrapados por el scraper."""
-    from catalog.models import WishlistItem
-
-    items = WishlistItem.objects.all().order_by('-date_found')
+    """Muestra los lanzamientos atrapados por el scraper consumiendo la API."""
+    try:
+        response = httpx.get(API_WISHLIST)
+        response.raise_for_status()
+        items = response.json()
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        return
 
     if not items:
         console.print(
@@ -32,67 +40,66 @@ def list_wishlist():
     table.add_column("Título", style="bold white")
     table.add_column("Editorial", style="yellow")
     table.add_column("Precio", style="green")
-    table.add_column("Encontrado el", style="cyan")
+    table.add_column("Fecha", style="cyan")
 
     for item in items:
-        date_str = item.date_found.strftime("%Y-%m-%d")
-        table.add_row(str(item.id), item.title,
-                      item.publisher or "-", item.price or "-", date_str)
+        # Acortamos la fecha que viene del JSON (ej. "2026-03-17T12:00:00Z" -> "2026-03-17")
+        date_str = item.get('date_found', '')[:10]
+        table.add_row(
+            str(item.get('id')),
+            item.get('title'),
+            item.get('publisher') or "-",
+            item.get('price') or "-",
+            date_str
+        )
 
     console.print(table)
-    console.print(
-        "\n[dim]Usa 'python -m cli.main wishlist details <ID>' para ver el link de compra.[/dim]\n")
 
 
 @wishlist_app.command(name="watch")
 def add_watcher():
-    """Añade un autor, manga o palabra clave para que el scraper lo vigile."""
-    from catalog.models import Watcher
-
+    """Añade un autor, manga o palabra clave mediante un POST a la API."""
     console.print(
         "\n[bold cyan]👁️  Añadir a la Lista de Vigilancia[/bold cyan]")
-    console.print(
-        "[dim]El scraper buscará estas palabras clave todos los días en las editoriales.[/dim]\n")
-
-    keyword = Prompt.ask(
-        "Palabra clave a vigilar (ej. 'Tatsuki Fujimoto' o 'Chainsaw Man')")
+    keyword = Prompt.ask("Palabra clave a vigilar (ej. 'Tatsuki Fujimoto')")
 
     if not keyword.strip():
         console.print("[red]❌ La palabra clave no puede estar vacía.[/red]")
         return
 
-    watcher, created = Watcher.objects.get_or_create(keyword=keyword.strip())
+    try:
+        # Enviamos un POST al servidor para crear la palabra clave
+        response = httpx.post(API_WATCHERS, json={
+                              "keyword": keyword.strip(), "is_active": True})
 
-    if created:
-        console.print(
-            f"\n[bold green]✅ ¡Ojos abiertos! El scraper ahora vigilará: '{watcher.keyword}'[/bold green]\n")
-    else:
-        # Si ya existía pero estaba desactivado, lo reactivamos
-        if not watcher.is_active:
-            watcher.is_active = True
-            watcher.save()
+        if response.status_code == 201:
             console.print(
-                f"\n[bold green]✅ Vigilancia reactivada para: '{watcher.keyword}'[/bold green]\n")
+                f"\n[bold green]✅ ¡Ojos abiertos! El scraper ahora vigilará: '{keyword}'[/bold green]\n")
+        elif response.status_code == 400:
+            console.print(
+                f"\n[yellow]⚠️ Esa palabra clave ya está en tu lista de vigilancia.[/yellow]\n")
         else:
-            console.print(
-                f"\n[yellow]⚠️ Ya estabas vigilando '{watcher.keyword}'.[/yellow]\n")
+            console.print(f"[red]❌ Error del servidor: {response.text}[/red]")
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
 
 
 @wishlist_app.command(name="delete")
 def delete_wishlist_item(item_id: int = typer.Argument(..., help="ID del lanzamiento a eliminar")):
-    """Elimina un libro del tablón de deseos (si ya lo compraste o no te interesa)."""
-    from catalog.models import WishlistItem
-
-    try:
-        item = WishlistItem.objects.get(id=item_id)
-    except WishlistItem.DoesNotExist:
-        console.print(
-            "[bold red]❌ Libro no encontrado en el tablón.[/bold red]")
-        return
-
-    if Confirm.ask(f"¿Estás seguro de eliminar '{item.title}' de tu tablón?"):
-        item.delete()
-        console.print(
-            "\n[bold green]✅ Eliminado correctamente del tablón.[/bold green]\n")
+    """Elimina un libro del tablón de deseos mediante un DELETE a la API."""
+    if Confirm.ask(f"¿Estás seguro de eliminar el ítem #{item_id} de tu tablón?"):
+        try:
+            # Enviamos la petición DELETE a la URL específica del ítem (ej. .../wishlist-crud/5/)
+            response = httpx.delete(f"{API_WISHLIST}{item_id}/")
+            # 204 significa "No Content" (Borrado exitoso en DRF)
+            if response.status_code == 204:
+                console.print(
+                    "\n[bold green]✅ Eliminado correctamente del tablón.[/bold green]\n")
+            else:
+                console.print(
+                    f"[red]❌ No se pudo eliminar. ¿Estás seguro de que el ID {item_id} existe?[/red]")
+        except Exception as e:
+            console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
     else:
         console.print("\n[yellow]Operación cancelada.[/yellow]\n")
