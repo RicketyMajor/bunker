@@ -19,35 +19,34 @@ class Genre(models.Model):
 
 
 class Book(models.Model):
-    FORMAT_CHOICES = [
-        ('NOVEL', 'Novel'),
-        ('COMIC', 'Comic Book'),
-        ('MANGA', 'Manga'),
-        ('ANTHOLOGY', 'Anthology'),
-    ]
-
     title = models.CharField(max_length=255)
-    author = models.ForeignKey(Author, on_delete=models.SET_NULL, null=True)
-    genres = models.ManyToManyField(Genre)
+    subtitle = models.CharField(max_length=255, blank=True, null=True)
+    author = models.ForeignKey(
+        'Author', on_delete=models.CASCADE, related_name='books', null=True, blank=True)
+    genres = models.ManyToManyField('Genre', related_name='books', blank=True)
+    publisher = models.CharField(max_length=255, blank=True, null=True)
+
+    # Formato principal para clasificar
+    FORMAT_CHOICES = [
+        ('NOVEL', 'Novela'),
+        ('MANGA', 'Manga / Cómic'),
+        ('ANTHOLOGY', 'Antología / Cuentos'),
+        ('ACADEMIC', 'Libro Académico'),
+    ]
     format_type = models.CharField(
         max_length=20, choices=FORMAT_CHOICES, default='NOVEL')
+
+    # 🚀 EL NUEVO MOTOR POLIMÓRFICO: Aquí guardaremos diccionarios dinámicos
+    # Ej: {"tomos_totales": 34, "tomos_obtenidos": [1, 2, 3]}
+    # Ej: {"cuentos": ["El Aleph", "El Inmortal"]}
+    details = models.JSONField(default=dict, blank=True)
+
     is_read = models.BooleanField(default=False)
-
-    publisher = models.CharField(
-        max_length=200, null=True, blank=True)  # Editorial
-
-    # --- NUEVOS CAMPOS DE METADATOS ---
-    subtitle = models.CharField(max_length=255, null=True, blank=True)
-    page_count = models.IntegerField(null=True, blank=True)
-    publish_date = models.CharField(max_length=50, null=True, blank=True)
-    cover_url = models.URLField(max_length=500, null=True, blank=True)
-    description = models.TextField(null=True, blank=True)
-
-    # Sistema de control para Cómics/Mangas
-    is_series = models.BooleanField(default=False)
-    total_volumes = models.IntegerField(null=True, blank=True)
-    owned_volumes = models.CharField(max_length=255, null=True, blank=True)
-    anthology_stories = models.JSONField(default=list, blank=True)
+    is_loaned = models.BooleanField(default=False)
+    page_count = models.IntegerField(blank=True, null=True)
+    publish_date = models.CharField(max_length=50, blank=True, null=True)
+    cover_url = models.URLField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.title
@@ -63,7 +62,7 @@ class Friend(models.Model):
 
 def default_due_date():
     """Por defecto, los préstamos duran 30 días."""
-    return timezone.now() + timedelta(days=30)
+    return (timezone.now() + timedelta(days=30)).date()
 
 
 class Loan(models.Model):

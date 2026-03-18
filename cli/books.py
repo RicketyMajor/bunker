@@ -3,6 +3,8 @@ import httpx
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from rich.prompt import Prompt, Confirm
+import json
 
 console = Console()
 book_app = typer.Typer(
@@ -68,40 +70,139 @@ def list_books(
     table.add_column("Autor", style="green")
     table.add_column("Formato", style="yellow")
     table.add_column("Leído", justify="center")
+    table.add_column("Ubicación", justify="center")
 
     for book in books:
         status = "✅" if book.get('is_read') else "❌"
+        ubicacion = "🤝 Prestado" if book.get('is_loaned') else "🏢 En BD"
         table.add_row(
             str(book.get('id')),
             book.get('title', 'Sin título'),
             book.get('author_name', 'Desconocido'),
             book.get('format_type', '-'),
-            status
+            status,
+            ubicacion
         )
 
     console.print(table)
 
 
 @book_app.command(name="add")
-def add_book(isbn: str):
-    """Añade un libro usando el ISBN consumiendo la API remota."""
-    console.print(f"Buscando y procesando el ISBN {isbn} en el servidor...")
-    try:
-        response = httpx.post(API_SCAN, json={"isbn": isbn})
-        data = response.json()
+def add_book_wizard():
+    """Asistente maestro para añadir libros (Escáner, ISBN o 100% Manual)."""
 
-        if response.status_code == 201:
-            console.print(
-                f"[bold green]{data.get('message', 'Añadido')}[/bold green] (ID: {data['book']['id']})")
-        elif response.status_code == 200:
-            console.print(
-                f"[yellow]{data.get('message', 'Ya existe')}[/yellow]")
-        else:
-            console.print(
-                f"[bold red]❌ Error: {data.get('error', 'Desconocido')}[/bold red]")
-    except Exception as e:
+    console.print("\n[bold cyan]🔮 ASISTENTE DE ADQUISICIONES 🔮[/bold cyan]")
+    console.print(
+        "[dim]Selecciona el método de ingreso para tu nuevo ejemplar:[/dim]")
+    console.print(
+        "  [bold green][1][/bold green] 📱 Activar Escáner de Código de Barras (Web)")
+    console.print(
+        "  [bold yellow][2][/bold yellow] 🔢 Ingresar ISBN manualmente (Búsqueda automática)")
+    console.print(
+        "  [bold magenta][3][/bold magenta] ✍️  Ingreso 100% Manual (Para libros antiguos o rarezas)")
+
+    choice = Prompt.ask("\nElige una opción", choices=[
+                        "1", "2", "3"], default="2")
+
+    # ---------------------------------------------------------
+    # OPCIÓN 1: EL ESCÁNER WEB
+    # ---------------------------------------------------------
+    if choice == "1":
+        console.print("\n[bold cyan]📡 MODO ESCÁNER ACTIVADO[/bold cyan]")
         console.print(
-            f"[bold red]❌ Error de conexión al servidor: {e}[/bold red]")
+            "Para usar la cámara de tu teléfono, asegúrate de estar en la misma red WiFi y abre:")
+        console.print(
+            "👉 [bold underline blue]http://localhost:8000/scanner/[/bold underline blue] (o reemplaza 'localhost' por la IP de tu PC)")
+        console.print(
+            "[dim]Nota: Si usabas ngrok antes y el link está caído, debes volver a ejecutar 'ngrok http 8000' en otra terminal para obtener un link público nuevo.[/dim]\n")
+        return
+
+    # ---------------------------------------------------------
+    # OPCIÓN 2: ISBN MANUAL (El flujo que ya tenías)
+    # ---------------------------------------------------------
+    elif choice == "2":
+        isbn = Prompt.ask(
+            "\n[bold yellow]🔢 Ingresa el código ISBN[/bold yellow]")
+        console.print(
+            f"Buscando los registros globales para el ISBN {isbn}...")
+        try:
+            response = httpx.post(API_SCAN, json={"isbn": isbn})
+            data = response.json()
+
+            if response.status_code == 201:
+                console.print(
+                    f"[bold green]✅ {data.get('message', 'Añadido')}[/bold green] (ID: {data['book']['id']})")
+            elif response.status_code == 200:
+                console.print(
+                    f"[yellow]⚠️ {data.get('message', 'Ya existe')}[/yellow]")
+            else:
+                console.print(
+                    f"[bold red]❌ Error: {data.get('error', 'Desconocido')}[/bold red]")
+        except Exception as e:
+            console.print(
+                f"[bold red]❌ Error de conexión al servidor: {e}[/bold red]")
+
+    # ---------------------------------------------------------
+    # OPCIÓN 3: INGRESO 100% MANUAL (Polimorfismo en acción)
+    # ---------------------------------------------------------
+    elif choice == "3":
+        console.print(
+            "\n[bold magenta]✍️  MODO DE INGRESO MANUAL[/bold magenta]")
+
+        # Datos base
+        title = Prompt.ask("Título del libro")
+        # El autor ahora es opcional en la BD, así que permitimos dejarlo en blanco
+        author_name = Prompt.ask(
+            "Autor [dim](Deja en blanco si es desconocido)[/dim]", default="")
+
+        console.print("\n[cyan]Formato del libro:[/cyan]")
+        console.print("1. NOVEL (Novela estándar)")
+        console.print("2. MANGA (Manga o Cómic)")
+        console.print("3. ANTHOLOGY (Antología de cuentos)")
+        fmt_choice = Prompt.ask("Elige el formato", choices=[
+                                "1", "2", "3"], default="1")
+
+        format_map = {"1": "NOVEL", "2": "MANGA", "3": "ANTHOLOGY"}
+        format_type = format_map[fmt_choice]
+
+        # 🚀 APROVECHANDO EL POLIMORFISMO (JSONB)
+        details = {}
+        if format_type == "MANGA":
+            tomos = Prompt.ask(
+                "¿Cuántos tomos tiene en total esta obra?", default="Desconocido")
+            details["tomos_totales"] = tomos
+            details["tomos_obtenidos"] = Prompt.ask(
+                "¿Qué tomos tienes actualmente? (Ej: 1,2,3)", default="1")
+
+        elif format_type == "ANTHOLOGY":
+            cuentos = Prompt.ask(
+                "Nombra algunos cuentos incluidos (separados por coma)")
+            details["lista_cuentos"] = [c.strip()
+                                        for c in cuentos.split(",") if c.strip()]
+
+        # Construimos el diccionario de datos para enviar a Django
+        payload = {
+            "title": title,
+            "format_type": format_type,
+            "details": details,
+            "is_read": Confirm.ask("¿Ya leíste este libro?"),
+        }
+
+        # Manejamos el autor como un diccionario anidado si el usuario lo ingresó
+        if author_name.strip():
+            payload["author_input"] = author_name.strip()
+
+        try:
+            # Enviamos el POST al endpoint CRUD normal
+            response = httpx.post(API_LIBRARY, json=payload)
+            if response.status_code == 201:
+                console.print(
+                    f"\n[bold green]✅ ¡Obra registrada magistralmente en tu biblioteca![/bold green]")
+            else:
+                console.print(
+                    f"\n[bold red]❌ Error al guardar: {response.text}[/bold red]")
+        except Exception as e:
+            console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
 
 
 @book_app.command(name="delete")
@@ -115,5 +216,161 @@ def delete_book(book_id: int):
         else:
             console.print(
                 f"[bold red]❌ No se pudo eliminar. ¿Existe el ID {book_id}?[/bold red]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+
+
+@book_app.command(name="details")
+def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
+    """Muestra TODO el perfil del libro: metadatos, estado y descripción."""
+    try:
+        response = httpx.get(f"{API_LIBRARY}{book_id}/")
+        if response.status_code == 404:
+            console.print(
+                f"[bold red]❌ Libro #{book_id} no encontrado en la biblioteca.[/bold red]")
+            return
+
+        book = response.json()
+
+        # 1. Cabecera Principal
+        console.print(f"\n📖 [bold cyan]{book.get('title')}[/bold cyan]")
+        if book.get('subtitle'):
+            console.print(
+                f"   [italic dim]{book.get('subtitle')}[/italic dim]")
+
+        author = book.get('author_name')
+        if author:
+            console.print(f"✍️  Autor: [yellow]{author}[/yellow]")
+
+        # 2. Metadatos Universales
+        console.print("\n[bold white]📦 Ficha Técnica:[/bold white]")
+        console.print(f"  🏢 Editorial: {book.get('publisher') or '-'}")
+        console.print(f"  🏷️  Formato: {book.get('format_type') or '-'}")
+        console.print(f"  📅 Publicación: {book.get('publish_date') or '-'}")
+        console.print(f"  📄 Páginas: {book.get('page_count') or '-'}")
+
+        # 3. Estado en Biblioteca
+        console.print("\n[bold white]🔖 Estado actual:[/bold white]")
+        console.print(
+            f"  📚 Leído: {'✅ Sí' if book.get('is_read') else '❌ No'}")
+
+        # 🚀 Lógica de ubicación detallada
+        if book.get('is_loaned'):
+            console.print(
+                "  📍 Ubicación: [bold red]🤝 Prestado a un amigo[/bold red]")
+        else:
+            console.print(
+                "  📍 Ubicación: [bold green]🏢 En tu estantería[/bold green]")
+
+        # 4. Polimorfismo (JSONB)
+        details = book.get('details', {})
+        if details:
+            console.print(
+                "\n[bold magenta]✨ Detalles Específicos del Formato:[/bold magenta]")
+            for key, value in details.items():
+                clean_key = key.replace("_", " ").title()
+                # Formateamos listas (ej: cuentos) para que se vean bien
+                if isinstance(value, list):
+                    value = ", ".join(value)
+                console.print(f"  📌 {clean_key}: [green]{value}[/green]")
+
+        # 5. Sinopsis (Si existe)
+        desc = book.get('description')
+        if desc:
+            console.print("\n[bold white]📝 Sinopsis:[/bold white]")
+            # Acortamos descripciones masivas a 500 caracteres para no romper la terminal
+            if len(desc) > 500:
+                console.print(f"[dim]{desc[:500]}...[/dim]")
+            else:
+                console.print(f"[dim]{desc}[/dim]")
+
+        console.print()  # Salto de línea final
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+
+
+@book_app.command(name="edit")
+def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
+    """Modifica rápidamente el estado de lectura, formato o añade metadatos polimórficos a un libro existente."""
+    try:
+        # 1. Obtenemos el libro actual
+        response = httpx.get(f"{API_LIBRARY}{book_id}/")
+        if response.status_code == 404:
+            console.print(
+                f"[bold red]❌ Libro #{book_id} no encontrado.[/bold red]")
+            return
+
+        book = response.json()
+        console.print(
+            f"\n✏️  [bold yellow]Editando: {book.get('title')}[/bold yellow]")
+        console.print(
+            "[dim]Presiona ENTER para mantener el valor actual.[/dim]\n")
+
+        # 2. Preparamos el payload con los datos existentes
+        payload = {}
+
+        # Editamos el estado de lectura
+        current_read = book.get('is_read', False)
+        read_prompt = Prompt.ask(
+            f"¿Ya está leído? [y/n] (Actual: {'y' if current_read else 'n'})", default="")
+        if read_prompt.lower() in ['y', 'yes', 's', 'si']:
+            payload['is_read'] = True
+        elif read_prompt.lower() in ['n', 'no']:
+            payload['is_read'] = False
+
+        # Editamos el formato si OpenLibrary lo clasificó mal (ej. clasificó un manga como novela)
+        current_format = book.get('format_type', 'NOVEL')
+        console.print(f"\nFormato actual: [cyan]{current_format}[/cyan]")
+        new_format = Prompt.ask(
+            "Nuevo formato (1=NOVEL, 2=MANGA, 3=ANTHOLOGY, ENTER para saltar)", default="")
+
+        if new_format == "1":
+            payload['format_type'] = "NOVEL"
+        elif new_format == "2":
+            payload['format_type'] = "MANGA"
+        elif new_format == "3":
+            payload['format_type'] = "ANTHOLOGY"
+
+        # 3. Lógica para inyectar detalles (Polimorfismo Retroactivo)
+        # Si cambiamos el formato a MANGA, o si ya era MANGA y queremos actualizar los tomos
+        final_format = payload.get('format_type', current_format)
+
+        if final_format == "MANGA":
+            if Confirm.ask("\n¿Deseas actualizar los datos de los tomos?"):
+                details = book.get('details', {})
+                tomos_totales = Prompt.ask("Tomos totales", default=str(
+                    details.get('tomos_totales', '')))
+                tomos_obtenidos = Prompt.ask("Tomos en tu colección (ej. 1,2,3)", default=str(
+                    details.get('tomos_obtenidos', '')))
+
+                details['tomos_totales'] = tomos_totales
+                details['tomos_obtenidos'] = tomos_obtenidos
+                payload['details'] = details
+
+        elif final_format == "ANTHOLOGY":
+            if Confirm.ask("\n¿Deseas actualizar la lista de cuentos?"):
+                details = book.get('details', {})
+                current_cuentos = ", ".join(details.get('lista_cuentos', []))
+                cuentos = Prompt.ask(
+                    "Nombra los cuentos (separados por coma)", default=current_cuentos)
+
+                details["lista_cuentos"] = [c.strip()
+                                            for c in cuentos.split(",") if c.strip()]
+                payload['details'] = details
+
+        # 4. Enviamos la actualización usando el método PATCH (modificación parcial)
+        if payload:
+            update_response = httpx.patch(
+                f"{API_LIBRARY}{book_id}/", json=payload)
+            if update_response.status_code == 200:
+                console.print(
+                    "\n[bold green]✅ Libro actualizado correctamente en la base de datos.[/bold green]\n")
+            else:
+                console.print(
+                    f"\n[bold red]❌ Error al actualizar: {update_response.text}[/bold red]\n")
+        else:
+            console.print("\n[yellow]No se realizaron cambios.[/yellow]\n")
+
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
