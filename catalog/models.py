@@ -75,3 +75,32 @@ class Loan(models.Model):
 
     def __str__(self):
         return f"{self.book.title} -> {self.friend.name}"
+
+
+# --- SISTEMA DE VIGILANCIA Y LISTA DE DESEOS ---
+
+class Watcher(models.Model):
+    """Palabras clave (autores, series) que el scraper buscará todos los días."""
+    keyword = models.CharField(
+        max_length=200, unique=True, help_text="Autor, serie o palabra clave a vigilar")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.keyword} (Activo: {self.is_active})"
+
+
+class WishlistItem(models.Model):
+    """Libros/Mangas encontrados por el scraper que te podrían interesar."""
+    title = models.CharField(max_length=255)
+    author_string = models.CharField(max_length=200, blank=True, null=True)
+    publisher = models.CharField(max_length=100, blank=True, null=True)
+    price = models.CharField(max_length=50, blank=True, null=True)
+
+    buy_url = models.URLField(max_length=500, blank=True, null=True)
+    cover_url = models.URLField(max_length=500, blank=True, null=True)
+
+    date_found = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title

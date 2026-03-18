@@ -1,7 +1,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Book, Author, Genre
+from .models import Book, Author, Genre, Watcher, WishlistItem
 from django.shortcuts import render
 
 # Importamos la herramienta que creamos para el CLI
@@ -75,3 +75,49 @@ def scanner_view(request):
     Renderiza la interfaz web del escáner para dispositivos móviles.
     """
     return render(request, 'catalog/scanner.html')
+
+# Arriba del todo, asegúrate de añadir Watcher y WishlistItem a tu importación de models:
+# from .models import Book, Author, Genre, Watcher, WishlistItem
+
+
+@api_view(['GET'])
+def get_active_watchers(_request):
+    """
+    Endpoint para que Node.js pregunte: "¿Qué palabras clave debo vigilar hoy?"
+    """
+    watchers = Watcher.objects.filter(is_active=True)
+    # Extraemos solo los textos en una lista simple
+    keywords = [w.keyword for w in watchers]
+
+    return Response({"keywords": keywords}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def add_wishlist_item(request):
+    """
+    Endpoint para que Node.js envíe un libro recién encontrado al tablón.
+    """
+    title = request.data.get('title')
+    buy_url = request.data.get('buy_url')
+
+    if not title:
+        return Response({"error": "El título es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Evitamos que el scraper llene la base de datos con el mismo libro todos los días
+    if WishlistItem.objects.filter(title=title, buy_url=buy_url).exists():
+        return Response({"message": "El libro ya estaba en el tablón de deseos."}, status=status.HTTP_200_OK)
+
+    # Creamos el nuevo registro en el tablón
+    item = WishlistItem.objects.create(
+        title=title,
+        author_string=request.data.get('author_string', ''),
+        publisher=request.data.get('publisher', ''),
+        price=request.data.get('price', ''),
+        buy_url=buy_url,
+        cover_url=request.data.get('cover_url', '')
+    )
+
+    return Response({
+        "message": "✅ Nuevo lanzamiento añadido al tablón de deseos.",
+        "id": item.id
+    }, status=status.HTTP_201_CREATED)
