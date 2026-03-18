@@ -1,0 +1,14 @@
+pyproject.toml
+cli/__init__.py
+cli/api.py
+cli/books_read.py
+cli/books_write.py
+cli/loans.py
+cli/main.py
+cli/wishlist.py
+library_cli.egg-info/PKG-INFO
+library_cli.egg-info/SOURCES.txt
+library_cli.egg-info/dependency_links.txt
+library_cli.egg-info/entry_points.txt
+library_cli.egg-info/requires.txt
+library_cli.egg-info/top_level.txt

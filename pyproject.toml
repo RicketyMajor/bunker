@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "library-cli"
+version = "1.0.0"
+description = "Un CLI interactivo para gestionar mi biblioteca distribuida"
+dependencies = [
+    "typer[all]",
+    "httpx",
+    "click-repl",
+]
+
+[project.scripts]
+# Esto crea el comando mágico "library" en tu sistema operativo
+library = "cli.main:app"
+
+# Le decimos explícitamente a Python que SOLO empaquete la carpeta "cli"
+[tool.setuptools]
+packages = ["cli"]
