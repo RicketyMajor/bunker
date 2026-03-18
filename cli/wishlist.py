@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
 from rich import box
+from rich.align import Align
 
 console = Console()
 wishlist_app = typer.Typer(
@@ -30,30 +31,32 @@ def list_wishlist():
             "[bold yellow]📭 Tu tablón de deseos está vacío. ¡El scraper aún no ha encontrado nada![/bold yellow]")
         return
 
+    console.print()
     table = Table(
-        title="✨ [bold cyan]Tablón de Deseos & Lanzamientos[/bold cyan]",
-        box=box.ROUNDED,
-        header_style="bold magenta"
+        title="★ [bold yellow]TABLÓN DE LANZAMIENTOS[/bold yellow] ★",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold yellow",
+        border_style="yellow"
     )
 
     table.add_column("ID", justify="right", style="dim")
     table.add_column("Título", style="bold white")
     table.add_column("Editorial", style="yellow")
-    table.add_column("Precio", style="green")
+    table.add_column("Precio", style="bold green")
     table.add_column("Fecha", style="cyan")
 
     for item in items:
-        # Acortamos la fecha que viene del JSON (ej. "2026-03-17T12:00:00Z" -> "2026-03-17")
         date_str = item.get('date_found', '')[:10]
         table.add_row(
             str(item.get('id')),
-            item.get('title'),
+            item.get('title').upper(),
             item.get('publisher') or "-",
             item.get('price') or "-",
             date_str
         )
 
-    console.print(table)
+    console.print(Align.center(table))
+    console.print()
 
 
 @wishlist_app.command(name="watch")

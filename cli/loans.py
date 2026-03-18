@@ -5,6 +5,7 @@ from rich.table import Table
 from rich import box
 from rich.prompt import Prompt
 from datetime import datetime
+from rich.align import Align
 
 console = Console()
 loan_app = typer.Typer(
@@ -30,16 +31,19 @@ def lend_book():
             return
 
         # 2. Interfaz Inmersiva: Mostrar opciones
-        console.print(
-            "\n[bold cyan]📦 INVENTARIO DISPONIBLE PARA PRÉSTAMO[/bold cyan]")
-        table = Table(box=box.ROUNDED)
-        table.add_column("ID", style="cyan", justify="right")
-        table.add_column("Título", style="magenta")
+        console.print()
+        table = Table(title="[bold cyan]📦 INVENTARIO DISPONIBLE[/bold cyan]",
+                      box=box.SIMPLE_HEAVY, header_style="bold cyan", border_style="cyan")
+        table.add_column("ID", style="dim", justify="right")
+        table.add_column("Título", style="bold white")
         table.add_column("Autor", style="green")
 
         for b in available_books:
-            table.add_row(str(b['id']), b['title'], b.get('author_name', ''))
-        console.print(table)
+            table.add_row(str(b['id']), b['title'].upper(),
+                          b.get('author_name', ''))
+
+        console.print(Align.center(table))
+        console.print()
 
         # 3. Recopilar datos
         book_id = Prompt.ask(
@@ -98,21 +102,27 @@ def list_loans():
                 "\n[yellow]No tienes ningún libro prestado actualmente. ¡Tu colección está completa![/yellow]\n")
             return
 
+        console.print()
         table = Table(
-            title="🤝 [bold blue]Libros Prestados[/bold blue]", box=box.ROUNDED)
-        table.add_column("ID Préstamo", style="cyan", justify="right")
-        table.add_column("Libro", style="magenta")
-        table.add_column("Amigo", style="green")
+            title="⇋ [bold magenta]REGISTRO DE PRÉSTAMOS[/bold magenta] ⇋",
+            box=box.SIMPLE_HEAVY,
+            header_style="bold magenta",
+            border_style="magenta"
+        )
+        table.add_column("ID", style="dim", justify="right")
+        table.add_column("Libro", style="bold white")
+        table.add_column("Amigo", style="bold green")
         table.add_column("Fecha Préstamo", style="yellow")
 
         for l in loans:
             table.add_row(
                 str(l['id']),
-                l.get('book_title', f"Libro #{l['book']}"),
+                l.get('book_title', f"Libro #{l['book']}").upper(),
                 l.get('friend_name', f"Amigo #{l['friend']}"),
                 l.get('loan_date', '')
             )
-        console.print(table)
+        console.print(Align.center(table))
+        console.print()
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
 

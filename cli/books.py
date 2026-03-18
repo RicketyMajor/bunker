@@ -4,6 +4,13 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 from rich.prompt import Prompt, Confirm
+# 🎨 Añadimos las herramientas de maquetación avanzada
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.text import Text
+# 🎨 Añadimos Group y Align para el ensamblaje maestro
+from rich.console import Group
+from rich.align import Align
 import json
 
 console = Console()
@@ -58,33 +65,61 @@ def list_books(
             "[yellow]No se encontraron libros con esos filtros.[/yellow]")
         return
 
-    # Imprimimos qué filtros estamos usando en el título de la tabla
+    # Imprimimos qué filtros estamos usando
     filters_used = ", ".join([f"{k}={v}" for k, v in params.items()])
-    table_title = f"📚 [bold blue]Mi Biblioteca[/bold blue]"
+    table_title = f"❖ [bold cyan]INVENTARIO DE BIBLIOTECA[/bold cyan] ❖"
     if filters_used:
-        table_title += f" [dim](Filtros: {filters_used})[/dim]"
+        table_title += f"\n[dim](Filtros: {filters_used})[/dim]"
 
-    table = Table(title=table_title, box=box.ROUNDED)
-    table.add_column("ID", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Título", style="magenta")
-    table.add_column("Autor", style="green")
-    table.add_column("Formato", style="yellow")
+    # 🚀 REVOLUCIÓN VISUAL: box.SIMPLE_HEAVY elimina el ruido vertical
+    table = Table(title=table_title, box=box.SIMPLE_HEAVY,
+                  header_style="bold cyan", border_style="cyan")
+    table.add_column("ID", justify="right", style="dim", no_wrap=True)
+    table.add_column("Título", style="bold white")
+    table.add_column("Autor", style="yellow")
+    table.add_column("Formato", style="magenta")
     table.add_column("Leído", justify="center")
     table.add_column("Ubicación", justify="center")
 
     for book in books:
-        status = "✅" if book.get('is_read') else "❌"
-        ubicacion = "🤝 Prestado" if book.get('is_loaned') else "🏢 En BD"
+        # Glifos monocromáticos inyectados con color puro
+        status = "[green]✔[/green]" if book.get('is_read') else "[red]✘[/red]"
+        ubicacion = "[bold red]⇋ Prestado[/bold red]" if book.get(
+            'is_loaned') else "[bold green]❖ Estantería[/bold green]"
+
+        # 🚀 LÓGICA DEL TÍTULO EN ÁRBOL (Subtítulos dinámicos)
+        title_display = book.get('title', 'Sin título').upper()
+        details = book.get('details', {})
+        format_type = book.get('format_type', 'NOVEL')
+
+        # Si es Manga, calculamos la cantidad de tomos obtenidos
+        if format_type == "MANGA" and details:
+            tomos_raw = details.get('tomos_obtenidos', '')
+            if tomos_raw:
+                # Contamos los tomos separando por comas
+                cantidad_tomos = len(
+                    [t for t in str(tomos_raw).split(',') if t.strip()])
+                title_display += f"\n  [dim]↳ {cantidad_tomos} tomos en colección[/dim]"
+
+        # Si es Antología, contamos la longitud de la lista de cuentos
+        elif format_type == "ANTHOLOGY" and details:
+            cuentos = details.get('lista_cuentos', [])
+            if cuentos:
+                title_display += f"\n  [dim]↳ {len(cuentos)} cuentos incluidos[/dim]"
+
         table.add_row(
             str(book.get('id')),
-            book.get('title', 'Sin título'),
+            title_display,  # Pasamos nuestro título con la información inyectada
             book.get('author_name', 'Desconocido'),
             book.get('format_type', '-'),
             status,
             ubicacion
         )
 
-    console.print(table)
+    console.print()
+    # Centramos la tabla en la pantalla
+    console.print(Align.center(table))
+    console.print()
 
 
 @book_app.command(name="add")
@@ -222,7 +257,7 @@ def delete_book(book_id: int):
 
 @book_app.command(name="details")
 def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
-    """Muestra TODO el perfil del libro: metadatos, estado y descripción."""
+    """Muestra TODO el perfil del libro: metadatos, estado y descripción en un formato inmersivo."""
     try:
         response = httpx.get(f"{API_LIBRARY}{book_id}/")
         if response.status_code == 404:
@@ -232,59 +267,89 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
 
         book = response.json()
 
-        # 1. Cabecera Principal
-        console.print(f"\n📖 [bold cyan]{book.get('title')}[/bold cyan]")
+        # --- 1. LA CABECERA (Header) ---
+        title_str = book.get('title', 'Sin Título').upper()
+        title_text = Text(title_str, style="bold cyan", justify="center")
+
         if book.get('subtitle'):
-            console.print(
-                f"   [italic dim]{book.get('subtitle')}[/italic dim]")
+            title_text.append(f"\n{book.get('subtitle')}", style="italic dim")
 
         author = book.get('author_name')
         if author:
-            console.print(f"✍️  Autor: [yellow]{author}[/yellow]")
+            # Usamos el glifo clásico de lápiz
+            title_text.append(f"\n✎  {author}", style="bold yellow")
 
-        # 2. Metadatos Universales
-        console.print("\n[bold white]📦 Ficha Técnica:[/bold white]")
-        console.print(f"  🏢 Editorial: {book.get('publisher') or '-'}")
-        console.print(f"  🏷️  Formato: {book.get('format_type') or '-'}")
-        console.print(f"  📅 Publicación: {book.get('publish_date') or '-'}")
-        console.print(f"  📄 Páginas: {book.get('page_count') or '-'}")
+        header_panel = Panel(title_text, box=box.HEAVY,
+                             border_style="cyan", padding=(1, 4))
 
-        # 3. Estado en Biblioteca
-        console.print("\n[bold white]🔖 Estado actual:[/bold white]")
-        console.print(
-            f"  📚 Leído: {'✅ Sí' if book.get('is_read') else '❌ No'}")
+        # --- 2. COLUMNA IZQUIERDA: Ficha Técnica y Estado ---
+        tech_text = Text(justify="center")
+        # Reemplazamos los emojis por glifos geométricos de terminal
+        tech_text.append(f"❖ Editorial: ", style="bold white")
+        tech_text.append(f"{book.get('publisher') or '-'}\n", style="yellow")
+        tech_text.append(f"◈ Formato: ", style="bold white")
+        tech_text.append(
+            f"{book.get('format_type') or '-'}\n", style="magenta")
+        tech_text.append(f"◷ Publicación: ", style="bold white")
+        tech_text.append(f"{book.get('publish_date') or '-'}\n", style="green")
+        tech_text.append(f"▤ Páginas: ", style="bold white")
+        tech_text.append(f"{book.get('page_count') or '-'}\n\n", style="cyan")
 
-        # 🚀 Lógica de ubicación detallada
+        tech_text.append("► Estado Físico ◄\n", style="bold underline white")
+        tech_text.append(
+            f"  ✔ Leído: {'Sí' if book.get('is_read') else 'No'}\n")
+
         if book.get('is_loaned'):
-            console.print(
-                "  📍 Ubicación: [bold red]🤝 Prestado a un amigo[/bold red]")
+            tech_text.append("  ⌖ Ubicación: ", style="bold")
+            tech_text.append("Prestado", style="bold red")
         else:
-            console.print(
-                "  📍 Ubicación: [bold green]🏢 En tu estantería[/bold green]")
+            tech_text.append("  ⌖ Ubicación: ", style="bold")
+            tech_text.append("En Estantería", style="bold green")
 
-        # 4. Polimorfismo (JSONB)
+        tech_panel = Panel(
+            tech_text, title="[bold cyan]Ficha Técnica[/bold cyan]", border_style="cyan", padding=(1, 2))
+
+        # --- 3. COLUMNA DERECHA: Polimorfismo (Detalles Específicos) ---
         details = book.get('details', {})
+        details_panel = None
         if details:
-            console.print(
-                "\n[bold magenta]✨ Detalles Específicos del Formato:[/bold magenta]")
+            det_text = Text(justify="center")
             for key, value in details.items():
                 clean_key = key.replace("_", " ").title()
-                # Formateamos listas (ej: cuentos) para que se vean bien
                 if isinstance(value, list):
                     value = ", ".join(value)
-                console.print(f"  📌 {clean_key}: [green]{value}[/green]")
+                det_text.append(f"▪ {clean_key}: ", style="bold white")
+                det_text.append(f"{value}\n", style="green")
 
-        # 5. Sinopsis (Si existe)
+            details_panel = Panel(
+                det_text, title="[bold magenta]Detalles Especiales[/bold magenta]", border_style="magenta", padding=(1, 2))
+
+        # --- 4. SINOPSIS (Cuerpo Inferior) ---
         desc = book.get('description')
+        synopsis_panel = None
         if desc:
-            console.print("\n[bold white]📝 Sinopsis:[/bold white]")
-            # Acortamos descripciones masivas a 500 caracteres para no romper la terminal
-            if len(desc) > 500:
-                console.print(f"[dim]{desc[:500]}...[/dim]")
-            else:
-                console.print(f"[dim]{desc}[/dim]")
+            if len(desc) > 800:
+                desc = desc[:800] + "..."
+            synopsis_panel = Panel(Text(desc, justify="center", style="dim"),
+                                   title="[bold yellow]Sinopsis[/bold yellow]", border_style="yellow", padding=(1, 4))
 
-        console.print()  # Salto de línea final
+        # --- 5. EL ENSAMBLAJE FINAL (Magia de Layout) ---
+        console.print()
+
+        # Preparamos las columnas si existen detalles
+        middle_section = Columns(
+            [tech_panel, details_panel], equal=True) if details_panel else tech_panel
+
+        # Agrupamos todo en un solo bloque renderizable
+        render_group = Group(
+            header_panel,
+            middle_section,
+            synopsis_panel if synopsis_panel else Text("")
+        )
+
+        # 🚀 LA SOLUCIÓN AL ESPACIO: Restringimos a 90 caracteres y centramos todo
+        console.print(Align.center(render_group, width=90))
+        console.print()
 
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
