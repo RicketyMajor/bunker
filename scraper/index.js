@@ -30,6 +30,33 @@ async function sendToWishlist(item) {
 }
 
 /**
+ * 🕵️‍♂️ FILTRO TEMPORAL: Consulta a Google Books para descartar reposiciones
+ */
+async function verifyNewRelease(title) {
+    try {
+        const searchUrl = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(title)}&maxResults=1`;
+        const response = await axios.get(searchUrl);
+
+        if (response.data.items && response.data.items.length > 0) {
+            const pubDate = response.data.items[0].volumeInfo.publishedDate; // Ej: "2011", "2023-11-08"
+            if (pubDate) {
+                const pubYear = parseInt(pubDate.substring(0, 4));
+                const currentYear = new Date().getFullYear();
+
+                // 🛑 Si el libro se publicó hace más de 2 años, es una reposición
+                if (currentYear - pubYear > 2) {
+                    return { isNew: false, year: pubYear };
+                }
+            }
+        }
+        // Si no lo encuentra o es reciente, le damos el beneficio de la duda
+        return { isNew: true, year: "Reciente/Desconocido" }; 
+    } catch (error) {
+        return { isNew: true, year: "Error API" }; // No bloqueamos si falla la red
+    }
+}
+
+/**
  * 🏭 PATRÓN FACTORY: Carga dinámicamente todas las estrategias de scraping
  */
 function loadStrategies() {
@@ -94,11 +121,20 @@ async function runScrapers(keywords) {
         const results = fuse.search(keyword);
         
         if (results.length > 0) {
-            console.log(`\n🎯 ¡MATCH PARA '${keyword}'! Encontramos ${results.length} posibles tomos/libros.`);
+            console.log(`\n🎯 ¡MATCH PARA '${keyword}'! Analizando ${results.length} coincidencias...`);
             
             for (const result of results) {
                 const item = result.item;
-                item.author_string = keyword; // Guardamos por qué palabra clave lo encontramos
+                
+                // 🚀 EJECUCIÓN DEL FILTRO DE NOVEDAD
+                const verification = await verifyNewRelease(item.title);
+
+                if (!verification.isNew) {
+                    console.log(`   ♻️  Descartado por Reposición: '${item.title}' (Publicado originalmente en ${verification.year})`);
+                    continue; // ⛔ Rompemos el ciclo aquí, no se enviará a la base de datos
+                }
+
+                item.author_string = keyword;
                 await sendToWishlist(item);
             }
         }
@@ -126,3 +162,5 @@ const job = new CronJob(
     null, true, 'America/Santiago'
 );
 console.log("✅ Piloto automático activado. Búsqueda diaria a las 09:00 AM.");
+
+main();

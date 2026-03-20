@@ -101,5 +101,8 @@ class WishlistItem(models.Model):
 
     date_found = models.DateTimeField(auto_now_add=True)
 
+    # 🚀 LA MEMORIA CACHÉ: Borrado Lógico (Soft Delete)
+    is_rejected = models.BooleanField(default=False)
+
     def __str__(self):
         return self.title

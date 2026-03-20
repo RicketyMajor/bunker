@@ -156,7 +156,9 @@ class WatcherViewSet(viewsets.ModelViewSet):
 
 class WishlistItemViewSet(viewsets.ModelViewSet):
     """Provee operaciones CRUD para el tablón de deseos."""
-    queryset = WishlistItem.objects.all().order_by('-date_found')
+    # 🚀 El CLI solo verá los que NO han sido rechazados
+    queryset = WishlistItem.objects.filter(
+        is_rejected=False).order_by('-date_found')
     serializer_class = WishlistItemSerializer
 
 

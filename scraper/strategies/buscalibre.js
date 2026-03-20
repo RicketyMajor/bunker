@@ -8,7 +8,8 @@ module.exports = {
         if (keywords.length === 0) return releases;
 
         for (const keyword of keywords) {
-            const searchUrl = `https://www.buscalibre.cl/libros/search?q=${encodeURIComponent(keyword)}`;
+            // 🚀 CAZADOR: Añadimos parámetros a la URL para forzar orden por "Más Nuevos" (Novedades)
+            const searchUrl = `https://www.buscalibre.cl/libros/search?q=${encodeURIComponent(keyword)}&sst=novedades`;
 
             try {
                 const response = await axios.get(searchUrl, {
@@ -23,22 +24,21 @@ module.exports = {
                     const title = $(element).find('.nombre, h3').text().trim();
                     const link = $(element).find('a').attr('href');
                     
-                    // 🥷 TÁCTICA NINJA: Búsqueda agresiva del precio
-                    // 1. Capturamos todo el texto de cualquier elemento que huela a precio
                     let rawPrice = $(element).find('[class*="precio"], .p-precio').text().trim();
-                    
-                    // Si no encuentra nada, tomamos todo el texto de la tarjeta
                     if (!rawPrice) rawPrice = $(element).text();
                     
-                    // 2. Usamos Expresiones Regulares (Regex) para cazar el patrón chileno: "$ 15.000" o "$15.000"
                     const priceMatch = rawPrice.match(/\$\s*[\d\.]+/);
                     const finalPrice = priceMatch ? priceMatch[0] : 'Precio no detectado';
 
-                    if (title) {
+                    // 🚀 CAZADOR: Descartamos basura obvia o reposiciones genéricas
+                    const isBoxset = title.toLowerCase().includes('boxset') || title.toLowerCase().includes('caja');
+                    
+                    // Solo guardamos si hay título y pasa nuestro filtro básico anti-reposiciones
+                    if (title && !isBoxset) {
                         releases.push({
                             title: title,
                             publisher: "Buscalibre",
-                            price: finalPrice, // ¡Ahora inyectamos el precio cazado con Regex!
+                            price: finalPrice, 
                             buy_url: link.startsWith('http') ? link : `https://www.buscalibre.cl${link}`,
                             cover_url: ""
                         });

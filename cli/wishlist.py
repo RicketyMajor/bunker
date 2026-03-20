@@ -90,15 +90,17 @@ def add_watcher():
 
 @wishlist_app.command(name="delete")
 def delete_wishlist_item(item_id: int = typer.Argument(..., help="ID del lanzamiento a eliminar")):
-    """Elimina un libro del tablón de deseos mediante un DELETE a la API."""
-    if Confirm.ask(f"¿Estás seguro de eliminar el ítem #{item_id} de tu tablón?"):
+    """Oculta un libro del tablón de deseos y lo añade a la lista negra del scraper."""
+    if Confirm.ask(f"¿Estás seguro de ocultar el ítem #{item_id} de tu tablón?"):
         try:
-            # Enviamos la petición DELETE a la URL específica del ítem (ej. .../wishlist-crud/5/)
-            response = httpx.delete(f"{API_WISHLIST}{item_id}/")
-            # 204 significa "No Content" (Borrado exitoso en DRF)
-            if response.status_code == 204:
+            # 🚀 Cambiamos DELETE por PATCH para aplicar el Soft Delete
+            response = httpx.patch(
+                f"{API_WISHLIST}{item_id}/", json={"is_rejected": True})
+
+            # En REST, un PATCH exitoso devuelve 200 OK (no 204 No Content)
+            if response.status_code == 200:
                 console.print(
-                    "\n[bold green]✅ Eliminado correctamente del tablón.[/bold green]\n")
+                    "\n[bold green]✅ Eliminado y añadido a la caché de rechazados.[/bold green]\n")
             else:
                 console.print(
                     f"[red]❌ No se pudo eliminar. ¿Estás seguro de que el ID {item_id} existe?[/red]")
@@ -129,7 +131,7 @@ def wishlist_details(item_id: int = typer.Argument(..., help="ID del lanzamiento
 
 @wishlist_app.command(name="clear")
 def clear_wishlist():
-    """Elimina TODOS los libros del tablón de deseos (Limpieza masiva)."""
+    """Oculta TODOS los libros del tablón de deseos (Limpieza masiva hacia la caché)."""
     try:
         response = httpx.get(API_WISHLIST)
         items = response.json()
@@ -138,12 +140,13 @@ def clear_wishlist():
             console.print("[yellow]El tablón ya está vacío.[/yellow]")
             return
 
-        # Borramos uno por uno rápidamente
+        # 🚀 Borrado lógico (PATCH) uno por uno
         for item in items:
-            httpx.delete(f"{API_WISHLIST}{item['id']}/")
+            httpx.patch(
+                f"{API_WISHLIST}{item['id']}/", json={"is_rejected": True})
 
         console.print(
-            f"[bold green]✅ Se han eliminado {len(items)} libros del tablón de deseos.[/bold green]")
+            f"[bold green]✅ Se han enviado {len(items)} libros a la memoria de rechazados. El scraper no volverá a molestarte con ellos.[/bold green]")
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
 
