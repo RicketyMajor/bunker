@@ -12,6 +12,10 @@ import httpx
 from pathlib import Path
 import sys
 import pyfiglet
+import socket
+import sys
+import platform
+
 
 # Importaciones limpias
 from cli.books import book_app
@@ -75,14 +79,80 @@ def exit_shell():
     raise EOFError
 
 
+def get_local_ip():
+    """Descubre la IPv4 local, con soporte especial para atravesar el NAT de WSL2."""
+
+    # 1. Detectar si estamos atrapados dentro de WSL
+    release_info = platform.uname().release.lower()
+    in_wsl = "microsoft" in release_info or "wsl" in release_info
+
+    if in_wsl:
+        try:
+            # Magia de interoperabilidad: Ejecutamos PowerShell desde Linux
+            # para extraer la IPv4 del adaptador Wi-Fi o Ethernet del host Windows
+            cmd = 'powershell.exe -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -match \'Wi-Fi|Ethernet\' } | Select-Object -First 1).IPAddress"'
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=2)
+            ip = result.stdout.strip()
+            if ip:
+                return ip
+        except Exception:
+            pass  # Si falla, caemos silenciosamente al método estándar
+
+    # 2. Método estándar para sistemas Linux puros (tu futuro PC Ubuntu)
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+def get_dashboard_stats():
+    """Consulta la API para obtener métricas rápidas de la biblioteca."""
+    stats = {"books": 0, "loans": 0, "wishlist": 0}
+    try:
+        books_resp = httpx.get(
+            "http://localhost:8000/api/books/library/", timeout=1.0)
+        if books_resp.status_code == 200:
+            stats["books"] = len(books_resp.json())
+
+        loans_resp = httpx.get(
+            "http://localhost:8000/api/books/loans/", timeout=1.0)
+        if loans_resp.status_code == 200:
+            stats["loans"] = len(loans_resp.json())
+
+        wish_resp = httpx.get(
+            "http://localhost:8000/api/books/wishlist-crud/", timeout=1.0)
+        if wish_resp.status_code == 200:
+            stats["wishlist"] = len(wish_resp.json())
+    except Exception:
+        pass
+    return stats
+
+
 def show_welcome_screen():
-    """Genera la cabecera visual de la aplicación."""
-    # Arte ASCII principal
+    """Genera la cabecera visual y el dashboard dinámico de la aplicación."""
     ascii_art = pyfiglet.figlet_format("LIBRARY", font="slant")
     ascii_text = Text(ascii_art, style="bold cyan")
 
-    welcome_text = """
+    # 🚀 Obtenemos los datos dinámicos
+    local_ip = get_local_ip()
+    stats = get_dashboard_stats()
+
+    welcome_text = f"""
 [dim]Tu ecosistema distribuido está en línea y operando.[/dim]
+
+📊 [bold white]Estado del Inventario:[/bold white]
+  📚 Libros en colección: [bold green]{stats['books']}[/bold green]
+  🤝 Préstamos activos: [bold yellow]{stats['loans']}[/bold yellow]
+  ✨ Novedades en el radar: [bold magenta]{stats['wishlist']}[/bold magenta]
+
+📱 [bold white]Escáner Móvil (Cámara):[/bold white]
+  👉 [bold underline blue]http://{local_ip}:8000/scanner/[/bold underline blue]
+  [dim](Abre este link en el navegador de tu celular conectado al mismo WiFi)[/dim]
 
 [bold yellow]Módulos Principales:[/bold yellow]
 [green]▸[/green] [bold]book[/bold] (list, add, details, edit, delete)
@@ -92,14 +162,12 @@ def show_welcome_screen():
 [dim]Presiona [bold]Tab[/bold] para autocompletar. Escribe [bold]exit[/bold] para salir.[/dim]
     """
 
-    # Imprimimos el ASCII centrado
     console.print(Align.center(ascii_text))
-    # Imprimimos el panel de comandos centrado debajo del ASCII
     console.print(Align.center(
-        Panel(welcome_text, title="[bold magenta]Terminal UI v2.0[/bold magenta]",
+        Panel(welcome_text, title="[bold magenta]Centro de Mando v1.0[/bold magenta]",
               border_style="cyan", expand=False)
     ))
-    console.print()  # Salto de línea extra para respirar
+    console.print()
 
 
 @app.command(name="shell")

@@ -1,8 +1,7 @@
 pyproject.toml
 cli/__init__.py
 cli/api.py
-cli/books_read.py
-cli/books_write.py
+cli/books.py
 cli/loans.py
 cli/main.py
 cli/wishlist.py
