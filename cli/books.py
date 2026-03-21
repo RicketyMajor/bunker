@@ -1,4 +1,5 @@
 import typer
+import re
 import httpx
 from rich.console import Console
 from rich.table import Table
@@ -20,6 +21,26 @@ book_app = typer.Typer(
 
 API_LIBRARY = "http://localhost:8000/api/books/library/"
 API_SCAN = "http://localhost:8000/api/books/scan/"
+
+
+def parse_manga_title(raw_title: str):
+    """
+    Intenta extraer el título base y el número de tomo usando Regex.
+    Ej: 'Chainsaw Man, Vol. 14' -> ('Chainsaw Man', '14')
+    Ej: 'Berserk 01' -> ('Berserk', '1')
+    """
+    # Busca: [Cualquier texto] [Separadores opcionales] [Números al final]
+    pattern = r"^(.*?)\s*(?:vol\.?|volume|tomo|#|-)?\s*0*(\d+)\s*$"
+    match = re.search(pattern, raw_title, re.IGNORECASE)
+
+    if match:
+        base_title = match.group(1).strip()
+        tomo = match.group(2).strip()
+        # Limpiamos comas o guiones que queden colgando al final del título base
+        base_title = re.sub(r"[,:-]$", "", base_title).strip()
+        return base_title, tomo
+
+    return raw_title, None
 
 
 @book_app.command(name="list")
@@ -162,13 +183,24 @@ def add_book_wizard():
         console.print(f"Consultando registros globales para {isbn}...")
 
         try:
-            # 1. Obtenemos la vista previa usando nuestra propia herramienta del CLI
             preview = fetch_book_by_isbn(isbn)
-
             if not preview:
                 console.print(
-                    f"[bold red]❌ Libro con ISBN {isbn} no encontrado en los registros de OpenLibrary.[/bold red]")
+                    f"[bold red]❌ Libro con ISBN {isbn} no encontrado.[/bold red]")
                 return
+
+            raw_title = preview.get('title', 'Desconocido')
+            base_title, tomo_detectado = parse_manga_title(raw_title)
+
+            # 🐉 EL INTERCEPTADOR: Si detectamos un tomo, buscamos la saga en la DB
+            saga_existente = None
+            if tomo_detectado:
+                resp_lib = httpx.get(API_LIBRARY, params={"title": base_title})
+                if resp_lib.status_code == 200:
+                    coincidencias = resp_lib.json()
+                    # Buscamos si alguna coincidencia es MANGA y su título coincide con la base
+                    saga_existente = next((b for b in coincidencias if b.get(
+                        'format_type') == 'MANGA' and base_title.lower() in b.get('title', '').lower()), None)
 
             # 2. Mostramos la tarjeta de confirmación con diseño geométrico
             preview_text = Text()
@@ -189,10 +221,39 @@ def add_book_wizard():
             console.print(Panel(
                 preview_text, title="[bold magenta]Vista Previa del Libro[/bold magenta]", border_style="magenta", expand=False))
 
-            # 3. 🛡️ BARRERA UX
-            if not Confirm.ask("¿Deseas registrar permanentemente este libro en tu biblioteca?"):
+           # 🐉 PREGUNTA DE FUSIÓN
+            if tomo_detectado and saga_existente:
                 console.print(
-                    "\n[yellow]Operación cancelada. El libro no fue guardado.[/yellow]\n")
+                    f"\n[bold magenta]🐉 ¡Saga Detectada en tu Biblioteca![/bold magenta]")
+                console.print(
+                    f"Parece que este es el [bold]Tomo {tomo_detectado}[/bold] de la obra [bold cyan]'{saga_existente['title']}'[/bold cyan].")
+
+                if Confirm.ask("¿Deseas inyectarlo como un nuevo tomo en lugar de crear un registro huérfano?"):
+                    detalles = saga_existente.get('details', {})
+                    tomos_str = str(detalles.get('tomos_obtenidos', ''))
+                    tomos_lista = [t.strip()
+                                   for t in tomos_str.split(',') if t.strip()]
+
+                    if tomo_detectado not in tomos_lista:
+                        tomos_lista.append(tomo_detectado)
+                        tomos_lista.sort(key=lambda x: int(
+                            x) if x.isdigit() else x)  # Orden numérico
+
+                    detalles['tomos_obtenidos'] = ", ".join(tomos_lista)
+
+                    patch_resp = httpx.patch(
+                        f"{API_LIBRARY}{saga_existente['id']}/", json={"details": detalles})
+                    if patch_resp.status_code == 200:
+                        console.print(
+                            f"\n[bold green]✅ Tomo {tomo_detectado} inyectado exitosamente en '{saga_existente['title']}'.[/bold green]\n")
+                    else:
+                        console.print(
+                            f"\n[bold red]❌ Error al fusionar el tomo.[/bold red]\n")
+                    return  # Cortamos la ejecución para no guardarlo como libro nuevo
+
+            # 3. 🛡️ BARRERA UX STANDARD (Si no es manga, o si el usuario dijo que no a la fusión)
+            if not Confirm.ask("¿Deseas registrar permanentemente este libro en tu biblioteca?"):
+                console.print("\n[yellow]Operación cancelada.[/yellow]\n")
                 return
 
             # 4. Si aprueba, disparamos la petición a nuestra API para que lo guarde oficialmente
@@ -482,6 +543,94 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                     f"\n[bold red]❌ Error al actualizar: {update_response.text}[/bold red]\n")
         else:
             console.print("\n[yellow]No se realizaron cambios.[/yellow]\n")
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+
+
+@book_app.command(name="consolidate")
+def consolidate_mangas():
+    """Escanea la biblioteca, agrupa tomos de mangas sueltos y los fusiona en sagas únicas."""
+    console.print(
+        "\n[bold cyan]🐉 INICIANDO MOTOR DE CONSOLIDACIÓN DE SAGAS 🐉[/bold cyan]\n")
+    try:
+        resp = httpx.get(API_LIBRARY)
+        all_books = resp.json()
+
+        # Diccionario: { "chainsaw man": [(book_dict, "1"), (book_dict, "2")] }
+        sagas = {}
+
+        # 1. Fase de Extracción: Agrupamos todos los tomos sueltos
+        for book in all_books:
+            base_title, tomo = parse_manga_title(book['title'])
+            if tomo:
+                base_key = base_title.lower()
+                if base_key not in sagas:
+                    sagas[base_key] = []
+                sagas[base_key].append((book, tomo))
+
+        fusion_count = 0
+
+        # 2. Fase de Transformación y Carga (ETL)
+        for base_key, tomos_detectados in sagas.items():
+            # Buscamos si el usuario ya había creado manualmente la saga Master
+            posibles_masters = [b for b in all_books if b['title'].lower(
+            ) == base_key and b.get('format_type') == 'MANGA']
+
+            if posibles_masters:
+                master = posibles_masters[0]
+                master_details = master.get('details', {})
+                tomos_str = str(master_details.get('tomos_obtenidos', ''))
+                tomos_lista = [t.strip()
+                               for t in tomos_str.split(',') if t.strip()]
+            elif len(tomos_detectados) > 1:
+                # Si no hay master pero hay varios tomos, convertimos el primer tomo en el Master
+                master_tuple = tomos_detectados.pop(0)
+                master = master_tuple[0]
+                tomos_lista = [master_tuple[1]]
+
+                # Promovemos el registro en la API
+                console.print(
+                    f"[dim]Promoviendo '{master['title']}' a Master Saga...[/dim]")
+                httpx.patch(
+                    f"{API_LIBRARY}{master['id']}/", json={"title": base_key.title(), "format_type": "MANGA"})
+                master['title'] = base_key.title()
+                master_details = {}
+            else:
+                continue  # Es solo 1 tomo suelto y no hay master, lo ignoramos
+
+            # Inyectamos los demás tomos en el master
+            tomos_a_eliminar = []
+            for t_tuple in tomos_detectados:
+                tomo_book = t_tuple[0]
+                tomo_num = t_tuple[1]
+                if tomo_num not in tomos_lista:
+                    tomos_lista.append(tomo_num)
+                tomos_a_eliminar.append(tomo_book['id'])
+
+            if not tomos_a_eliminar and not posibles_masters:
+                continue
+
+            # Actualizamos el Master con la nueva lista de tomos
+            tomos_lista.sort(key=lambda x: int(x) if x.isdigit() else x)
+            master_details['tomos_obtenidos'] = ", ".join(tomos_lista)
+            httpx.patch(
+                f"{API_LIBRARY}{master['id']}/", json={"details": master_details})
+
+            # Eliminamos los registros huérfanos que ya fueron absorbidos
+            for del_id in tomos_a_eliminar:
+                httpx.delete(f"{API_LIBRARY}{del_id}/")
+
+            console.print(
+                f"✅ Saga [bold green]'{master['title']}'[/bold green] consolidada. Tomos actuales: {master_details['tomos_obtenidos']}")
+            fusion_count += len(tomos_a_eliminar)
+
+        if fusion_count == 0:
+            console.print(
+                "[yellow]No se encontraron tomos huérfanos. Tu biblioteca está optimizada.[/yellow]\n")
+        else:
+            console.print(
+                f"\n[bold magenta]✨ Consolidación terminada. Se absorbieron {fusion_count} registros redundantes.[/bold magenta]\n")
 
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")

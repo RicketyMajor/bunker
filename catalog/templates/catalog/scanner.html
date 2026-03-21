@@ -30,7 +30,7 @@
         width: 100%;
         max-width: 500px;
         margin: 20px auto;
-        background: #ffffff; /* Fondo blanco para que los controles de la cámara se vean bien */
+        background: #ffffff;
         color: #000000;
         border-radius: 10px;
         overflow: hidden;
@@ -43,6 +43,30 @@
         color: #ffcc00;
         padding: 10px;
       }
+
+      /* Estilos para el nuevo botón de reinicio */
+      .btn-restart {
+        margin-top: 15px;
+        padding: 12px 24px;
+        font-size: 16px;
+        background-color: #00d2ff;
+        color: #1e1e1e;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.2s;
+      }
+      .btn-restart:hover {
+        background-color: #00a8cc;
+      }
+      .btn-error {
+        background-color: #ff4444;
+        color: #ffffff;
+      }
+      .btn-error:hover {
+        background-color: #cc0000;
+      }
     </style>
   </head>
   <body>
@@ -54,25 +78,21 @@
     <div id="status">Esperando escáner...</div>
 
     <script>
-      // Inyectamos el token de seguridad de Django directamente en JavaScript
       const csrfToken = "{{ csrf_token }}";
 
-      // Función que se ejecuta cuando el escáner lee algo con éxito
       function onScanSuccess(decodedText, decodedResult) {
         const statusDiv = document.getElementById("status");
         statusDiv.innerText = "⏳ Procesando ISBN: " + decodedText + "...";
         statusDiv.style.color = "#00d2ff";
 
-        // 1. Detenemos la cámara
         html5QrcodeScanner
           .clear()
           .then(() => {
-            // 2. Enviamos el ISBN a nuestro servidor Django (El Backend)
             fetch("/api/books/scan/", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "X-CSRFToken": csrfToken, // El token de seguridad de Django
+                "X-CSRFToken": csrfToken,
               },
               body: JSON.stringify({
                 isbn: decodedText,
@@ -84,23 +104,36 @@
                   .then((data) => ({ status: response.status, body: data })),
               )
               .then((res) => {
-                // 3. Manejamos la respuesta del servidor
                 if (res.status === 201 || res.status === 200) {
-                  // Éxito: El libro se guardó o ya existía
-                  statusDiv.innerText =
-                    res.body.message || "✅ Libro agregado con éxito.";
+                  let msg = res.body.message || "✅ Libro agregado con éxito.";
+                  // Inyectamos mensaje y botón de éxito
+                  statusDiv.innerHTML = `
+                    ${msg}<br>
+                    <button class="btn-restart" onclick="window.location.reload()">
+                      🔄 Escanear otro artículo
+                    </button>
+                  `;
                   statusDiv.style.color = "#00ff00";
                 } else {
-                  // Error: No se encontró en OpenLibrary o faltó un dato
-                  statusDiv.innerText =
-                    "❌ Error: " +
-                    (res.body.error || "No se pudo agregar el libro.");
+                  let errMsg = res.body.error || "No se pudo agregar el libro.";
+                  // Inyectamos mensaje y botón de error
+                  statusDiv.innerHTML = `
+                    ❌ Error: ${errMsg}<br>
+                    <button class="btn-restart btn-error" onclick="window.location.reload()">
+                      🔄 Intentar de nuevo
+                    </button>
+                  `;
                   statusDiv.style.color = "#ff4444";
                 }
               })
               .catch((error) => {
                 console.error("Error en la petición:", error);
-                statusDiv.innerText = "❌ Error de conexión con el servidor.";
+                statusDiv.innerHTML = `
+                  ❌ Error de conexión con el servidor.<br>
+                  <button class="btn-restart btn-error" onclick="window.location.reload()">
+                    🔄 Intentar de nuevo
+                  </button>
+                `;
                 statusDiv.style.color = "#ff4444";
               });
           })

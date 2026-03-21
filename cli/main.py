@@ -1,3 +1,5 @@
+import re
+import subprocess
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -16,6 +18,8 @@ import pyfiglet
 import socket
 import sys
 import platform
+import qrcode
+from rich.prompt import Prompt
 
 
 # Importaciones limpias
@@ -149,8 +153,8 @@ def show_welcome_screen():
   ⇋ Préstamos activos: [bold yellow]{stats['loans']}[/bold yellow]
   ★ Novedades en radar: [bold magenta]{stats['wishlist']}[/bold magenta]
 
-[bold white]► ESCÁNER MÓVIL (WIFI) ◄[/bold white]
-  ⌖ [bold underline blue]http://{local_ip}:8000/scanner/[/bold underline blue]"""
+[bold white]► ESCÁNER MÓVIL ◄[/bold white]
+  ⌖ Ejecuta: [bold cyan]scanner[/bold cyan]"""
 
     # 🚀 Panel Derecho: Comandos
     right_text = """[bold yellow]► MÓDULOS ACTIVOS ◄[/bold yellow]
@@ -174,6 +178,71 @@ def show_welcome_screen():
     console.print(Align.center(ascii_text))
     # Imprimimos el dashboard ensamblado sin saltos de línea extra
     console.print(Align.center(dashboard))
+
+
+@app.command(name="scanner")
+def show_scanner_qr():
+    """Genera un Código QR y un túnel HTTPS efímero para el escáner móvil."""
+    console.print("\n[bold cyan]📱 INICIANDO ESCÁNER MÓVIL SEGURO[/bold cyan]")
+    console.print(
+        "[cyan]⏳ Negociando túnel cifrado (SSH Reverse Tunnel)...[/cyan]")
+
+    tunnel_process = None
+    url = ""
+
+    try:
+        tunnel_process = subprocess.Popen(
+            ["ssh", "-o", "StrictHostKeyChecking=no", "-R",
+                "80:localhost:8000", "nokey@localhost.run"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True
+        )
+
+        output_log = []
+        for _ in range(50):
+            line = tunnel_process.stdout.readline()
+            if line:
+                output_log.append(line.strip())
+
+            match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", line)
+            if match:
+                url = match.group(1) + "/scanner/"
+                break
+
+        if not url:
+            console.print(
+                "[bold red]❌ No se pudo establecer el túnel. Leyendo la 'Caja Negra' de SSH:[/bold red]")
+            for log_line in output_log:
+                if log_line:
+                    console.print(f"[dim]  > {log_line}[/dim]")
+
+            if tunnel_process:
+                tunnel_process.terminate()
+            return
+
+    except Exception as e:
+        console.print(
+            f"[bold red]❌ Error iniciando el túnel SSH: {e}[/bold red]")
+        return
+
+    console.print(
+        f"\n[bold green]Escanea este código QR con la cámara de tu celular:[/bold green]")
+    console.print(f"[blue underline]{url}[/blue underline]\n")
+
+    qr = qrcode.QRCode(version=1, box_size=1, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    qr.print_tty()
+
+    console.print("\n[dim]El servidor ya está escuchando...[/dim]")
+    Prompt.ask(
+        "[bold yellow]Presiona ENTER cuando termines de escanear para cerrar la conexión[/bold yellow]")
+
+    if tunnel_process:
+        console.print("[dim]Destruyendo túnel efímero...[/dim]")
+        tunnel_process.terminate()
 
 
 @app.command(name="shell")

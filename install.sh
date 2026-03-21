@@ -36,6 +36,16 @@ echo -e "${GREEN}▶ Creando comando global 'library' (te pedirá contraseña si
 CURRENT_DIR=$(pwd)
 sudo ln -sf "$CURRENT_DIR/venv/bin/library" /usr/local/bin/library
 
+# 5. Aprovisionamiento de Claves para Túneles Seguros
+echo -e "${GREEN}▶ Verificando credenciales de red (SSH) para el escáner móvil...${NC}"
+if [ ! -f ~/.ssh/id_ed25519 ] && [ ! -f ~/.ssh/id_rsa ]; then
+    echo -e "${YELLOW}  Generando clave SSH criptográfica automáticamente...${NC}"
+    # Ejecuta el keygen de forma silenciosa sin pedir interacción
+    ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 > /dev/null 2>&1
+else
+    echo -e "${GREEN}  Credenciales detectadas correctamente.${NC}"
+fi
+
 echo -e "\n${CYAN}================================================${NC}"
 echo -e "${GREEN}✅ ¡Instalación completada con éxito!${NC}"
 echo -e "Puedes iniciar tu biblioteca desde cualquier lugar escribiendo: ${YELLOW}library shell${NC}"
