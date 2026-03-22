@@ -191,9 +191,13 @@ def show_scanner_qr():
     url = ""
 
     try:
+        # Definimos la ruta exacta de nuestra llave dedicada
+        key_path = str(Path.home() / ".ssh" / "library_cli_key")
+
         tunnel_process = subprocess.Popen(
-            ["ssh", "-o", "StrictHostKeyChecking=no", "-R",
-                "80:localhost:8000", "nokey@localhost.run"],
+            # 🚀 Añadimos '-i', key_path para usar SOLO esta identidad
+            ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no",
+                "-R", "80:localhost:8000", "nokey@localhost.run"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,

@@ -36,14 +36,14 @@ echo -e "${GREEN}▶ Creando comando global 'library' (te pedirá contraseña si
 CURRENT_DIR=$(pwd)
 sudo ln -sf "$CURRENT_DIR/venv/bin/library" /usr/local/bin/library
 
-# 5. Aprovisionamiento de Claves para Túneles Seguros
-echo -e "${GREEN}▶ Verificando credenciales de red (SSH) para el escáner móvil...${NC}"
-if [ ! -f ~/.ssh/id_ed25519 ] && [ ! -f ~/.ssh/id_rsa ]; then
-    echo -e "${YELLOW}  Generando clave SSH criptográfica automáticamente...${NC}"
-    # Ejecuta el keygen de forma silenciosa sin pedir interacción
-    ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 > /dev/null 2>&1
+# 5. Aprovisionamiento de Claves Aisladas para Túneles Seguros
+echo -e "${GREEN}▶ Aprovisionando criptografía dedicada para el escáner...${NC}"
+# Creamos una llave exclusiva para la app que NO afectará a Git ni a otros sistemas
+if [ ! -f ~/.ssh/library_cli_key ]; then
+    ssh-keygen -t ed25519 -N "" -f ~/.ssh/library_cli_key > /dev/null 2>&1
+    echo -e "${GREEN}  Llave dedicada generada con éxito.${NC}"
 else
-    echo -e "${GREEN}  Credenciales detectadas correctamente.${NC}"
+    echo -e "${GREEN}  Credenciales aisladas listas.${NC}"
 fi
 
 echo -e "\n${CYAN}================================================${NC}"
