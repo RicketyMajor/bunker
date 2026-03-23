@@ -132,6 +132,11 @@ def get_dashboard_stats():
             "http://localhost:8000/api/books/wishlist-crud/", timeout=1.0)
         if wish_resp.status_code == 200:
             stats["wishlist"] = len(wish_resp.json())
+
+        tracker_resp = httpx.get(
+            "http://localhost:8000/api/books/tracker/stats/", timeout=1.0)
+        if tracker_resp.status_code == 200:
+            stats["tracker"] = tracker_resp.json()
     except Exception:
         pass
     return stats
@@ -139,44 +144,66 @@ def get_dashboard_stats():
 
 def show_welcome_screen():
     """Genera la cabecera visual y el dashboard dinámico de la aplicación."""
+    # Importaciones locales para la nueva maquetación matricial
+    from rich.table import Table
+    from rich import box
+
     ascii_art = pyfiglet.figlet_format("LIBRARY", font="slant")
     ascii_text = Text(ascii_art, style="bold cyan")
 
-    # Obtenemos los datos dinámicos
-    local_ip = get_local_ip()
+    # Obtenemos los datos dinámicos (La lógica se mantiene intacta)
     stats = get_dashboard_stats()
 
-    # 🚀 Panel Izquierdo: Sensores
-    left_text = f"""[bold white]► ESTADO DEL INVENTARIO ◄[/bold white]
-  ❖ Libros en colección: [bold green]{stats['books']}[/bold green]
-  ⇋ Préstamos activos: [bold yellow]{stats['loans']}[/bold yellow]
-  ★ Novedades en radar: [bold magenta]{stats['wishlist']}[/bold magenta]
+    tracker = stats.get("tracker", {})
+    pages_month = tracker.get("pages_this_month", 0)
+    books_month = tracker.get("books_this_month", 0)
+    month_name = tracker.get("current_month", "Mes actual")
 
-[bold white]► ESCÁNER MÓVIL ◄[/bold white]
-  ⌖ Ejecuta: [bold cyan]scanner[/bold cyan]"""
+    # 🚀 1. Panel de Inventario (Glifos geométricos)
+    inv_text = f"""[cyan]▤[/cyan] Colección: [bold green]{stats.get('books', 0)}[/bold green] tomos
+[yellow]⇋[/yellow] Préstamos: [bold yellow]{stats.get('loans', 0)}[/bold yellow] activos
+[magenta]◈[/magenta] Wishlist:  [bold magenta]{stats.get('wishlist', 0)}[/bold magenta] en radar"""
 
-    # 🚀 Panel Derecho: Comandos
-    right_text = """[bold yellow]► MÓDULOS ACTIVOS ◄[/bold yellow]
-[green]▪[/green] [bold]book[/bold] (list, add, details, edit, delete)
-[green]▪[/green] [bold]loan[/bold] (list, lend, return)
-[green]▪[/green] [bold]wishlist[/bold] (list, watch, watchers, clear)
+    # 🚀 2. Panel de Tracker
+    track_text = f"""[cyan]∑[/cyan] Páginas leídas:   [bold cyan]{pages_month}[/bold cyan]
+[yellow]★[/yellow] Obras terminadas: [bold yellow]{books_month}[/bold yellow]
+[dim]Progreso de {month_name}[/dim]"""
 
-[dim]Atajos del Sistema:[/dim]
-[dim]  Tab  = Autocompletar[/dim]
-[dim]  exit = Cerrar sesión[/dim]"""
+    # 🚀 3. Panel de Comandos Rápidos
+    cmd_text = """[cyan]⌘[/cyan] Escanear QR:    [bold cyan]scanner[/bold cyan]
+[green]✎[/green] Anotar páginas: [bold cyan]tracker log <#>[/bold cyan]
+[magenta]✔[/magenta] Registrar obra: [bold cyan]tracker finish[/bold cyan]"""
 
-    # Compresión vertical: padding de 0 arriba y abajo
-    left_panel = Panel(
-        left_text, title="[bold cyan]Métricas y Sensores[/bold cyan]", border_style="cyan", padding=(0, 2))
-    right_panel = Panel(
-        right_text, title="[bold magenta]Subsistemas[/bold magenta]", border_style="magenta", padding=(0, 2))
+    # 🚀 4. Panel de Módulos (Con atajos extra)
+    mod_text = """[green]▪[/green] [bold]book[/bold]    (list, add, details...)
+[green]▪[/green] [bold]loan[/bold]    (list, lend, return)
+[green]▪[/green] [bold]tracker[/bold] (log, finish, annual)"""
 
-    # Ensamblamos los paneles uno al lado del otro
-    dashboard = Columns([left_panel, right_panel], equal=True, expand=False)
+    # Ensamblamos los 4 paneles reduciendo drásticamente el padding vertical
+    p_inv = Panel(
+        inv_text, title="[bold cyan]Sensores[/bold cyan]", border_style="cyan", padding=(0, 2))
+    p_trk = Panel(
+        track_text, title="[bold green]Hábitos[/bold green]", border_style="green", padding=(0, 2))
+    p_cmd = Panel(cmd_text, title="[bold yellow]Atajos Rápidos[/bold yellow]",
+                  border_style="yellow", padding=(0, 2))
+    p_mod = Panel(mod_text, title="[bold magenta]Módulos[/bold magenta]",
+                  border_style="magenta", padding=(0, 2))
 
+    # 🚀 LA REVOLUCIÓN VISUAL: Usamos una Grid en lugar de Columns para un control milimétrico
+    grid = Table.grid(expand=True, padding=(0, 2))
+    grid.add_column(ratio=1)  # Columna Izquierda
+    grid.add_column(ratio=1)  # Columna Derecha
+
+    # Apilamos en formato 2x2
+    grid.add_row(p_inv, p_trk)
+    grid.add_row(p_cmd, p_mod)
+
+    # Imprimimos limpiamente
     console.print(Align.center(ascii_text))
-    # Imprimimos el dashboard ensamblado sin saltos de línea extra
-    console.print(Align.center(dashboard))
+    console.print(grid)
+    console.print(
+        "[dim]Atajos: \\[Tab] Autocompletar | \\[exit] Cerrar sesión[/dim]", justify="center")
+    console.print()  # Un respiro final antes del prompt
 
 
 @app.command(name="scanner")

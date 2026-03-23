@@ -13,6 +13,7 @@ tracker_app = typer.Typer(
 API_LIBRARY = "http://localhost:8000/api/books/library/"
 API_TRACKER_PAGES = "http://localhost:8000/api/books/tracker/pages/"
 API_TRACKER_FINISH = "http://localhost:8000/api/books/tracker/finish/"
+API_TRACKER_ANNUAL = "http://localhost:8000/api/books/tracker/annual/"
 
 
 @tracker_app.command(name="log")
@@ -37,7 +38,7 @@ def log_pages(pages: int = typer.Argument(..., help="Cantidad de páginas leída
 def finish_book():
     """Asistente inteligente para registrar un libro terminado en tu historial anual."""
     console.print(
-        "\n[bold cyan]🏆 REGISTRO DE VICTORIA LITERARIA 🏆[/bold cyan]")
+        "\n[bold cyan] REGISTRO DE LIBRO FINALIZADO [/bold cyan]")
 
     # 1. Obtenemos la base de datos de libros actual para el autocompletado
     try:
@@ -119,3 +120,47 @@ def finish_book():
                 f"\n[bold red]❌ Error: {data.get('error', 'Desconocido')}[/bold red]\n")
     except Exception as e:
         console.print(f"[bold red]❌ Error al registrar: {e}[/bold red]")
+
+
+@tracker_app.command(name="annual")
+def annual_records():
+    """Muestra la lista de libros terminados en el año actual."""
+    try:
+        response = httpx.get(API_TRACKER_ANNUAL)
+        response.raise_for_status()
+        records = response.json()
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        return
+
+    if not records:
+        console.print(
+            "\n[yellow]Aún no has registrado libros terminados este año. ¡Es hora de empezar a leer![/yellow]\n")
+        return
+
+    from rich.table import Table
+    from rich import box
+    from rich.align import Align
+
+    table = Table(title="🏆 [bold magenta]SALÓN DE LA FAMA (AÑO ACTUAL)[/bold magenta] 🏆",
+                  box=box.SIMPLE_HEAVY, header_style="bold cyan", border_style="cyan")
+    table.add_column("ID", justify="right", style="dim")
+    table.add_column("Título", style="bold white")
+    table.add_column("Autor", style="yellow")
+    table.add_column("Propiedad", justify="center")
+    table.add_column("Fecha Terminado", style="green", justify="center")
+
+    for rec in records:
+        owned_str = "[green]✔ Estantería[/green]" if rec.get(
+            'is_owned') else "[red]⇋ Prestado/Externo[/red]"
+        table.add_row(
+            str(rec.get('id')),
+            rec.get('title'),
+            rec.get('author_name', 'Desconocido'),
+            owned_str,
+            rec.get('date_finished')
+        )
+
+    console.print()
+    console.print(Align.center(table))
+    console.print()
