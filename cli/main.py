@@ -1,31 +1,29 @@
 import re
 import subprocess
 import typer
-from rich.console import Console
-from rich.panel import Panel
-from rich.align import Align
-from rich.text import Text
-from rich.columns import Columns
 import click
-from click_repl import repl
-from prompt_toolkit.formatted_text import HTML
 import subprocess
 import time
 import httpx
-from pathlib import Path
 import sys
 import pyfiglet
 import socket
 import sys
 import platform
 import qrcode
+from prompt_toolkit.formatted_text import HTML
+from click_repl import repl
+from pathlib import Path
+from rich.console import Console
+from rich.panel import Panel
+from rich.align import Align
+from rich.text import Text
+from rich.columns import Columns
 from rich.prompt import Prompt
-
-
-# Importaciones limpias
 from cli.books import book_app
 from cli.loans import loan_app
 from cli.wishlist import wishlist_app
+from cli.tracker import tracker_app
 
 console = Console()
 app = typer.Typer(
@@ -34,6 +32,7 @@ app = typer.Typer(
 app.add_typer(book_app, name="book")
 app.add_typer(loan_app, name="loan")
 app.add_typer(wishlist_app, name="wishlist")
+app.add_typer(tracker_app, name="tracker")
 
 
 def ensure_infrastructure_up():
