@@ -162,5 +162,3 @@ const job = new CronJob(
     null, true, 'America/Santiago'
 );
 console.log("✅ Piloto automático activado. Búsqueda diaria a las 09:00 AM.");
-
-main();
