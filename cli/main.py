@@ -35,13 +35,27 @@ app.add_typer(wishlist_app, name="wishlist")
 app.add_typer(tracker_app, name="tracker")
 
 
+# 🚀 1. Memoria de Estado: Esta variable recordará si ya revisamos la red
+_infrastructure_checked = False
+
+
 def ensure_infrastructure_up():
     """El Orquestador Invisible: Verifica la red y levanta Docker si está caído."""
+    global _infrastructure_checked
+
+    # Si ya comprobamos que todo está en orden en esta sesión, saltamos esta función de inmediato
+    if _infrastructure_checked:
+        return
+
     try:
-        httpx.get("http://localhost:8000/api/books/library/", timeout=0.5)
-    except httpx.ConnectError:
+        # Subimos el timeout a 2.0s para evitar "falsos positivos" de caída
+        httpx.get("http://localhost:8000/api/books/library/", timeout=2.0)
+        _infrastructure_checked = True  # Sellamos la verificación exitosa
+
+    # 🚀 Añadimos httpx.RemoteProtocolError al escudo
+    except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError):
         console.print(
-            "\n[bold yellow]🚀 Infraestructura dormida. Encendiendo servidores...[/bold yellow]")
+            "\n[bold yellow]🚀 Infraestructura dormida o inestable. Encendiendo servidores...[/bold yellow]")
         project_dir = Path(__file__).resolve().parent.parent
         try:
             subprocess.run(["docker-compose", "up", "-d"], cwd=project_dir,
@@ -56,17 +70,24 @@ def ensure_infrastructure_up():
         for _ in range(20):
             try:
                 httpx.get(
-                    "http://localhost:8000/api/books/library/", timeout=1.0)
+                    "http://localhost:8000/api/books/library/", timeout=2.0)
                 console.print(
                     "\n[bold green]✅ ¡Sistemas en línea![/bold green]\n")
+                _infrastructure_checked = True  # Sellamos la verificación tras encender
                 return
-            except httpx.ConnectError:
+
+            # 🚀 Añadimos httpx.RemoteProtocolError al escudo del bucle de espera
+            except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError):
                 console.print(".", end="", style="cyan")
                 sys.stdout.flush()
                 time.sleep(1)
 
         console.print(
             "\n[bold red]❌ El servidor tardó demasiado en responder.[/bold red]")
+
+        # 🚀 EL PARCHE: Marcamos como revisado incluso si fracasa,
+        # para que comandos como 'exit' no vuelvan a disparar el bucle de 20 segundos.
+        _infrastructure_checked = True
 
 
 @app.callback()

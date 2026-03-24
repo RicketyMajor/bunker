@@ -5,6 +5,9 @@ import re
 import time
 import random
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 console = Console()
 
