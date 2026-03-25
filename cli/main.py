@@ -193,6 +193,7 @@ def show_welcome_screen():
 
     # 🚀 3. Panel de Comandos Rápidos
     cmd_text = """[cyan]⌘[/cyan] Escanear QR:    [bold cyan]scanner[/bold cyan]
+[green]🌳[/green] Ver Universos:  [bold cyan]tree[/bold cyan]
 [green]✎[/green] Anotar páginas: [bold cyan]tracker log <#>[/bold cyan]
 [magenta]✔[/magenta] Registrar obra: [bold cyan]tracker finish[/bold cyan]"""
 
@@ -296,6 +297,61 @@ def show_scanner_qr():
     if tunnel_process:
         console.print("[dim]Destruyendo túnel efímero...[/dim]")
         tunnel_process.terminate()
+
+
+@app.command(name="tree")
+def show_tree():
+    """Explorador visual del Sistema de Archivos (Directorios y Libros)."""
+    console.print("\n[bold cyan]🌳 EXPLORADOR DE UNIVERSOS[/bold cyan]\n")
+    try:
+        books = httpx.get("http://localhost:8000/api/books/library/").json()
+        dirs = httpx.get("http://localhost:8000/api/books/directories/").json()
+    except Exception as e:
+        console.print(f"[bold red]❌ Error de red: {e}[/bold red]")
+        return
+
+    from rich.tree import Tree
+
+    # 1. Crear la raíz del árbol
+    root = Tree("📚 [bold white]Mi Biblioteca[/bold white]", guide_style="cyan")
+
+    # 2. Agrupar libros por directorio
+    books_by_dir = {}
+    orphans = []
+    for b in books:
+        d_id = b.get('directory')
+        if d_id:
+            if d_id not in books_by_dir:
+                books_by_dir[d_id] = []
+            books_by_dir[d_id].append(b)
+        else:
+            orphans.append(b)
+
+    # 3. Dibujar los Directorios y sus libros anidados
+    for d in dirs:
+        d_id = d['id']
+        color = d.get('color_hex', 'cyan')
+        d_name = d.get('name', 'Unknown')
+
+        # Rama del directorio (Carpeta)
+        branch = root.add(f"[{color}]📁 {d_name}[/{color}]")
+
+        # Hojas (libros pertenecientes a esta carpeta)
+        dir_books = books_by_dir.get(d_id, [])
+        for b in dir_books:
+            status = "[green]✔[/green]" if b.get('is_read') else "[red]✘[/red]"
+            branch.add(f"[dim]ID:{b['id']}[/dim] {b['title']} {status}")
+
+    # 4. Dibujar los libros sueltos en la raíz
+    if orphans:
+        orphans_branch = root.add("[bold dim]📄 Obras sin agrupar[/bold dim]")
+        for b in orphans:
+            status = "[green]✔[/green]" if b.get('is_read') else "[red]✘[/red]"
+            orphans_branch.add(
+                f"[dim]ID:{b['id']}[/dim] {b['title']} {status}")
+
+    console.print(root)
+    console.print()
 
 
 @app.command(name="shell")

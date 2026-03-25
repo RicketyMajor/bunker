@@ -79,6 +79,14 @@ def list_books(
         response = httpx.get(API_LIBRARY, params=params)
         response.raise_for_status()
         books = response.json()
+
+        # 🚀 NUEVO: Hacemos fetch de los directorios para pintarlos en la tabla
+        dir_map = {}
+        dir_resp = httpx.get(
+            "http://localhost:8000/api/books/directories/", timeout=2.0)
+        if dir_resp.status_code == 200:
+            dir_map = {d['id']: d for d in dir_resp.json()}
+
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
         return
@@ -101,6 +109,7 @@ def list_books(
     table.add_column("Título", style="bold white")
     table.add_column("Autor", style="yellow")
     table.add_column("Formato", style="magenta")
+    table.add_column("Directorio", justify="center")
     table.add_column("Leído", justify="center")
     table.add_column("Ubicación", justify="center")
 
@@ -130,11 +139,20 @@ def list_books(
             if cuentos:
                 title_display += f"\n  [dim]↳ {len(cuentos)} cuentos incluidos[/dim]"
 
+        # 🚀 LÓGICA DE DIRECTORIOS: Pintamos la etiqueta de la carpeta
+        dir_id = book.get('directory')
+        if dir_id and dir_id in dir_map:
+            d_info = dir_map[dir_id]
+            dir_display = f"[{d_info['color_hex']}]■ {d_info['name']}[/{d_info['color_hex']}]"
+        else:
+            dir_display = "[dim]---[/dim]"
+
         table.add_row(
             str(book.get('id')),
-            title_display,  # Pasamos nuestro título con la información inyectada
+            title_display,
             book.get('author_name', 'Desconocido'),
             book.get('format_type', '-'),
+            dir_display,  # 🚀 Insertamos el directorio aquí
             status,
             ubicacion
         )
