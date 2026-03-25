@@ -2,7 +2,6 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const Fuse = require('fuse.js'); // El motor de coincidencias difusas
-const { CronJob } = require('cron');
 
 // 🌐 URLs de la API interna de Django
 const API_URL_WATCHERS = 'http://web:8000/api/books/watchers/';
@@ -148,17 +147,4 @@ async function main() {
     console.log("🏁 --- Ciclo de vigilancia terminado ---\n");
 }
 
-// ============================================================================
-// ⏰ PILOTO AUTOMÁTICO (CRON JOB)
-// ============================================================================
-console.log("🕒 Inicializando el orquestador (Cron)...");
-
-const job = new CronJob(
-    '0 9 * * *', 
-    async function() {
-        console.log(`\n⏰ [${new Date().toLocaleTimeString()}] Despertando al trabajador...`);
-        await main();
-    },
-    null, true, 'America/Santiago'
-);
-console.log("✅ Piloto automático activado. Búsqueda diaria a las 09:00 AM.");
+main();

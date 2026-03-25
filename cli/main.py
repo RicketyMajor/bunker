@@ -20,11 +20,14 @@ from rich.align import Align
 from rich.text import Text
 from rich.columns import Columns
 from rich.prompt import Prompt
+from rich.table import Table
+from rich import box
 from cli.books import book_app
 from cli.loans import loan_app
 from cli.wishlist import wishlist_app
 from cli.tracker import tracker_app
 from cli.directories import dir_app
+
 
 console = Console()
 app = typer.Typer(
@@ -317,13 +320,18 @@ def list_structure():
     # Filtramos solo los libros que están en la raíz (sin directorio)
     orphan_books = [b for b in all_books if b.get('directory') is None]
 
+    # 🚀 ORDENAMIENTO ALFABÉTICO Y NATURAL
+    def natural_sort_key(book_dict):
+        title = book_dict.get('title', '').lower()
+        return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', title)]
+
+    all_dirs.sort(key=lambda d: d.get('name', '').lower())
+    orphan_books.sort(key=natural_sort_key)
+
     if not all_dirs and not orphan_books:
         console.print(
             "\n[yellow]Tu biblioteca está completamente vacía.[/yellow]\n")
         return
-
-    from rich.table import Table
-    from rich import box
 
     table = Table(title="🗄️ [bold cyan]SISTEMA DE ARCHIVOS (RAÍZ)[/bold cyan] 🗄️",
                   box=box.SIMPLE_HEAVY, header_style="bold cyan")
@@ -418,6 +426,46 @@ def show_tree():
 
     console.print(root)
     console.print()
+
+
+@app.command(name="sync")
+def run_scraper():
+    """Despierta a los sabuesos (Scraper Node.js) para buscar novedades en la web."""
+    console.print(
+        "\n[bold cyan]🕸️ INICIANDO RASTREO WEB (SCRAPER)[/bold cyan]")
+    console.print("[dim]Conectando con el microservicio Node.js...[/dim]")
+
+    project_dir = Path(__file__).resolve().parent.parent
+
+    try:
+        # 🚀 docker-compose run crea un contenedor efímero, ejecuta el script y lo destruye al terminar
+        process = subprocess.Popen(
+            ["docker-compose", "run", "--rm", "scraper"],
+            cwd=project_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        # Leemos los logs en tiempo real para que veas qué está haciendo el scraper
+        for line in process.stdout:
+            console.print(f"[dim green]>[/dim green] {line.strip()}")
+
+        process.wait()
+
+        if process.returncode == 0:
+            console.print(
+                "\n[bold green]✅ Rastreo web finalizado con éxito.[/bold green]\n")
+        else:
+            console.print(
+                "\n[bold red]❌ El rastreo finalizó con errores (Revisa los logs arriba).[/bold red]\n")
+
+    except FileNotFoundError:
+        console.print(
+            "[bold red]❌ Comando 'docker-compose' no encontrado en el sistema.[/bold red]")
+    except Exception as e:
+        console.print(
+            f"[bold red]❌ Error al ejecutar el scraper: {e}[/bold red]")
 
 
 @app.command(name="shell")

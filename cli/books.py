@@ -83,16 +83,24 @@ def list_books(
         response.raise_for_status()
         books = response.json()
 
-        # 🚀 NUEVO: Hacemos fetch de los directorios para pintarlos en la tabla
+        # Fetch de los directorios para pintarlos en la tabla
         dir_map = {}
         dir_resp = httpx.get(
             "http://localhost:8000/api/books/directories/", timeout=2.0)
         if dir_resp.status_code == 200:
             dir_map = {d['id']: d for d in dir_resp.json()}
 
-        # 🚀 LÓGICA DE VFS: Ocultamos los libros anidados si estamos en la "raíz" (sin filtros)
+        # LÓGICA DE VFS: Ocultamos los libros anidados si estamos en la "raíz"
         if not is_search:
             books = [b for b in books if b.get('directory') is None]
+
+        # 🚀 ALGORITMO DE ORDENAMIENTO NATURAL
+        def natural_sort_key(book_dict):
+            title = book_dict.get('title', '').lower()
+            # Separa letras de números: "tomo 10" -> ["tomo ", 10, ""]
+            return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', title)]
+
+        books.sort(key=natural_sort_key)
 
     except Exception as e:
         console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
