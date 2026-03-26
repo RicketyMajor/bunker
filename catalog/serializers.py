@@ -27,6 +27,20 @@ class BookSerializer(serializers.ModelSerializer):
         # 3. Guardamos el libro normalmente con el autor ya asignado
         return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        # 1. Extraemos el author_input si el usuario lo envió en el PATCH
+        author_input = validated_data.pop('author_input', None)
+
+        # 2. Si hay un autor nuevo, lo buscamos o lo creamos, y se lo asignamos a la instancia
+        if author_input:
+            # Asegúrate de que el modelo Author esté importado
+            author, created = Author.objects.get_or_create(
+                name=author_input.strip())
+            instance.author = author
+
+        # 3. Continuamos con la actualización normal del resto de los campos
+        return super().update(instance, validated_data)
+
 
 class WatcherSerializer(serializers.ModelSerializer):
     class Meta:

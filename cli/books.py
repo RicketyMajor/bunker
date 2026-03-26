@@ -16,6 +16,21 @@ from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 
 
+def sanitize_payload(payload: dict) -> dict:
+    """Escanea y elimina caracteres subrogados corruptos (ej. tildes rotas en Windows) antes de enviar el JSON."""
+    clean = {}
+    for k, v in payload.items():
+        if isinstance(v, str):
+            # Elimina caracteres en el rango subrogado (0xD800 - 0xDFFF)
+            clean[k] = ''.join(c for c in v if not (
+                0xD800 <= ord(c) <= 0xDFFF))
+        elif isinstance(v, dict):
+            clean[k] = sanitize_payload(v)
+        else:
+            clean[k] = v
+    return clean
+
+
 console = Console()
 book_app = typer.Typer(
     help="Manage your library books, comics, and mangas.", no_args_is_help=True)
@@ -365,8 +380,11 @@ def add_book_wizard():
             payload["author_input"] = author_name.strip()
 
         try:
+            # 🚀 Pasamos el payload por el filtro sanitizador
+            clean_payload = sanitize_payload(payload)
+
             # Enviamos el POST al endpoint CRUD normal
-            response = httpx.post(API_LIBRARY, json=payload)
+            response = httpx.post(API_LIBRARY, json=clean_payload)
             if response.status_code == 201:
                 console.print(
                     f"\n[bold green]✅ ¡Obra registrada magistralmente en tu biblioteca![/bold green]")
@@ -533,10 +551,11 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
             table.add_row("1", "Título", book.get('title', '-'))
             table.add_row("2", "Subtítulo", book.get('subtitle', '-'))
             table.add_row("3", "Autor", book.get('author_name', '-'))
-            table.add_row("4", "Formato", book.get('format_type', '-'))
-            table.add_row("5", "Páginas", str(book.get('page_count', '-')))
-            table.add_row("6", "Leído", "Sí" if book.get('is_read') else "No")
-            table.add_row("7", "Detalles (Tomos/Cuentos)",
+            table.add_row("4", "Editorial", book.get('publisher', '-'))
+            table.add_row("5", "Formato", book.get('format_type', '-'))
+            table.add_row("6", "Páginas", str(book.get('page_count', '-')))
+            table.add_row("7", "Leído", "Sí" if book.get('is_read') else "No")
+            table.add_row("8", "Detalles (Tomos/Cuentos)",
                           str(book.get('details', '-')))
             table.add_row(
                 "0", "[bold green]Guardar Cambios y Salir[/bold green]", "")
@@ -563,6 +582,11 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                 payload['author_input'] = val
                 book['author_name'] = val
             elif choice == "4":
+                val = Prompt.ask(
+                    "Nueva Editorial", default=book.get('publisher', ''))
+                payload['publisher'] = val
+                book['publisher'] = val
+            elif choice == "5":
                 console.print(
                     "[dim]Opciones permitidas: NOVEL, MANGA, COMIC, ANTHOLOGY, ACADEMIC[/dim]")
                 val = prompt("Formato (Usa TAB para autocompletar): ",
@@ -605,25 +629,28 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                             book['details'] = details
                 else:
                     console.print("[red]❌ Formato no válido.[/red]")
-            elif choice == "5":
+            elif choice == "6":
                 val = Prompt.ask("Cantidad de páginas",
                                  default=str(book.get('page_count', '')))
                 if val.isdigit():
                     payload['page_count'] = int(val)
                     book['page_count'] = int(val)
-            elif choice == "6":
+            elif choice == "7":
                 val = Confirm.ask(
                     "¿Marcar libro como completado/leído?", default=book.get('is_read', False))
                 payload['is_read'] = val
                 book['is_read'] = val
-            elif choice == "7":
+            elif choice == "8":
                 console.print(
                     "[dim]⚠️ Los detalles se actualizan automáticamente al cambiar el Formato (Opción 4).[/dim]")
 
         # 4. Impacto en la Base de Datos al salir del bucle
         if payload:
+            # 🚀 Pasamos el payload por el filtro sanitizador
+            clean_payload = sanitize_payload(payload)
+
             update_response = httpx.patch(
-                f"{API_LIBRARY}{book_id}/", json=payload)
+                f"{API_LIBRARY}{book_id}/", json=clean_payload)
             if update_response.status_code == 200:
                 console.print(
                     "\n[bold green]✅ Ficha del libro actualizada magistralmente.[/bold green]\n")

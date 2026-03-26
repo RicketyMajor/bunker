@@ -6,7 +6,7 @@ module.exports = {
     scrape: async function() {
         const releases = [];
         // Apuntamos a la vista de novedades de la tienda de Panini
-        const targetUrl = 'https://www.panini.es/shp_esp_es/comics-revistas/novedades.html';
+        const targetUrl = 'https://tiendapanini.cl/manga/novedades-manga';
 
         try {
             const response = await axios.get(targetUrl, {
