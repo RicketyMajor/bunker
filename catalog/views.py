@@ -14,10 +14,11 @@ from cli.api import fetch_book_by_isbn
 @api_view(['POST'])
 def scan_book(request):
     """
-    Recibe un ISBN mediante POST, busca en nuestro Triple Gateway y lo guarda en la base de datos.
+    Recibe un ISBN y opcionalmente la metadata seleccionada, y lo guarda en la BD.
     """
-    # Extrae el ISBN del JSON que envíe el teléfono
+    # Extrae el ISBN y el book_data (si el CLI ya hizo la elección)
     isbn = request.data.get('isbn')
+    book_data = request.data.get('book_data')
 
     if not isbn:
         return Response(
@@ -25,17 +26,19 @@ def scan_book(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Usa el Triple Gateway (Comic Vine -> Google -> OpenLibrary)
-    book_data = fetch_book_by_isbn(isbn)
-
+    # Si viene del escáner web (que aún no tiene menú), usa la lista y toma el primero
     if not book_data:
-        return Response(
-            {"error": f"ISBN {isbn} no encontrado en ninguna de las 3 bases de datos (Comic Vine, Google, OpenLibrary)."},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        results = fetch_book_by_isbn(isbn)
+        if not results:
+            return Response(
+                {"error": f"ISBN {isbn} no encontrado en los oráculos."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        book_data = results[0]
 
     # Guarda los datos en la base de datos
-    author, _ = Author.objects.get_or_create(name=book_data['author'].strip())
+    author_name = book_data.get('author') or "Desconocido"
+    author, _ = Author.objects.get_or_create(name=author_name.strip())
 
     if Book.objects.filter(isbn=isbn).exists():
         return Response(
@@ -45,9 +48,9 @@ def scan_book(request):
 
     # Detección Automática Multi-Formato
     detected_format = 'NOVEL'  # Valor por defecto
-    categories_str = " ".join(book_data['categories']).lower()
-    title_str = book_data['title'].lower()
-    desc_str = book_data['description'].lower()
+    categories_str = " ".join(book_data.get('categories', [])).lower()
+    title_str = book_data.get('title', '').lower()
+    desc_str = book_data.get('description', '').lower()
 
     # Sistema de triage heurístico
     if 'manga' in categories_str or 'manga' in title_str:
@@ -59,26 +62,26 @@ def scan_book(request):
 
     book = Book.objects.create(
         isbn=isbn,
-        title=book_data['title'].strip(),
-        subtitle=book_data['subtitle'],
+        title=book_data.get('title', 'Sin título').strip(),
+        subtitle=book_data.get('subtitle', ''),
         author=author,
-        publisher=book_data['publisher'],
+        publisher=book_data.get('publisher', ''),
         format_type=detected_format,
         is_read=False,
-        page_count=book_data['page_count'] or None,
-        publish_date=book_data['publish_date'],
-        cover_url=book_data['cover_url'],
-        description=book_data['description']
+        page_count=book_data.get('page_count') or None,
+        publish_date=book_data.get('publish_date', ''),
+        cover_url=book_data.get('cover_url', ''),
+        description=book_data.get('description', '')
     )
 
-    for category in book_data['categories']:
+    for category in book_data.get('categories', []):
         clean_category = category.split('/')[-1].strip()
         genre, _ = Genre.objects.get_or_create(name=clean_category)
         book.genres.add(genre)
 
-    # Responde con éxito al teléfono
+    # Responde con éxito
     return Response({
-        "message": f"{detected_format} agregado con éxito a la biblioteca.",
+        "message": f"{detected_format} agregado a la biblioteca.",
         "book": {
             "id": book.id,
             "title": book.title,

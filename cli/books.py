@@ -231,30 +231,71 @@ def add_book_wizard():
     # ---------------------------------------------------------
     elif choice == "2":
         isbn = Prompt.ask(
-            "\n[bold yellow]🔢 Ingresa el código ISBN[/bold yellow]")
-        console.print(f"Consultando registros globales para {isbn}...")
+            "\n[bold yellow] Ingresa el código ISBN[/bold yellow]")
+        console.print(
+            f"Consultando oráculos globales en paralelo para {isbn}...")
 
         try:
-            preview = fetch_book_by_isbn(isbn)
-            if not preview:
+            previews = fetch_book_by_isbn(isbn)
+            if not previews:
                 console.print(
-                    f"[bold red]❌ Libro con ISBN {isbn} no encontrado.[/bold red]")
+                    f"[bold red] Libro con ISBN {isbn} no encontrado en la red.[/bold red]")
                 return
+
+            preview = None
+            # Si solo un oráculo encontró algo, se salta la tabla
+            if len(previews) == 1:
+                preview = previews[0]
+                console.print(
+                    f"[dim green]✓ Único resultado encontrado (Fuente: {preview.get('source', 'API')}).[/dim green]")
+            else:
+                console.print(
+                    f"\n[bold cyan] Múltiples orígenes detectados. Elige la mejor versión:[/bold cyan]")
+                table = Table(box=box.SIMPLE_HEAVY, header_style="bold yellow")
+                table.add_column("#", justify="right")
+                table.add_column("Oráculo", style="cyan")
+                table.add_column("Título", style="bold white")
+                table.add_column("Autor", style="dim")
+                table.add_column("Páginas", justify="right")
+
+                for idx, p in enumerate(previews):
+                    t_title = p.get('title', 'Desconocido')
+                    # Se truncam títulos excesivamente largos para no romper la tabla
+                    t_title = t_title[:45] + \
+                        "..." if len(t_title) > 45 else t_title
+
+                    table.add_row(
+                        str(idx + 1),
+                        p.get('source', 'Desconocido'),
+                        t_title,
+                        p.get('author', 'Desconocido')[:20],
+                        str(p.get('page_count', '-'))
+                    )
+                console.print(table)
+
+                choices = [str(i) for i in range(1, len(previews) + 1)] + ["0"]
+                choice_idx = Prompt.ask(
+                    "\nSelecciona el número correcto [dim](0 para cancelar)[/dim]", choices=choices, default="1")
+
+                if choice_idx == "0":
+                    console.print("\n[yellow]Operación cancelada.[/yellow]\n")
+                    return
+
+                preview = previews[int(choice_idx) - 1]
 
             raw_title = preview.get('title', 'Desconocido')
             base_title, tomo_detectado = parse_manga_title(raw_title)
 
-            # 🐉 EL INTERCEPTADOR: Si detectamos un tomo, buscamos la saga en la DB
+            # Si detecta un tomo, busca la saga en la DB
             saga_existente = None
             if tomo_detectado:
                 resp_lib = httpx.get(API_LIBRARY, params={"title": base_title})
                 if resp_lib.status_code == 200:
                     coincidencias = resp_lib.json()
-                    # Buscamos si alguna coincidencia es MANGA y su título coincide con la base
                     saga_existente = next((b for b in coincidencias if b.get(
-                        'format_type') == 'MANGA' and base_title.lower() in b.get('title', '').lower()), None)
+                        'format_type') in ['MANGA', 'COMIC'] and base_title.lower() in b.get('title', '').lower()), None)
 
-            # 2. Mostramos la tarjeta de confirmación con diseño geométrico
+            # Muestra la tarjeta de confirmación
             preview_text = Text()
             preview_text.append(f"❖ Título: ", style="bold white")
             preview_text.append(
@@ -271,12 +312,11 @@ def add_book_wizard():
 
             console.print()
             console.print(Panel(
-                preview_text, title="[bold magenta]Vista Previa del Libro[/bold magenta]", border_style="magenta", expand=False))
+                preview_text, title=f"[bold magenta]Vista Previa ({preview.get('source')})[/bold magenta]", border_style="magenta", expand=False))
 
-           # 🐉 PREGUNTA DE FUSIÓN
             if tomo_detectado and saga_existente:
                 console.print(
-                    f"\n[bold magenta]🐉 ¡Saga Detectada en tu Biblioteca![/bold magenta]")
+                    f"\n[bold magenta] Saga Detectada en tu Biblioteca[/bold magenta]")
                 console.print(
                     f"Parece que este es el [bold]Tomo {tomo_detectado}[/bold] de la obra [bold cyan]'{saga_existente['title']}'[/bold cyan].")
 
@@ -288,8 +328,8 @@ def add_book_wizard():
 
                     if tomo_detectado not in tomos_lista:
                         tomos_lista.append(tomo_detectado)
-                        tomos_lista.sort(key=lambda x: int(
-                            x) if x.isdigit() else x)  # Orden numérico
+                        tomos_lista.sort(key=lambda x: int(x)
+                                         if x.isdigit() else x)
 
                     detalles['tomos_obtenidos'] = ", ".join(tomos_lista)
 
@@ -297,34 +337,37 @@ def add_book_wizard():
                         f"{API_LIBRARY}{saga_existente['id']}/", json={"details": detalles})
                     if patch_resp.status_code == 200:
                         console.print(
-                            f"\n[bold green]✅ Tomo {tomo_detectado} inyectado exitosamente en '{saga_existente['title']}'.[/bold green]\n")
+                            f"\n[bold green] Tomo {tomo_detectado} inyectado correctamente en '{saga_existente['title']}'.[/bold green]\n")
                     else:
                         console.print(
-                            f"\n[bold red]❌ Error al fusionar el tomo.[/bold red]\n")
-                    return  # Cortamos la ejecución para no guardarlo como libro nuevo
+                            f"\n[bold red] Error al fusionar el tomo.[/bold red]\n")
+                    return
 
-            # 3. 🛡️ BARRERA UX STANDARD (Si no es manga, o si el usuario dijo que no a la fusión)
             if not Confirm.ask("¿Deseas registrar permanentemente este libro en tu biblioteca?"):
                 console.print("\n[yellow]Operación cancelada.[/yellow]\n")
                 return
 
-            # 4. Si aprueba, disparamos la petición a nuestra API para que lo guarde oficialmente
-            response = httpx.post(API_SCAN, json={"isbn": isbn})
+            # Envía toda la metadata ya extraída al backend
+            payload_scan = {
+                "isbn": isbn,
+                "book_data": sanitize_payload(preview)
+            }
+            response = httpx.post(API_SCAN, json=payload_scan)
             data = response.json()
 
             if response.status_code == 201:
                 console.print(
-                    f"\n[bold green]✅ {data.get('message', 'Añadido')}[/bold green] (ID: {data['book']['id']})")
+                    f"\n[bold green] {data.get('message', 'Añadido')}[/bold green] (ID: {data['book']['id']})")
             elif response.status_code == 200:
                 console.print(
-                    f"\n[yellow]⚠️ {data.get('message', 'Ya existe')}[/yellow]")
+                    f"\n[yellow] {data.get('message', 'Ya existe')}[/yellow]")
             else:
                 console.print(
-                    f"\n[bold red]❌ Error: {data.get('error', 'Desconocido')}[/bold red]")
+                    f"\n[bold red] Error: {data.get('error', 'Desconocido')}[/bold red]")
 
         except Exception as e:
             console.print(
-                f"\n[bold red]❌ Error de conexión al servidor: {e}[/bold red]")
+                f"\n[bold red] Error crítico de procesamiento: {e}[/bold red]")
 
     # ---------------------------------------------------------
     # OPCIÓN 3: INGRESO 100% MANUAL (Polimorfismo en acción)
