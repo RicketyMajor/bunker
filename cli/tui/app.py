@@ -1,12 +1,17 @@
 import httpx
 from textual.app import App, ComposeResult
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Header, Footer, DataTable, Markdown, Input, Button, Label
+from textual.widgets import Header, Footer, DataTable, Markdown, Input, Button, Label, TabbedContent, TabPane
 from textual.containers import VerticalScroll, Vertical, Horizontal
 from textual import work
 
 API_LIBRARY = "http://localhost:8000/api/books/library/"
 API_SCAN = "http://localhost:8000/api/books/scan/"
+API_INBOX = "http://localhost:8000/api/books/inbox/"
+API_LOANS = "http://localhost:8000/api/books/loans/"
+API_TRACKER = "http://localhost:8000/api/books/tracker/stats/"
+API_WISHLIST = "http://localhost:8000/api/books/wishlist-crud/"
+API_DIRECTORIES = "http://localhost:8000/api/books/directories/"
 
 # ==============================================================================
 # 📄 PANTALLA SECUNDARIA: DETALLES DEL LIBRO (FASE 40)
@@ -149,7 +154,11 @@ class NeoLibraryApp(App):
 
     CSS = """
     Screen { background: $surface-darken-1; }
-    DataTable { height: 100%; margin: 1 2; }
+    
+    /* Usamos 1fr en lugar de 100% para que Textual calcule 
+       bien el tamaño dentro de pestañas ocultas */
+    DataTable { height: 1fr; margin: 1 2; }
+    
     #details_container { margin: 2 4; padding: 1 2; border: heavy $accent; background: $surface; }
     
     /* Estilos de los Modales Flotantes */
@@ -163,37 +172,91 @@ class NeoLibraryApp(App):
 
     BINDINGS = [
         ("q", "quit", "Salir"),
-        ("a", "add_book", "Añadir (ISBN)"),  # 🚀 NUEVO
-        ("e", "edit_book", "Editar Ficha"),  # 🚀 NUEVO
+        ("a", "add_book", "Añadir (ISBN)"),
+        ("e", "edit_book", "Editar Ficha"),
         ("d", "show_details", "Ver Detalles"),
+        ("1", "switch_tab('tab_library')", "Inv"),
+        ("2", "switch_tab('tab_inbox')", "Inbox"),
+        ("3", "switch_tab('tab_loans')", "Préstamos"),
+        ("4", "switch_tab('tab_tracker')", "Hábitos"),
     ]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield DataTable(id="books_table")
+        # Contenedor de Pestañas
+        with TabbedContent(initial="tab_library", id="main_tabs"):
+            with TabPane("▤ Inventario", id="tab_library"):
+                yield DataTable(id="books_table")  # Le dimos un ID específico
+            with TabPane("◈ Inbox", id="tab_inbox"):
+                yield DataTable(id="inbox_table")
+            with TabPane("⇋ Préstamos", id="tab_loans"):
+                yield DataTable(id="loans_table")
+            with TabPane("∑ Hábitos", id="tab_tracker"):
+                yield Markdown("Cargando métricas del sistema...", id="tracker_content")
         yield Footer()
 
     def on_mount(self) -> None:
-        table = self.query_one(DataTable)
-        table.cursor_type = "row"
-        table.zebra_stripes = True
-        table.add_columns("ID", "Título", "Autor",
-                          "Formato", "Editorial", "Estado")
-        self.load_books()
+        # Configurar Tabla 1: Inventario
+        t_books = self.query_one("#books_table", DataTable)
+        t_books.cursor_type = "row"
+        t_books.zebra_stripes = True
+        t_books.add_columns("ID", "Título", "Autor",
+                            "Formato", "Editorial", "Estado")
+
+        # Configurar Tabla 2: Inbox
+        t_inbox = self.query_one("#inbox_table", DataTable)
+        t_inbox.cursor_type = "row"
+        t_inbox.zebra_stripes = True
+        t_inbox.add_columns("ID", "ISBN", "Fecha de Escaneo")
+
+        # Configurar Tabla 3: Préstamos
+        t_loans = self.query_one("#loans_table", DataTable)
+        t_loans.cursor_type = "row"
+        t_loans.zebra_stripes = True
+        t_loans.add_columns("Libro", "Amigo", "Fecha Préstamo",
+                            "Vencimiento", "Devuelto")
+
+        self.load_all_data()
 
     @work(thread=True)
-    def load_books(self) -> None:
+    def load_all_data(self) -> None:
+        """Carga todas las vistas de forma asíncrona y a prueba de balas."""
+        # 1. Cargar Libros
         try:
-            resp = httpx.get(API_LIBRARY, timeout=5.0)
-            books = resp.json()
-            orphan_books = [b for b in books if b.get('directory') is None]
-            self.call_from_thread(self.populate_table, orphan_books)
-        except Exception:
+            books = httpx.get(API_LIBRARY, timeout=5.0).json()
+            if isinstance(books, list):
+                orphan = [b for b in books if b.get('directory') is None]
+                self.app.call_from_thread(self.populate_books, orphan)
+        except Exception as e:
             self.app.call_from_thread(
-                self.notify, "Fallo al cargar la biblioteca.", severity="error")
+                self.notify, f"Error en Inventario: {e}", severity="error")
 
-    def populate_table(self, books: list) -> None:
-        table = self.query_one(DataTable)
+        # 2. Cargar Inbox
+        try:
+            inbox = httpx.get(API_INBOX, timeout=5.0).json()
+            if isinstance(inbox, list):
+                self.app.call_from_thread(self.populate_inbox, inbox)
+        except Exception:
+            pass  # Falla silenciosa para no llenar de alertas
+
+        # 3. Cargar Préstamos
+        try:
+            loans = httpx.get(API_LOANS, timeout=5.0).json()
+            if isinstance(loans, list):
+                self.app.call_from_thread(self.populate_loans, loans)
+        except Exception:
+            pass
+
+        # 4. Cargar Hábitos
+        try:
+            tracker = httpx.get(API_TRACKER, timeout=5.0).json()
+            if isinstance(tracker, dict):
+                self.app.call_from_thread(self.populate_tracker, tracker)
+        except Exception:
+            pass
+
+    def populate_books(self, books: list) -> None:
+        table = self.query_one("#books_table", DataTable)
         table.clear()
         for book in books:
             status = "✔ Leído" if book.get('is_read') else "✘ Pendiente"
@@ -204,13 +267,47 @@ class NeoLibraryApp(App):
                     'format_type', '-'),
                 book.get('publisher') or '-', status, key=row_key
             )
-        table.focus()
+
+    def populate_inbox(self, items: list) -> None:
+        table = self.query_one("#inbox_table", DataTable)
+        table.clear()
+        for item in items:
+            table.add_row(str(item.get('id')), item.get('isbn'), item.get(
+                'date_scanned', '')[:10], key=str(item.get('id')))
+
+    def populate_loans(self, loans: list) -> None:
+        table = self.query_one("#loans_table", DataTable)
+        table.clear()
+        for loan in loans:
+            status = "✔ Sí" if loan.get('returned') else "✘ No"
+            table.add_row(loan.get('book_title', '-'), loan.get('friend_name', '-'), loan.get(
+                'loan_date', ''), loan.get('due_date', ''), status, key=str(loan.get('id')))
+
+    def populate_tracker(self, stats: dict) -> None:
+        md = self.query_one("#tracker_content", Markdown)
+        text = f"""
+# ∑ Hábitos de Lectura ({stats.get('current_month', 'Mes')} {stats.get('current_year', '')})
+---
+* **Páginas leídas este mes:** `{stats.get('pages_this_month', 0)}`
+* **Libros terminados este mes:** `{stats.get('books_this_month', 0)}`
+"""
+        md.update(text)
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        self.query_one(DataTable).sort(event.column_key)
+        # 🚀 CORRECCIÓN: Ahora ordena la tabla específica en la que hiciste clic
+        event.control.sort(event.column_key)
+
+    # 🚀 ACCIÓN: CAMBIAR PESTAÑAS (PARCHE 4)
+    def action_switch_tab(self, tab_id: str) -> None:
+        self.query_one("#main_tabs", TabbedContent).active = tab_id
 
     def action_show_details(self) -> None:
-        table = self.query_one(DataTable)
+        # 🚀 SEGURO: Si no estamos en la pestaña del inventario, no hace nada
+        if self.query_one("#main_tabs", TabbedContent).active != "tab_library":
+            return
+
+        # <-- Apuntamos explícitamente a #books_table
+        table = self.query_one("#books_table", DataTable)
         try:
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
@@ -219,7 +316,7 @@ class NeoLibraryApp(App):
         except Exception:
             pass
 
-    # 🚀 ACCIÓN 'A': AÑADIR LIBRO
+    # AÑADIR LIBRO
     def action_add_book(self) -> None:
         # Callback: Qué hacer cuando el modal se cierra
         def check_isbn(isbn: str | None) -> None:
@@ -238,7 +335,8 @@ class NeoLibraryApp(App):
             if resp.status_code in [200, 201]:
                 self.app.call_from_thread(
                     self.notify, "¡Libro registrado exitosamente!", title="Éxito")
-                self.app.call_from_thread(self.load_books)  # Refresca la tabla
+                self.app.call_from_thread(
+                    self.load_all_data)  # Refresca la tabla
             else:
                 self.app.call_from_thread(
                     self.notify, f"Error: {resp.json().get('error', 'Desconocido')}", severity="error")
@@ -246,9 +344,16 @@ class NeoLibraryApp(App):
             self.app.call_from_thread(
                 self.notify, f"Error de red: {e}", severity="error")
 
-    # 🚀 ACCIÓN 'E': EDITAR LIBRO
+    # EDITAR LIBRO
     def action_edit_book(self) -> None:
-        table = self.query_one(DataTable)
+        # 🚀 SEGURO: Si no estamos en la pestaña del inventario, bloquea la acción
+        if self.query_one("#main_tabs", TabbedContent).active != "tab_library":
+            self.notify(
+                "La edición solo está disponible en el Inventario.", severity="warning")
+            return
+
+        # <-- Apuntamos explícitamente a #books_table
+        table = self.query_one("#books_table", DataTable)
         try:
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
@@ -287,7 +392,7 @@ class NeoLibraryApp(App):
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.notify, "¡Ficha actualizada!", title="Éxito")
-                self.app.call_from_thread(self.load_books)
+                self.app.call_from_thread(self.load_all_data)
             else:
                 self.app.call_from_thread(
                     self.notify, "Error al actualizar.", severity="error")
