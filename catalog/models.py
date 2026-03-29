@@ -40,9 +40,6 @@ class Book(models.Model):
     format_type = models.CharField(
         max_length=20, choices=FORMAT_CHOICES, default='NOVEL')
 
-    # 🚀 EL NUEVO MOTOR POLIMÓRFICO: Aquí guardaremos diccionarios dinámicos
-    # Ej: {"tomos_totales": 34, "tomos_obtenidos": [1, 2, 3]}
-    # Ej: {"cuentos": ["El Aleph", "El Inmortal"]}
     details = models.JSONField(default=dict, blank=True)
 
     is_read = models.BooleanField(default=False)
@@ -116,7 +113,6 @@ class WishlistItem(models.Model):
 
     date_found = models.DateTimeField(auto_now_add=True)
 
-    # 🚀 LA MEMORIA CACHÉ: Borrado Lógico (Soft Delete)
     is_rejected = models.BooleanField(default=False)
 
     def __str__(self):
@@ -137,7 +133,6 @@ class AnnualRecord(models.Model):
     title = models.CharField(max_length=255)
     author_name = models.CharField(max_length=200, blank=True, null=True)
 
-    # Relación opcional: Si es None, significa que el libro no está en tu DB (era prestado/externo)
     book = models.ForeignKey(Book, on_delete=models.SET_NULL,
                              null=True, blank=True, related_name='read_records')
 
@@ -146,3 +141,12 @@ class AnnualRecord(models.Model):
 
     def __str__(self):
         return f"{self.title} - Terminado el {self.date_finished}"
+
+
+class ScanInbox(models.Model):
+    """Bandeja de entrada temporal para ISBNs escaneados desde el móvil (Purgatorio)."""
+    isbn = models.CharField(max_length=20, unique=True)
+    date_scanned = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"ISBN en espera: {self.isbn}"

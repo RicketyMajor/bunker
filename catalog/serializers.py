@@ -5,40 +5,38 @@ from .models import AnnualRecord
 
 class BookSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.name', read_only=True)
-    # 🚀 Campo virtual para recibir el nombre del autor como texto desde el CLI
     author_input = serializers.CharField(
         write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Book
         fields = '__all__'
-        # Evitamos que DRF nos exija el ID (PK) original
+        # Evita que DRF nos exija el ID (PK) original
         extra_kwargs = {'author': {'read_only': True}}
 
     def create(self, validated_data):
-        # 1. Extraemos el texto del autor antes de guardar el libro
+        # Extrae el texto del autor antes de guardar el libro
         author_name = validated_data.pop('author_input', None)
 
-        # 2. Si viene un nombre, aplicamos la lógica "get_or_create"
+        # Si viene un nombre, aplica la lógica "get_or_create"
         if author_name:
             author, _ = Author.objects.get_or_create(name=author_name.strip())
             validated_data['author'] = author
 
-        # 3. Guardamos el libro normalmente con el autor ya asignado
+        # Guarda el libro normalmente con el autor ya asignado
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # 1. Extraemos el author_input si el usuario lo envió en el PATCH
+        # Extrae el author_input si el usuario lo envió en el PATCH
         author_input = validated_data.pop('author_input', None)
 
-        # 2. Si hay un autor nuevo, lo buscamos o lo creamos, y se lo asignamos a la instancia
+        # Si hay un autor nuevo, lo buscamos o lo crea, y se lo asigna a la instancia
         if author_input:
-            # Asegúrate de que el modelo Author esté importado
             author, created = Author.objects.get_or_create(
                 name=author_input.strip())
             instance.author = author
 
-        # 3. Continuamos con la actualización normal del resto de los campos
+        # actualización normal del resto de los campos
         return super().update(instance, validated_data)
 
 

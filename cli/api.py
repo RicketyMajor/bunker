@@ -5,6 +5,7 @@ import re
 import time
 import random
 import os
+import concurrent.futures
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,7 +33,6 @@ def fetch_from_comicvine(isbn: str) -> Optional[Dict]:
         if not comic:
             return None
 
-        # 🛡️ Programación Defensiva contra Nulos de Comic Vine
         volume_data = comic.get("volume") or {}
         title = comic.get("name") or volume_data.get("name") or "Unknown Comic"
         issue_num = comic.get("issue_number") or ""
@@ -51,6 +51,7 @@ def fetch_from_comicvine(isbn: str) -> Optional[Dict]:
             description = re.sub('<[^<]+?>', '', description).strip()
 
         return {
+            "source": "Comic Vine",
             "title": full_title,
             "subtitle": "",
             "author": "Varios Autores (Cómic)",
@@ -63,20 +64,18 @@ def fetch_from_comicvine(isbn: str) -> Optional[Dict]:
         }
     except Exception as e:
         console.print(
-            f"[dim yellow]⚠️ Comic Vine falló ({e}). Pasando a Google Books...[/dim yellow]")
+            f"[dim yellow] Comic Vine falló ({e}). Pasando a Google Books...[/dim yellow]")
         return None
 
 
 def fetch_from_google_books(isbn: str) -> Optional[Dict]:
     """Oracle 2: Google Books API (Primary Comercial con Tolerancia a Fallos)"""
 
-    # 🚀 Lógica de Portabilidad: Usar llave si existe, sino modo anónimo
     if GOOGLE_BOOKS_KEY:
         url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&key={GOOGLE_BOOKS_KEY}"
     else:
         url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
 
-    # 🚀 Implementación de Exponential Backoff con Jitter (Max 3 intentos)
     for attempt in range(3):
         try:
             response = requests.get(url, timeout=10)
@@ -85,7 +84,7 @@ def fetch_from_google_books(isbn: str) -> Optional[Dict]:
             if response.status_code == 429:
                 sleep_time = (2 ** attempt) + random.uniform(0, 1)
                 console.print(
-                    f"[dim yellow]⚠️ Estrangulamiento en Google (429). Reintentando en {sleep_time:.1f}s...[/dim yellow]")
+                    f"[dim yellow] Estrangulamiento en Google (429). Reintentando en {sleep_time:.1f}s...[/dim yellow]")
                 time.sleep(sleep_time)
                 continue  # Volvemos a intentar el ciclo
 
@@ -103,6 +102,7 @@ def fetch_from_google_books(isbn: str) -> Optional[Dict]:
             categories = volume_info.get("categories") or []
 
             return {
+                "source": "Google Books",
                 "title": volume_info.get("title", "Unknown Title"),
                 "subtitle": volume_info.get("subtitle", ""),
                 "author": authors[0] if authors else "Unknown Author",
@@ -115,7 +115,7 @@ def fetch_from_google_books(isbn: str) -> Optional[Dict]:
             }
         except Exception as e:
             console.print(
-                f"[dim yellow]⚠️ Aviso: Falló Google Books ({e}). Intentando Fallback final...[/dim yellow]")
+                f"[dim yellow] Falló Google Books ({e}). Intentando Fallback final...[/dim yellow]")
             return None
 
     return None  # Si agota los 3 intentos, se rinde y pasa a OpenLibrary
@@ -136,13 +136,13 @@ def fetch_from_openlibrary(isbn: str) -> Optional[Dict]:
 
         book = data[key]
 
-        # 🛡️ Programación Defensiva en OpenLibrary
         authors = book.get("authors") or [{"name": "Unknown Author"}]
         publishers = book.get("publishers") or [{"name": ""}]
         subjects = book.get("subjects") or []
         cover_data = book.get("cover") or {}
 
         return {
+            "source": "OpenLibrary",
             "title": book.get("title", "Unknown Title"),
             "subtitle": book.get("subtitle", ""),
             "author": authors[0].get("name", "Unknown Author"),
@@ -157,25 +157,40 @@ def fetch_from_openlibrary(isbn: str) -> Optional[Dict]:
         return None
 
 
-def fetch_book_by_isbn(isbn: str) -> Optional[Dict]:
-    """El Gateway Definitivo (Comic Vine -> Google Books -> OpenLibrary)"""
+def fetch_book_by_isbn(isbn: str) -> list:
+    """
+    El Gateway Federado Concurrente.
+    Dispara hilos en paralelo a Comic Vine, Google Books y OpenLibrary simultáneamente.
+    Retorna una lista con todas las versiones encontradas.
+    """
     console.print(
-        f"[dim]Consultando Oracle 1 (Comic Vine) para ISBN {isbn}...[/dim]")
-    data = fetch_from_comicvine(isbn)
-    if data:
-        console.print("[dim green]✓ Encontrado en Comic Vine.[/dim green]")
-        return data
+        f"[cyan] Despertando a los Oráculos para el ISBN {isbn}...[/cyan]")
 
-    console.print(f"[dim]Consultando Oracle 2 (Google Books)...[/dim]")
-    data = fetch_from_google_books(isbn)
-    if data:
-        console.print("[dim green]✓ Encontrado en Google Books.[/dim green]")
-        return data
+    results = []
 
-    console.print(f"[dim]Consultando Oracle 3 (OpenLibrary)...[/dim]")
-    data = fetch_from_openlibrary(isbn)
-    if data:
-        console.print("[dim green]✓ Encontrado en OpenLibrary.[/dim green]")
-        return data
+    # ThreadPoolExecutor para lanzar las 3 peticiones de red al mismo tiempo
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        # Mapea los hilos a sus respectivas funciones
+        future_to_api = {
+            executor.submit(fetch_from_comicvine, isbn): "Comic Vine",
+            executor.submit(fetch_from_google_books, isbn): "Google Books",
+            executor.submit(fetch_from_openlibrary, isbn): "OpenLibrary"
+        }
 
-    return None
+        # A medida que los oráculos van respondiendo (el primero que termine), procesa sus datos
+        for future in concurrent.futures.as_completed(future_to_api):
+            api_name = future_to_api[future]
+            try:
+                data = future.result()
+                if data:
+                    console.print(
+                        f"  [green]✔ {api_name} encontró una coincidencia.[/green]")
+                    results.append(data)
+                else:
+                    console.print(
+                        f"  [dim]✘ {api_name} no encontró registros.[/dim]")
+            except Exception as e:
+                console.print(
+                    f"  [dim red] Error interno en {api_name}: {e}[/dim red]")
+
+    return results

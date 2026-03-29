@@ -8,8 +8,6 @@ from django.db.models import Sum
 from rest_framework import viewsets
 from .serializers import BookSerializer, WatcherSerializer, WishlistItemSerializer, FriendSerializer, LoanSerializer, AnnualRecordSerializer, DirectorySerializer
 import django_filters
-
-# Importamos la herramienta que creamos para el CLI
 from cli.api import fetch_book_by_isbn
 
 
@@ -18,7 +16,7 @@ def scan_book(request):
     """
     Recibe un ISBN mediante POST, busca en nuestro Triple Gateway y lo guarda en la base de datos.
     """
-    # 1. Extraemos el ISBN del JSON que envíe el teléfono
+    # Extrae el ISBN del JSON que envíe el teléfono
     isbn = request.data.get('isbn')
 
     if not isbn:
@@ -27,27 +25,25 @@ def scan_book(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 2. Usamos el Triple Gateway (Comic Vine -> Google -> OpenLibrary)
+    # Usa el Triple Gateway (Comic Vine -> Google -> OpenLibrary)
     book_data = fetch_book_by_isbn(isbn)
 
     if not book_data:
-        # 🚀 Corrección: Ahora el mensaje refleja la realidad de nuestra arquitectura distribuida
         return Response(
             {"error": f"ISBN {isbn} no encontrado en ninguna de las 3 bases de datos (Comic Vine, Google, OpenLibrary)."},
             status=status.HTTP_404_NOT_FOUND
         )
 
-    # 3. Guardamos los datos en la base de datos
+    # Guarda los datos en la base de datos
     author, _ = Author.objects.get_or_create(name=book_data['author'].strip())
 
-    # 🛡️ Prevención matemática estricta por ISBN
     if Book.objects.filter(isbn=isbn).exists():
         return Response(
             {"message": f"¡El tomo con ISBN {isbn} ya está registrado en tu biblioteca!"},
             status=status.HTTP_200_OK
         )
 
-    # 🚀 CEREBRO HEURÍSTICO: Detección Automática Multi-Formato
+    # Detección Automática Multi-Formato
     detected_format = 'NOVEL'  # Valor por defecto
     categories_str = " ".join(book_data['categories']).lower()
     title_str = book_data['title'].lower()
@@ -67,7 +63,7 @@ def scan_book(request):
         subtitle=book_data['subtitle'],
         author=author,
         publisher=book_data['publisher'],
-        format_type=detected_format,  # <-- Asignación quirúrgica
+        format_type=detected_format,
         is_read=False,
         page_count=book_data['page_count'] or None,
         publish_date=book_data['publish_date'],
@@ -80,9 +76,9 @@ def scan_book(request):
         genre, _ = Genre.objects.get_or_create(name=clean_category)
         book.genres.add(genre)
 
-    # 4. Respondemos con éxito al teléfono
+    # Responde con éxito al teléfono
     return Response({
-        "message": f"✅ ¡{detected_format} agregado con éxito a la biblioteca!",
+        "message": f"{detected_format} agregado con éxito a la biblioteca.",
         "book": {
             "id": book.id,
             "title": book.title,
@@ -97,9 +93,6 @@ def scanner_view(request):
     """
     return render(request, 'catalog/scanner.html')
 
-# Arriba del todo, asegúrate de añadir Watcher y WishlistItem a tu importación de models:
-# from .models import Book, Author, Genre, Watcher, WishlistItem
-
 
 @api_view(['GET'])
 def get_active_watchers(_request):
@@ -107,7 +100,7 @@ def get_active_watchers(_request):
     Endpoint para que Node.js pregunte: "¿Qué palabras clave debo vigilar hoy?"
     """
     watchers = Watcher.objects.filter(is_active=True)
-    # Extraemos solo los textos en una lista simple
+    # Extrae solo los textos en una lista simple
     keywords = [w.keyword for w in watchers]
 
     return Response({"keywords": keywords}, status=status.HTTP_200_OK)
@@ -124,11 +117,11 @@ def add_wishlist_item(request):
     if not title:
         return Response({"error": "El título es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Evitamos que el scraper llene la base de datos con el mismo libro todos los días
+    # Evita que el scraper llene la base de datos con el mismo libro todos los días
     if WishlistItem.objects.filter(title=title, buy_url=buy_url).exists():
         return Response({"message": "El libro ya estaba en el tablón de deseos."}, status=status.HTTP_200_OK)
 
-    # Creamos el nuevo registro en el tablón
+    # Crea el nuevo registro en el tablón
     item = WishlistItem.objects.create(
         title=title,
         author_string=request.data.get('author_string', ''),
@@ -139,7 +132,7 @@ def add_wishlist_item(request):
     )
 
     return Response({
-        "message": "✅ Nuevo lanzamiento añadido al tablón de deseos.",
+        "message": "Nuevo lanzamiento añadido al tablón de deseos.",
         "id": item.id
     }, status=status.HTTP_201_CREATED)
 
@@ -163,7 +156,7 @@ class BookViewSet(viewsets.ModelViewSet):
     """Provee operaciones CRUD automáticas para los libros de la biblioteca."""
     queryset = Book.objects.all().order_by('-id')
     serializer_class = BookSerializer
-    filterset_class = BookFilter  # <-- Conectamos nuestro nuevo filtro inteligente
+    filterset_class = BookFilter
 
 
 class WatcherViewSet(viewsets.ModelViewSet):
@@ -174,7 +167,6 @@ class WatcherViewSet(viewsets.ModelViewSet):
 
 class WishlistItemViewSet(viewsets.ModelViewSet):
     """Provee operaciones CRUD para el tablón de deseos."""
-    # 🚀 El CLI solo verá los que NO han sido rechazados
     queryset = WishlistItem.objects.filter(
         is_rejected=False).order_by('-date_found')
     serializer_class = WishlistItemSerializer
@@ -201,9 +193,9 @@ def log_pages(request):
         if pages <= 0:
             return Response({"error": "La cantidad de páginas debe ser mayor a 0"}, status=400)
 
-        # Simplemente añadimos un evento al registro
+        # Simplemente añade un evento al registro
         ReadingSession.objects.create(pages_read=pages)
-        return Response({"message": f"✅ {pages} páginas registradas exitosamente para hoy."}, status=201)
+        return Response({"message": f"{pages} páginas registradas exitosamente para hoy."}, status=201)
     except ValueError:
         return Response({"error": "Valor numérico inválido"}, status=400)
 
@@ -219,7 +211,7 @@ def finish_book(request):
     if not title:
         return Response({"error": "El título es obligatorio"}, status=400)
 
-    # 1. Creamos el registro histórico
+    # Crea el registro histórico
     AnnualRecord.objects.create(
         title=title,
         author_name=author_name,
@@ -227,7 +219,7 @@ def finish_book(request):
         is_owned=is_owned
     )
 
-    # 2. Si el libro nos pertenece, lo marcamos como leído en la base de datos central
+    # Si el libro es mio, lo marca como leído en la base de datos central
     if book_id and is_owned:
         try:
             book = Book.objects.get(id=book_id)
@@ -237,7 +229,7 @@ def finish_book(request):
         except Book.DoesNotExist:
             pass
 
-    return Response({"message": f"✅ ¡Felicidades! '{title}' añadido a tu registro anual."}, status=201)
+    return Response({"message": f"¡Felicidades! '{title}' añadido al registro anual."}, status=201)
 
 
 @api_view(['GET'])
@@ -245,13 +237,13 @@ def tracker_stats(request):
     """Calcula las métricas dinámicas del mes actual para el Centro de Mando"""
     now = timezone.now()
 
-    # 1. Sumamos las páginas, filtrando solo por el año y mes actuales
+    # Suma las páginas, filtrando solo por el año y mes actuales
     mes_actual_sessions = ReadingSession.objects.filter(
         date__year=now.year, date__month=now.month)
     paginas_mes = mes_actual_sessions.aggregate(
         Sum('pages_read'))['pages_read__sum'] or 0
 
-    # 2. Contamos los libros terminados este mes
+    # Cuenta los libros terminados este mes
     libros_mes = AnnualRecord.objects.filter(
         date_finished__year=now.year, date_finished__month=now.month).count()
 
@@ -269,10 +261,8 @@ class AnnualRecordViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         now = timezone.now()
-        # El "reset" anual: solo devolvemos los registros de este año
+        # El reset anual solo devuelve los registros de este año
         return AnnualRecord.objects.filter(date_finished__year=now.year).order_by('-date_finished')
-
-# Asegúrate de importar Directory y DirectorySerializer en la parte superior
 
 
 class DirectoryViewSet(viewsets.ModelViewSet):

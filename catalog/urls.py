@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from .views import log_pages, finish_book, tracker_stats, AnnualRecordViewSet
 
-# Creamos el enrutador y registramos nuestras nuevas vistas automáticas
+#  enrutador y registra las nuevas vistas automáticas
 router = DefaultRouter()
 router.register(r'library', views.BookViewSet, basename='library')
 router.register(r'watchers-crud', views.WatcherViewSet,
@@ -17,7 +17,7 @@ router.register(r'tracker/annual', AnnualRecordViewSet,
 router.register(r'directories', views.DirectoryViewSet, basename='directories')
 
 urlpatterns = [
-    # Tus endpoints antiguos siguen funcionando intactos
+    # endpoints
     path('scan/', views.scan_book, name='scan-book'),
     path('scanner/', views.scanner_view, name='scanner-ui'),
     path('watchers/', views.get_active_watchers, name='watchers-list'),
@@ -26,6 +26,6 @@ urlpatterns = [
     path('tracker/finish/', finish_book, name='finish-book'),
     path('tracker/stats/', tracker_stats, name='tracker-stats'),
 
-    # Inyectamos todas las rutas automáticas generadas por el router
+    # Inyecta todas las rutas automáticas generadas por el router
     path('', include(router.urls)),
 ]
