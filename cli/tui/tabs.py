@@ -1,5 +1,6 @@
 from textual.app import ComposeResult
 from textual.widgets import TabPane, DataTable, Markdown
+from textual.containers import Vertical
 
 
 class InventoryTab(TabPane):
@@ -43,7 +44,10 @@ class TrackerTab(TabPane):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Markdown("Cargando métricas del sistema...", id="tracker_content")
+        # 🚀 Anidamos el panel de stats y la tabla debajo
+        with Vertical():
+            yield Markdown("Cargando métricas del sistema...", id="tracker_content")
+            yield DataTable(id="annual_table")
 
 
 class WishlistTab(TabPane):

@@ -29,6 +29,8 @@ class NeoLibraryApp(App):
     .modal_title { text-style: bold; margin-bottom: 1; }
     .form_buttons { height: auto; margin-top: 1; align: center middle; }
     Button { margin: 0 1; }
+    #tracker_content { height: auto; margin: 1 2; padding: 0 1; border-left: thick $success; background: $surface; }
+    #annual_table { height: 1fr; margin: 0 2 1 2; }
     """
 
     BINDINGS = [
@@ -85,6 +87,12 @@ class NeoLibraryApp(App):
         t_wishlist.zebra_stripes = True
         t_wishlist.add_columns("ID", "Título", "Editorial", "Precio", "Fecha")
 
+        # Configurar Tabla 6: Registro Anual (Hábitos)
+        t_annual = self.query_one("#annual_table", DataTable)
+        t_annual.cursor_type = "row"
+        t_annual.zebra_stripes = True
+        t_annual.add_columns("ID", "Título", "Autor", "Propiedad", "Terminado")
+
         self.load_all_data()
 
     @work(thread=True)
@@ -126,6 +134,16 @@ class NeoLibraryApp(App):
             wishlist = httpx.get(API_WISHLIST, timeout=5.0).json()
             if isinstance(wishlist, list):
                 self.app.call_from_thread(self.populate_wishlist, wishlist)
+        except Exception:
+            pass
+
+        # Cargar Hábitos y Registro Anual
+        try:
+            tracker = httpx.get(API_TRACKER, timeout=5.0).json()
+            annual = httpx.get(API_TRACKER_ANNUAL, timeout=5.0).json()
+            if isinstance(tracker, dict):
+                self.app.call_from_thread(
+                    self.populate_tracker, tracker, annual)
         except Exception:
             pass
 
@@ -180,7 +198,8 @@ class NeoLibraryApp(App):
             table.add_row(loan.get('book_title', '-'), loan.get('friend_name', '-'), loan.get(
                 'loan_date', ''), loan.get('due_date', ''), status, key=str(loan.get('id')))
 
-    def populate_tracker(self, stats: dict) -> None:
+    def populate_tracker(self, stats: dict, annual: list) -> None:
+        # 1. Panel de Markdown superior
         md = self.query_one("#tracker_content", Markdown)
         text = f"""
 # ∑ Hábitos de Lectura ({stats.get('current_month', 'Mes')} {stats.get('current_year', '')})
@@ -189,6 +208,20 @@ class NeoLibraryApp(App):
 * **Libros terminados este mes:** `{stats.get('books_this_month', 0)}`
 """
         md.update(text)
+
+        # 2. Tabla Anual inferior
+        table = self.query_one("#annual_table", DataTable)
+        table.clear()
+        for rec in annual:
+            owned_str = "✔ Estantería" if rec.get('is_owned') else "⇋ Externo"
+            table.add_row(
+                str(rec.get('id')),
+                rec.get('title', '').upper(),
+                rec.get('author_name', 'Desconocido'),
+                owned_str,
+                rec.get('date_finished', '')[:10],
+                key=str(rec.get('id'))
+            )
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         event.control.sort(event.column_key)

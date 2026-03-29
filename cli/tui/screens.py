@@ -2,7 +2,7 @@ import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Markdown
-from textual.containers import VerticalScroll
+from textual.containers import VerticalScroll, Vertical, Grid
 from textual import work
 from .constants import API_LIBRARY
 
@@ -13,14 +13,44 @@ class BookDetailsScreen(Screen):
         ("q", "app.quit", "Salir")
     ]
 
+    # 🚀 REVOLUCIÓN GRÁFICA: CSS Integrado en la Pantalla
+    CSS = """
+    #details_root { padding: 1 2; }
+    
+    #header_panel { 
+        content-align: center middle; 
+        height: auto; 
+        margin-bottom: 1; 
+    }
+    
+    #details_grid { 
+        grid-size: 2; /* Dos columnas */
+        grid-columns: 1fr 2fr; /* La sinopsis (der) ocupa el doble que la técnica (izq) */
+        grid-gutter: 2; /* Espacio entre columnas */
+    }
+    
+    .info_panel { 
+        border: heavy $accent; 
+        padding: 0 1; 
+        background: $surface; 
+        height: auto; 
+    }
+    """
+
     def __init__(self, book_id: str, **kwargs):
         super().__init__(**kwargs)
         self.book_id = book_id
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with VerticalScroll(id="details_container"):
-            yield Markdown("Cargando los archivos de la base de datos...", id="details_content")
+        # 🚀 CONTENEDORES GRID
+        with VerticalScroll(id="details_root"):
+            yield Markdown("Cargando...", id="header_panel")
+            with Grid(id="details_grid"):
+                with Vertical(classes="info_panel"):
+                    yield Markdown(id="tech_panel")
+                with Vertical(classes="info_panel"):
+                    yield Markdown(id="synopsis_panel")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -31,52 +61,54 @@ class BookDetailsScreen(Screen):
         try:
             resp = httpx.get(f"{API_LIBRARY}{self.book_id}/", timeout=5.0)
             if resp.status_code == 200:
-                book = resp.json()
-                self.app.call_from_thread(self.render_details, book)
-            else:
-                self.app.call_from_thread(
-                    self.show_error, f"Error {resp.status_code}")
-        except Exception as e:
-            self.app.call_from_thread(self.show_error, f"Error de red: {e}")
+                self.app.call_from_thread(self.render_details, resp.json())
+        except Exception:
+            pass
 
     def render_details(self, book: dict) -> None:
-        content = self.query_one("#details_content", Markdown)
+        # 1. Cabecera (Centro)
+        title = book.get('title', 'Sin Título').upper()
+        subtitle = f"*{book.get('subtitle')}*" if book.get('subtitle') else ""
+        author = book.get('author_name', 'Desconocido')
+        self.query_one("#header_panel", Markdown).update(
+            f"# {title}\n{subtitle}\n### ✎ {author}")
+
+        # 2. Ficha Técnica (Izquierda)
         generos_str = ", ".join(book.get('genre_list', [])) if book.get(
             'genre_list') else "Sin clasificar"
         estado = "✔ Leído" if book.get('is_read') else "✘ Pendiente"
         ubicacion = "⇋ Prestado" if book.get(
             'is_loaned') else "❖ En Estantería"
 
-        md_text = f"""
-# {book.get('title', 'Sin Título').upper()}
-{f"*{book.get('subtitle')}*" if book.get('subtitle') else ""}
-
-**Autor:** {book.get('author_name', 'Desconocido')}
-**Editorial:** {book.get('publisher') or '-'} | **Formato:** {book.get('format_type', '-')} | **Géneros:** {generos_str}
-**Páginas:** {book.get('page_count') or '-'} | **Publicación:** {book.get('publish_date') or '-'}
+        tech_md = f"""### ❖ Ficha Técnica
+**Editorial:** {book.get('publisher') or '-'}
+**Formato:** {book.get('format_type', '-')}
+**Géneros:** {generos_str}
+**Páginas:** {book.get('page_count') or '-'}
+**Publicación:** {book.get('publish_date') or '-'}
 
 ---
 ### ⌖ Estado Físico
 * **Lectura:** {estado}
 * **Ubicación:** {ubicacion}
 """
+        self.query_one("#tech_panel", Markdown).update(tech_md)
+
+        # 3. Sinopsis y Detalles Extra (Derecha)
+        synopsis_md = ""
         details = book.get('details', {})
         if details:
-            md_text += "### ◈ Detalles Adicionales\n"
+            synopsis_md += "### ◈ Detalles Adicionales\n"
             for k, v in details.items():
                 if isinstance(v, list):
                     v = ", ".join(v)
-                md_text += f"* **{k.replace('_', ' ').title()}:** {v}\n"
+                synopsis_md += f"* **{k.replace('_', ' ').title()}:** {v}\n"
+            synopsis_md += "\n---\n"
 
         desc = book.get('description')
-        if desc:
-            md_text += f"\n### 📖 Sinopsis\n{desc}"
+        synopsis_md += f"### 📖 Sinopsis\n{desc if desc else '*Sin descripción disponible.*'}"
 
-        content.update(md_text)
-
-    def show_error(self, message: str) -> None:
-        self.query_one("#details_content", Markdown).update(
-            f"### ❌ Error\n{message}")
+        self.query_one("#synopsis_panel", Markdown).update(synopsis_md)
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
