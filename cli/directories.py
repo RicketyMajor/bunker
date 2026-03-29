@@ -12,7 +12,6 @@ console = Console()
 dir_app = typer.Typer(
     help="Gestiona los directorios y colecciones maestras.", no_args_is_help=True)
 
-# 🚀 Asegúrate de que las rutas coincidan con tu urls.py
 API_DIR = "http://localhost:8000/api/books/directories/"
 API_LIBRARY = "http://localhost:8000/api/books/library/"
 
@@ -36,11 +35,11 @@ def create_dir():
             API_DIR, json={"name": name.strip(), "color_hex": color})
         if resp.status_code == 201:
             console.print(
-                f"\n[bold green]✅ Directorio '{name}' creado y montado exitosamente.[/bold green]\n")
+                f"\n[bold green]Directorio '{name}' creado y montado exitosamente.[/bold green]\n")
         else:
-            console.print(f"\n[bold red]❌ Error: {resp.text}[/bold red]\n")
+            console.print(f"\n[bold red]Error: {resp.text}[/bold red]\n")
     except Exception as e:
-        console.print(f"[bold red]❌ Error de red: {e}[/bold red]")
+        console.print(f"[bold red]Error de red: {e}[/bold red]")
 
 
 @dir_app.command("list")
@@ -51,7 +50,7 @@ def list_dirs():
         resp.raise_for_status()
         dirs = resp.json()
 
-        # Hacemos un fetch a la biblioteca para calcular el peso de cada directorio
+        # Hacem un fetch a la biblioteca para calcular el peso de cada directorio
         resp_books = httpx.get(API_LIBRARY)
         books = resp_books.json()
 
@@ -71,12 +70,11 @@ def list_dirs():
     table.add_column("Volumen (Obras)", justify="center")
 
     for d in dirs:
-        # 🚀 LA MAGIA VISUAL: Creamos el prefijo [D-X] en la terminal, manteniendo el ID entero en PostgreSQL
         d_id = d.get('id')
         color = d.get('color_hex', 'cyan')
         name = d.get('name', 'Unknown')
 
-        # Calculamos cuántos libros apuntan a esta llave foránea
+        # Calcula cuántos libros apuntan a esta llave foránea
         count = sum(1 for b in books if b.get('directory') == d_id)
 
         table.add_row(
@@ -104,13 +102,13 @@ def add_to_dir(
     ids = [i.strip() for i in book_ids.split(",") if i.strip().isdigit()]
     if not ids:
         console.print(
-            "[bold red]❌ No se proporcionaron IDs numéricos válidos.[/bold red]")
+            "[bold red]No se proporcionaron IDs numéricos válidos.[/bold red]")
         return
 
     success_count = 0
     for b_id in ids:
         try:
-            # Usamos PATCH para actualizar únicamente la llave foránea 'directory'
+            # Usa PATCH para actualizar únicamente la llave foránea 'directory'
             resp = httpx.patch(f"{API_LIBRARY}{b_id}/",
                                json={"directory": dir_id})
             if resp.status_code == 200:
@@ -119,13 +117,13 @@ def add_to_dir(
                     f"  [green]✔ Tomo #{b_id} transferido exitosamente.[/green]")
             else:
                 console.print(
-                    f"  [red]❌ Falló el tomo #{b_id}: {resp.text}[/red]")
+                    f"  [red]Falló el tomo #{b_id}: {resp.text}[/red]")
         except Exception as e:
             console.print(
-                f"  [red]❌ Error de red con el tomo #{b_id}: {e}[/red]")
+                f"  [red]Error de red con el tomo #{b_id}: {e}[/red]")
 
     console.print(
-        f"\n[bold magenta]✨ Operación finalizada. {success_count} tomos anidados.[/bold magenta]\n")
+        f"\n[bold magenta]Operación finalizada. {success_count} tomos anidados.[/bold magenta]\n")
 
 
 @dir_app.command("delete")
@@ -139,12 +137,12 @@ def delete_dir(dir_id: int = typer.Argument(..., help="ID numérico del director
         resp = httpx.delete(f"{API_DIR}{dir_id}/")
         if resp.status_code == 204:
             console.print(
-                f"\n[bold green]✅ Directorio D-{dir_id} desintegrado exitosamente.[/bold green]\n")
+                f"\n[bold green]Directorio D-{dir_id} desintegrado exitosamente.[/bold green]\n")
         else:
             console.print(
-                f"\n[bold red]❌ Error al eliminar. ¿Existe el ID {dir_id}?[/bold red]\n")
+                f"\n[bold red]Error al eliminar. ¿Existe el ID {dir_id}?[/bold red]\n")
     except Exception as e:
-        console.print(f"[bold red]❌ Error de red: {e}[/bold red]")
+        console.print(f"[bold red]Error de red: {e}[/bold red]")
 
 
 @dir_app.command("edit")
@@ -154,12 +152,12 @@ def edit_dir(dir_id: int = typer.Argument(..., help="ID numérico del directorio
         resp = httpx.get(f"{API_DIR}{dir_id}/")
         if resp.status_code == 404:
             console.print(
-                f"[bold red]❌ Directorio D-{dir_id} no encontrado.[/bold red]")
+                f"[bold red]Directorio D-{dir_id} no encontrado.[/bold red]")
             return
 
         directory = resp.json()
         console.print(
-            f"\n[bold cyan]✏️ Editando Directorio: {directory['name']}[/bold cyan]")
+            f"\n[bold cyan]Editando Directorio: {directory['name']}[/bold cyan]")
 
         new_name = Prompt.ask("Nuevo nombre", default=directory['name'])
 
@@ -178,28 +176,28 @@ def edit_dir(dir_id: int = typer.Argument(..., help="ID numérico del directorio
 
         if update_resp.status_code == 200:
             console.print(
-                "\n[bold green]✅ Directorio actualizado magistralmente.[/bold green]\n")
+                "\n[bold green]Directorio actualizado magistralmente.[/bold green]\n")
         else:
             console.print(
-                f"\n[bold red]❌ Error al actualizar: {update_resp.text}[/bold red]\n")
+                f"\n[bold red]Error al actualizar: {update_resp.text}[/bold red]\n")
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de red: {e}[/bold red]")
+        console.print(f"[bold red]Error de red: {e}[/bold red]")
 
 
 @dir_app.command("view")
 def view_dir(dir_id: int = typer.Argument(..., help="ID numérico del directorio a explorar")):
     """Abre el directorio y muestra los libros anidados en su interior."""
     try:
-        # Obtenemos la metadata del directorio
+        # Obtiene la metadata del directorio
         d_resp = httpx.get(f"{API_DIR}{dir_id}/")
         if d_resp.status_code == 404:
             console.print(
-                f"[bold red]❌ Directorio D-{dir_id} no encontrado.[/bold red]")
+                f"[bold red]Directorio D-{dir_id} no encontrado.[/bold red]")
             return
         directory = d_resp.json()
 
-        # Obtenemos todos los libros y filtramos localmente (rápido y eficiente)
+        # Obtiene todos los libros y filtramos localmente
         b_resp = httpx.get(API_LIBRARY)
         b_resp.raise_for_status()
         all_books = b_resp.json()
@@ -218,21 +216,20 @@ def view_dir(dir_id: int = typer.Argument(..., help="ID numérico del directorio
             f"\n[{color}]■ Directorio '{name}' está vacío.[/_{color}]\n")
         return
 
-   # Renderizamos la tabla con todas las columnas estándar
+   # Renderiza la tabla con todas las columnas estándar
     table = Table(title=f"[{color}]■ CONTENIDO DE: {name.upper()}[/{color}]",
                   box=box.SIMPLE_HEAVY, header_style=f"bold {color}", border_style=color)
     table.add_column("ID", justify="right", style="dim", no_wrap=True)
     table.add_column("Título", style="bold white")
     table.add_column("Autor", style="yellow")
     table.add_column("Formato", style="magenta")
-    table.add_column("Editorial", style="green")  # 🚀 Nueva columna
+    table.add_column("Editorial", style="green")
     table.add_column("Leído", justify="center")
-    table.add_column("Ubicación", justify="center")  # 🚀 Nueva columna
+    table.add_column("Ubicación", justify="center")
 
     for book in dir_books:
         status = "[green]✔[/green]" if book.get('is_read') else "[red]✘[/red]"
         ubicacion = "[bold red]⇋ Prestado[/bold red]" if book.get(
-            # 🚀 Lógica de ubicación
             'is_loaned') else "[bold green]❖ Estantería[/bold green]"
 
         title_display = book.get('title', 'Sin título').upper()
@@ -255,9 +252,9 @@ def view_dir(dir_id: int = typer.Argument(..., help="ID numérico del directorio
             title_display,
             book.get('author_name', 'Desconocido'),
             fmt,
-            book.get('publisher') or '-',  # 🚀 Render de editorial
+            book.get('publisher') or '-',
             status,
-            ubicacion  # 🚀 Render de ubicación
+            ubicacion
         )
 
     console.print()

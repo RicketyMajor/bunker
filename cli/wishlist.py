@@ -10,7 +10,6 @@ console = Console()
 wishlist_app = typer.Typer(
     help="Manage your Wishlist and Scraper Watchers.", no_args_is_help=True)
 
-# Las URLs de nuestra nueva API automática
 API_WISHLIST = "http://localhost:8000/api/books/wishlist-crud/"
 API_WATCHERS = "http://localhost:8000/api/books/watchers-crud/"
 
@@ -23,12 +22,12 @@ def list_wishlist():
         response.raise_for_status()
         items = response.json()
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
         return
 
     if not items:
         console.print(
-            "[bold yellow]📭 Tu tablón de deseos está vacío. ¡El scraper aún no ha encontrado nada![/bold yellow]")
+            "[bold yellow]Tu tablón de deseos está vacío. ¡El scraper aún no ha encontrado nada![/bold yellow]")
         return
 
     console.print()
@@ -63,11 +62,11 @@ def list_wishlist():
 def add_watcher():
     """Añade un autor, manga o palabra clave mediante un POST a la API."""
     console.print(
-        "\n[bold cyan]👁️  Añadir a la Lista de Vigilancia[/bold cyan]")
+        "\n[bold cyan]Añadir a la Lista de Vigilancia[/bold cyan]")
     keyword = Prompt.ask("Palabra clave a vigilar (ej. 'Tatsuki Fujimoto')")
 
     if not keyword.strip():
-        console.print("[red]❌ La palabra clave no puede estar vacía.[/red]")
+        console.print("[red]La palabra clave no puede estar vacía.[/red]")
         return
 
     try:
@@ -77,15 +76,15 @@ def add_watcher():
 
         if response.status_code == 201:
             console.print(
-                f"\n[bold green]✅ ¡Ojos abiertos! El scraper ahora vigilará: '{keyword}'[/bold green]\n")
+                f"\n[bold green]El scraper ahora vigilará: '{keyword}'[/bold green]\n")
         elif response.status_code == 400:
             console.print(
-                f"\n[yellow]⚠️ Esa palabra clave ya está en tu lista de vigilancia.[/yellow]\n")
+                f"\n[yellow]Esa palabra clave ya está en tu lista de vigilancia.[/yellow]\n")
         else:
-            console.print(f"[red]❌ Error del servidor: {response.text}[/red]")
+            console.print(f"[red]Error del servidor: {response.text}[/red]")
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @wishlist_app.command(name="delete")
@@ -93,19 +92,18 @@ def delete_wishlist_item(item_id: int = typer.Argument(..., help="ID del lanzami
     """Oculta un libro del tablón de deseos y lo añade a la lista negra del scraper."""
     if Confirm.ask(f"¿Estás seguro de ocultar el ítem #{item_id} de tu tablón?"):
         try:
-            # 🚀 Cambiamos DELETE por PATCH para aplicar el Soft Delete
+            # DELETE por PATCH para aplicar el Soft Delete
             response = httpx.patch(
                 f"{API_WISHLIST}{item_id}/", json={"is_rejected": True})
 
-            # En REST, un PATCH exitoso devuelve 200 OK (no 204 No Content)
             if response.status_code == 200:
                 console.print(
-                    "\n[bold green]✅ Eliminado y añadido a la caché de rechazados.[/bold green]\n")
+                    "\n[bold green]Eliminado y añadido a la caché de rechazados.[/bold green]\n")
             else:
                 console.print(
-                    f"[red]❌ No se pudo eliminar. ¿Estás seguro de que el ID {item_id} existe?[/red]")
+                    f"[red]No se pudo eliminar. ¿Estás seguro de que el ID {item_id} existe?[/red]")
         except Exception as e:
-            console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+            console.print(f"[bold red]Error de conexión: {e}[/bold red]")
     else:
         console.print("\n[yellow]Operación cancelada.[/yellow]\n")
 
@@ -120,13 +118,13 @@ def wishlist_details(item_id: int = typer.Argument(..., help="ID del lanzamiento
             return
 
         item = response.json()
-        console.print(f"\n📚 [bold cyan]{item.get('title')}[/bold cyan]")
-        console.print(f"🏢 Editorial: {item.get('publisher')}")
-        console.print(f"💰 Precio: {item.get('price')}")
+        console.print(f"\n[bold cyan]{item.get('title')}[/bold cyan]")
+        console.print(f"Editorial: {item.get('publisher')}")
+        console.print(f"Precio: {item.get('price')}")
         console.print(
-            f"🔗 Link de compra: [blue underline]{item.get('buy_url')}[/blue underline]\n")
+            f"Link de compra: [blue underline]{item.get('buy_url')}[/blue underline]\n")
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @wishlist_app.command(name="clear")
@@ -140,21 +138,20 @@ def clear_wishlist():
             console.print("[yellow]El tablón ya está vacío.[/yellow]")
             return
 
-        # 🚀 Borrado lógico (PATCH) uno por uno
         for item in items:
             httpx.patch(
                 f"{API_WISHLIST}{item['id']}/", json={"is_rejected": True})
 
         console.print(
-            f"[bold green]✅ Se han enviado {len(items)} libros a la memoria de rechazados. El scraper no volverá a molestarte con ellos.[/bold green]")
+            f"[bold green]Se han enviado {len(items)} libros a la memoria de rechazados. El scraper no volverá a molestarte con ellos.[/bold green]")
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @wishlist_app.command(name="watchers")
 def list_watchers():
     """Muestra todas las palabras clave que el bot está vigilando actualmente."""
-    # Usamos la variable global API_WATCHERS (".../watchers-crud/") automáticamente
+    # variable global API_WATCHERS (".../watchers-crud/")
     try:
         response = httpx.get(API_WATCHERS)
         watchers = response.json()
@@ -165,19 +162,18 @@ def list_watchers():
             return
 
         table = Table(
-            title="👁️ [bold cyan]Palabras Vigiladas (Scraper)[/bold cyan]", box=box.ROUNDED)
+            title="[bold cyan]Palabras Vigiladas (Scraper)[/bold cyan]", box=box.ROUNDED)
         table.add_column("ID", justify="right", style="dim")
         table.add_column("Palabra Clave", style="green")
         table.add_column("Creado", style="cyan")
 
         for w in watchers:
-            # Acortamos la fecha de "2026-03-18T10:00..." a "2026-03-18"
             table.add_row(str(w.get('id', '')), w.get(
                 'keyword', ''), str(w.get('created_at', ''))[:10])
 
         console.print(table)
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @wishlist_app.command(name="unwatch")
@@ -187,9 +183,9 @@ def unwatch_keyword(watcher_id: int):
         response = httpx.delete(f"{API_WATCHERS}{watcher_id}/")
         if response.status_code == 204:
             console.print(
-                f"[bold green]✅ Palabra clave #{watcher_id} eliminada del radar.[/bold green]")
+                f"[bold green]Palabra clave #{watcher_id} eliminada del radar.[/bold green]")
         else:
             console.print(
-                f"[bold red]❌ No se pudo eliminar. ¿Existe el ID {watcher_id}?[/bold red]")
+                f"[bold red]No se pudo eliminar. ¿Existe el ID {watcher_id}?[/bold red]")
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")

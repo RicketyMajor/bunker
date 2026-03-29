@@ -70,7 +70,7 @@
     </style>
   </head>
   <body>
-    <h1>📚 Escáner de Biblioteca</h1>
+    <h1>Escáner de Biblioteca</h1>
     <p>Apunta la cámara al código de barras o sube una imagen.</p>
 
     <div id="reader"></div>
@@ -82,13 +82,15 @@
 
       function onScanSuccess(decodedText, decodedResult) {
         const statusDiv = document.getElementById("status");
-        statusDiv.innerText = "⏳ Procesando ISBN: " + decodedText + "...";
+        statusDiv.innerText =
+          "⏳ Enviando ISBN " + decodedText + " al servidor...";
         statusDiv.style.color = "#00d2ff";
 
         html5QrcodeScanner
           .clear()
           .then(() => {
-            fetch("/api/books/scan/", {
+            // Apunta al Purgatorio (inbox) en lugar de scan directo
+            fetch("/api/books/inbox/", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -105,18 +107,17 @@
               )
               .then((res) => {
                 if (res.status === 201 || res.status === 200) {
-                  let msg = res.body.message || "✅ Libro agregado con éxito.";
-                  // Inyectamos mensaje y botón de éxito
                   statusDiv.innerHTML = `
-                    ${msg}<br>
+                    ✅ ¡Capturado!<br>ISBN ${decodedText} enviado a la Bandeja de Entrada.<br>
                     <button class="btn-restart" onclick="window.location.reload()">
-                      🔄 Escanear otro artículo
+                      🔄 Escanear siguiente tomo
                     </button>
                   `;
                   statusDiv.style.color = "#00ff00";
                 } else {
-                  let errMsg = res.body.error || "No se pudo agregar el libro.";
-                  // Inyectamos mensaje y botón de error
+                  let errMsg = res.body.isbn
+                    ? "Este ISBN ya está en la bandeja."
+                    : "Error desconocido.";
                   statusDiv.innerHTML = `
                     ❌ Error: ${errMsg}<br>
                     <button class="btn-restart btn-error" onclick="window.location.reload()">
@@ -126,12 +127,13 @@
                   statusDiv.style.color = "#ff4444";
                 }
               })
+              // ... resto del código igual ...
               .catch((error) => {
                 console.error("Error en la petición:", error);
                 statusDiv.innerHTML = `
-                  ❌ Error de conexión con el servidor.<br>
+                  Error de conexión con el servidor.<br>
                   <button class="btn-restart btn-error" onclick="window.location.reload()">
-                    🔄 Intentar de nuevo
+                    Intentar de nuevo
                   </button>
                 `;
                 statusDiv.style.color = "#ff4444";

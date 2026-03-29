@@ -37,6 +37,7 @@ book_app = typer.Typer(
 
 API_LIBRARY = "http://localhost:8000/api/books/library/"
 API_SCAN = "http://localhost:8000/api/books/scan/"
+API_INBOX = "http://localhost:8000/api/books/inbox/"
 
 
 def parse_manga_title(raw_title: str):
@@ -45,14 +46,14 @@ def parse_manga_title(raw_title: str):
     Ej: 'Chainsaw Man, Vol. 14' -> ('Chainsaw Man', '14')
     Ej: 'Berserk 01' -> ('Berserk', '1')
     """
-    # Busca: [Cualquier texto] [Separadores opcionales] [Números al final]
+    # [Cualquier texto] [Separadores opcionales] [Números al final]
     pattern = r"^(.*?)\s*(?:vol\.?|volume|tomo|#|-)?\s*0*(\d+)\s*$"
     match = re.search(pattern, raw_title, re.IGNORECASE)
 
     if match:
         base_title = match.group(1).strip()
         tomo = match.group(2).strip()
-        # Limpiamos comas o guiones que queden colgando al final del título base
+        # Limpia comas o guiones que queden colgando al final del título base
         base_title = re.sub(r"[,:-]$", "", base_title).strip()
         return base_title, tomo
 
@@ -74,7 +75,7 @@ def list_books(
 ):
     """Muestra los libros de tu biblioteca con opciones de búsqueda avanzada."""
 
-    # Construimos el diccionario de parámetros para enviar en la URL
+    # Construye el diccionario de parámetros para enviar en la URL
     params = {}
     if title:
         params['title'] = title
@@ -85,15 +86,15 @@ def list_books(
     if format_type:
         params['format_type'] = format_type.upper()
 
-    # Manejamos el booleano (si el usuario usó --read o --unread)
+    # Maneja el booleano (si el usuario usó --read o --unread)
     if read is not None:
         params['is_read'] = "true" if read else "false"
 
-    # 🚀 VFS: Detectamos si es una búsqueda global o una vista de raíz
+    # Detecta si es una búsqueda global o una vista de raíz
     is_search = bool(params)
 
     try:
-        # httpx convertirá el diccionario 'params' mágicamente en ?author=X&title=Y
+        # httpx convertirá el diccionario 'params' en ?author=X&title=Y
         response = httpx.get(API_LIBRARY, params=params)
         response.raise_for_status()
         books = response.json()
@@ -105,11 +106,11 @@ def list_books(
         if dir_resp.status_code == 200:
             dir_map = {d['id']: d for d in dir_resp.json()}
 
-        # LÓGICA DE VFS: Ocultamos los libros anidados si estamos en la "raíz"
+        # Oculta los libros anidados si estamos en la "raíz"
         if not is_search:
             books = [b for b in books if b.get('directory') is None]
 
-        # 🚀 ALGORITMO DE ORDENAMIENTO NATURAL
+        # ALGORITMO DE ORDENAMIENTO NATURAL
         def natural_sort_key(book_dict):
             title = book_dict.get('title', '').lower()
             # Separa letras de números: "tomo 10" -> ["tomo ", 10, ""]
@@ -118,7 +119,7 @@ def list_books(
         books.sort(key=natural_sort_key)
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
         return
 
     if not books:
@@ -141,7 +142,7 @@ def list_books(
     table.add_column("Formato", style="magenta")
     table.add_column("Editorial", style="green")
 
-    # 🚀 VFS: Solo mostramos la columna de Directorio si estamos haciendo una búsqueda global
+    # Solo muestra la columna de Directorio si está haciendo una búsqueda global
     if is_search:
         table.add_column("Directorio", justify="center")
 
@@ -168,7 +169,7 @@ def list_books(
             if cuentos:
                 title_display += f"\n  [dim]↳ {len(cuentos)} cuentos incluidos[/dim]"
 
-        # 🚀 Construimos la fila base
+        # Construye la fila base
         row_data = [
             str(book.get('id')),
             title_display,
@@ -177,7 +178,7 @@ def list_books(
             book.get('publisher') or '-'
         ]
 
-        # Si es una búsqueda, inyectamos la columna dinámica del Directorio
+        # Si es una búsqueda, inyecta la columna dinámica del Directorio
         if is_search:
             dir_id = book.get('directory')
             if dir_id and dir_id in dir_map:
@@ -200,30 +201,98 @@ def list_books(
 def add_book_wizard():
     """Asistente maestro para añadir libros (Escáner, ISBN o 100% Manual)."""
 
-    console.print("\n[bold cyan]🔮 ASISTENTE DE ADQUISICIONES 🔮[/bold cyan]")
+    console.print("\n[bold cyan]ASISTENTE DE ADQUISICIONES[/bold cyan]")
     console.print(
         "[dim]Selecciona el método de ingreso para tu nuevo ejemplar:[/dim]")
     console.print(
-        "  [bold green][1][/bold green] 📱 Activar Escáner de Código de Barras (Web)")
+        "  [bold green][1][/bold green] Activar Escáner de Código de Barras (Web)")
     console.print(
-        "  [bold yellow][2][/bold yellow] 🔢 Ingresar ISBN manualmente (Búsqueda automática)")
+        "  [bold yellow][2][/bold yellow] Ingresar ISBN manualmente (Búsqueda automática)")
     console.print(
-        "  [bold magenta][3][/bold magenta] ✍️  Ingreso 100% Manual (Para libros antiguos o rarezas)")
+        "  [bold magenta][3][/bold magenta] Ingreso 100% Manual (Para libros antiguos o sin ISBN)")
 
     choice = Prompt.ask("\nElige una opción", choices=[
                         "1", "2", "3"], default="2")
 
     # ---------------------------------------------------------
-    # OPCIÓN 1: EL ESCÁNER WEB
+    # OPCIÓN 1: EL ESCÁNER WEB (Túnel SSH y Código QR Nativo)
     # ---------------------------------------------------------
     if choice == "1":
-        console.print("\n[bold cyan]📡 MODO ESCÁNER ACTIVADO[/bold cyan]")
+        console.print("\n[bold cyan]MODO ESCÁNER ACTIVADO[/bold cyan]")
         console.print(
-            "Para usar la cámara de tu teléfono, asegúrate de estar en la misma red WiFi y abre:")
+            "[cyan]Negociando túnel cifrado (SSH Reverse Tunnel)...[/cyan]")
+
+        # Importaciones locales para evitar problemas de dependencias circulares
+        import subprocess
+        from pathlib import Path
+        import qrcode
+
+        tunnel_process = None
+        url = ""
+
+        try:
+            # Apunta a la llave SSH dedicada
+            key_path = str(Path.home() / ".ssh" / "library_cli_key")
+
+            tunnel_process = subprocess.Popen(
+                ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
+                 "ServerAliveInterval=60", "-R", "80:localhost:8000", "nokey@localhost.run"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                text=True
+            )
+
+            output_log = []
+            # Lee el output del túnel para interceptar la URL generada
+            for _ in range(50):
+                line = tunnel_process.stdout.readline()
+                if line:
+                    output_log.append(line.strip())
+
+                match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", line)
+                if match:
+                    url = match.group(1) + "/scanner/"
+                    break
+
+            if not url:
+                console.print(
+                    "[bold red]No se pudo establecer el túnel. Leyendo la 'Caja Negra' de SSH:[/bold red]")
+                for log_line in output_log:
+                    if log_line:
+                        console.print(f"[dim]  > {log_line}[/dim]")
+
+                if tunnel_process:
+                    tunnel_process.terminate()
+                return
+
+        except Exception as e:
+            console.print(
+                f"[bold red]Error iniciando el túnel SSH: {e}[/bold red]")
+            return
+
         console.print(
-            "👉 [bold underline blue]http://localhost:8000/scanner/[/bold underline blue] (o reemplaza 'localhost' por la IP de tu PC)")
+            f"\n[bold green]Escanea este código QR con la cámara de tu celular:[/bold green]")
+        console.print(f"[blue underline]{url}[/blue underline]\n")
+
+        # Genera el código QR en la terminal con la URL pública
+        qr = qrcode.QRCode(version=1, box_size=1, border=2)
+        qr.add_data(url)
+        qr.make(fit=True)
+        qr.print_tty()
+
+        console.print("\n[dim]El servidor ya está escuchando...[/dim]")
+        Prompt.ask(
+            "[bold yellow]Presiona ENTER cuando termines de escanear para cerrar la conexión y destruir el túnel[/bold yellow]")
+
+        if tunnel_process:
+            console.print("[dim]Destruyendo túnel efímero...[/dim]")
+            tunnel_process.terminate()
+
         console.print(
-            "[dim]Nota: Si usabas ngrok antes y el link está caído, debes volver a ejecutar 'ngrok http 8000' en otra terminal para obtener un link público nuevo.[/dim]\n")
+            "\n[bold yellow]¡Importante![/bold yellow] Una vez que escanees los libros con tu celular,")
+        console.print(
+            "usa el comando [bold cyan]library book inbox[/bold cyan] para procesarlos y guardarlos en la biblioteca.")
         return
 
     # ---------------------------------------------------------
@@ -260,7 +329,7 @@ def add_book_wizard():
 
                 for idx, p in enumerate(previews):
                     t_title = p.get('title', 'Desconocido')
-                    # Se truncam títulos excesivamente largos para no romper la tabla
+                    # Se truncan títulos excesivamente largos para no romper la tabla
                     t_title = t_title[:45] + \
                         "..." if len(t_title) > 45 else t_title
 
@@ -316,7 +385,7 @@ def add_book_wizard():
 
             if tomo_detectado and saga_existente:
                 console.print(
-                    f"\n[bold magenta] Saga Detectada en tu Biblioteca[/bold magenta]")
+                    f"\n[bold magenta]Saga Detectada en tu Biblioteca[/bold magenta]")
                 console.print(
                     f"Parece que este es el [bold]Tomo {tomo_detectado}[/bold] de la obra [bold cyan]'{saga_existente['title']}'[/bold cyan].")
 
@@ -340,7 +409,7 @@ def add_book_wizard():
                             f"\n[bold green] Tomo {tomo_detectado} inyectado correctamente en '{saga_existente['title']}'.[/bold green]\n")
                     else:
                         console.print(
-                            f"\n[bold red] Error al fusionar el tomo.[/bold red]\n")
+                            f"\n[bold red]Error al fusionar el tomo.[/bold red]\n")
                     return
 
             if not Confirm.ask("¿Deseas registrar permanentemente este libro en tu biblioteca?"):
@@ -367,14 +436,14 @@ def add_book_wizard():
 
         except Exception as e:
             console.print(
-                f"\n[bold red] Error crítico de procesamiento: {e}[/bold red]")
+                f"\n[bold red]Error crítico de procesamiento: {e}[/bold red]")
 
     # ---------------------------------------------------------
     # OPCIÓN 3: INGRESO 100% MANUAL (Polimorfismo en acción)
     # ---------------------------------------------------------
     elif choice == "3":
         console.print(
-            "\n[bold magenta]✍️  MODO DE INGRESO MANUAL[/bold magenta]")
+            "\n[bold magenta]MODO DE INGRESO MANUAL[/bold magenta]")
 
         # Datos base
         title = Prompt.ask("Título del libro")
@@ -395,7 +464,6 @@ def add_book_wizard():
                       "3": "ANTHOLOGY", "4": "COMIC", "5": "ACADEMIC"}
         format_type = format_map[fmt_choice]
 
-        # 🚀 APROVECHANDO EL POLIMORFISMO (JSONB)
         details = {}
         if format_type in ["MANGA", "COMIC"]:
             tomos = Prompt.ask(
@@ -410,7 +478,7 @@ def add_book_wizard():
             details["lista_cuentos"] = [c.strip()
                                         for c in cuentos.split(",") if c.strip()]
 
-        # Construimos el diccionario de datos para enviar a Django
+        # Construye el diccionario de datos para enviar a Django
         payload = {
             "title": title,
             "format_type": format_type,
@@ -418,31 +486,29 @@ def add_book_wizard():
             "is_read": Confirm.ask("¿Ya leíste este libro?"),
         }
 
-        # Manejamos el autor como un diccionario anidado si el usuario lo ingresó
+        # Maneja el autor como un diccionario anidado si el usuario lo ingresó
         if author_name.strip():
             payload["author_input"] = author_name.strip()
 
         try:
-            # 🚀 Pasamos el payload por el filtro sanitizador
             clean_payload = sanitize_payload(payload)
 
             # Enviamos el POST al endpoint CRUD normal
             response = httpx.post(API_LIBRARY, json=clean_payload)
             if response.status_code == 201:
                 console.print(
-                    f"\n[bold green]✅ ¡Obra registrada magistralmente en tu biblioteca![/bold green]")
+                    f"\n[bold green]¡Obra registrada magistralmente en tu biblioteca![/bold green]")
             else:
                 console.print(
-                    f"\n[bold red]❌ Error al guardar: {response.text}[/bold red]")
+                    f"\n[bold red]Error al guardar: {response.text}[/bold red]")
         except Exception as e:
-            console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+            console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @book_app.command(name="delete")
 def delete_book(book_id: int):
     """Elimina un libro de la biblioteca mediante la API."""
 
-    # 🛡️ BARRERA UX
     if not Confirm.ask(f"¿Estás seguro de que deseas eliminar permanentemente el libro #{book_id}?"):
         console.print("\n[yellow]Operación cancelada.[/yellow]\n")
         return
@@ -451,12 +517,12 @@ def delete_book(book_id: int):
         response = httpx.delete(f"{API_LIBRARY}{book_id}/")
         if response.status_code == 204:
             console.print(
-                f"\n[bold green]✅ Libro #{book_id} eliminado correctamente del servidor.[/bold green]\n")
+                f"\n[bold green]Libro #{book_id} eliminado correctamente del servidor.[/bold green]\n")
         else:
             console.print(
-                f"\n[bold red]❌ No se pudo eliminar. ¿Existe el ID {book_id}?[/bold red]\n")
+                f"\n[bold red]No se pudo eliminar. ¿Existe el ID {book_id}?[/bold red]\n")
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @book_app.command(name="details")
@@ -466,12 +532,12 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
         response = httpx.get(f"{API_LIBRARY}{book_id}/")
         if response.status_code == 404:
             console.print(
-                f"[bold red]❌ Libro #{book_id} no encontrado en la biblioteca.[/bold red]")
+                f"[bold red]Libro #{book_id} no encontrado en la biblioteca.[/bold red]")
             return
 
         book = response.json()
 
-        # --- 1. LA CABECERA (Header) ---
+        # --- Header ---
         title_str = book.get('title', 'Sin Título').upper()
         title_text = Text(title_str, style="bold cyan", justify="center")
 
@@ -482,11 +548,10 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
         if author:
             title_text.append(f"\n✎  {author}", style="bold yellow")
 
-        # 🚀 COMPRESIÓN: padding vertical a 0
         header_panel = Panel(title_text, box=box.HEAVY,
                              border_style="cyan", padding=(0, 4))
 
-        # --- 2. COLUMNA IZQUIERDA: Ficha Técnica y Estado ---
+        # --- Ficha Técnica y Estado ---
         tech_text = Text(justify="center")
         tech_text.append(f"❖ Editorial: ", style="bold white")
         tech_text.append(f"{book.get('publisher') or '-'}\n", style="yellow")
@@ -496,7 +561,6 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
         tech_text.append(f"◷ Publicación: ", style="bold white")
         tech_text.append(f"{book.get('publish_date') or '-'}\n", style="green")
 
-        # 🚀 COMPRESIÓN: Quitamos el \n extra que había aquí
         tech_text.append(f"▤ Páginas: ", style="bold white")
         tech_text.append(f"{book.get('page_count') or '-'}\n", style="cyan")
 
@@ -511,11 +575,10 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
             tech_text.append("  ⌖ Ubicación: ", style="bold")
             tech_text.append("En Estantería", style="bold green")
 
-        # 🚀 COMPRESIÓN: padding vertical a 0
         tech_panel = Panel(
             tech_text, title="[bold cyan]Ficha Técnica[/bold cyan]", border_style="cyan", padding=(0, 2))
 
-        # --- 3. COLUMNA DERECHA: Detalles y Sinopsis ---
+        # --- Detalles y Sinopsis ---
         details = book.get('details', {})
         details_panel = None
         if details:
@@ -533,15 +596,14 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
         desc = book.get('description')
         synopsis_panel = None
         if desc:
-            # 🚀 COMPRESIÓN: Reducimos a 350 caracteres máximos para no estirar la columna
             if len(desc) > 350:
                 desc = desc[:350] + "..."
             synopsis_panel = Panel(Text(desc, justify="center", style="dim"),
                                    title="[bold yellow]Sinopsis[/bold yellow]", border_style="yellow", padding=(0, 2))
 
-        # --- 4. EL ENSAMBLAJE FINAL ---
+        # --- ENSAMBLAJE FINAL ---
 
-        # Apilamos detalles arriba y sinopsis abajo en el mismo bloque derecho
+        # Apila detalles arriba y sinopsis abajo en el mismo bloque derecho
         right_items = []
         if details_panel:
             right_items.append(details_panel)
@@ -556,7 +618,6 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
 
         render_group = Group(header_panel, middle_section)
 
-        # 🚀 COMPRESIÓN: Eliminamos los saltos de línea (console.print()) antes y después
         console.print(Align.center(render_group, width=90))
 
     except Exception as e:
@@ -570,22 +631,19 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
         response = httpx.get(f"{API_LIBRARY}{book_id}/")
         if response.status_code == 404:
             console.print(
-                f"[bold red]❌ Libro #{book_id} no encontrado.[/bold red]")
+                f"[bold red]Libro #{book_id} no encontrado.[/bold red]")
             return
 
         book = response.json()
         payload = {}
 
-        # 🚀 Autocompletador Dinámico
         format_completer = WordCompleter(
             ['NOVEL', 'MANGA', 'COMIC', 'ANTHOLOGY', 'ACADEMIC'], ignore_case=True)
 
         while True:
-            # 🧹 Limpiamos la pantalla sutilmente para UX fluida (Opcional, puedes quitarlo si prefieres ver el historial)
             console.print(
-                f"\n[bold cyan]✏️ Editando Ficha #{book_id}: {book.get('title', 'Sin título')}[/bold cyan]")
+                f"\n[bold cyan]Editando Ficha #{book_id}: {book.get('title', 'Sin título')}[/bold cyan]")
 
-            # Tabla de estado actual
             table = Table(box=box.SIMPLE_HEAVY, header_style="bold yellow")
             table.add_column("Opción")
             table.add_column("Campo", style="bold white")
@@ -639,7 +697,6 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                     payload['format_type'] = val
                     book['format_type'] = val
 
-                    # 🚀 Mutación Polimórfica Inmediata
                     if val in ["MANGA", "COMIC"]:
                         if Confirm.ask("¿Actualizar registro de tomos?"):
                             details = payload.get(
@@ -671,7 +728,7 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                             payload['details'] = details
                             book['details'] = details
                 else:
-                    console.print("[red]❌ Formato no válido.[/red]")
+                    console.print("[red]Formato no válido.[/red]")
             elif choice == "6":
                 val = Prompt.ask("Cantidad de páginas",
                                  default=str(book.get('page_count', '')))
@@ -685,33 +742,32 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                 book['is_read'] = val
             elif choice == "8":
                 console.print(
-                    "[dim]⚠️ Los detalles se actualizan automáticamente al cambiar el Formato (Opción 4).[/dim]")
+                    "[dim]Los detalles se actualizan automáticamente al cambiar el Formato (Opción 4).[/dim]")
 
-        # 4. Impacto en la Base de Datos al salir del bucle
+        # Impacto en la Base de Datos al salir del bucle
         if payload:
-            # 🚀 Pasamos el payload por el filtro sanitizador
             clean_payload = sanitize_payload(payload)
 
             update_response = httpx.patch(
                 f"{API_LIBRARY}{book_id}/", json=clean_payload)
             if update_response.status_code == 200:
                 console.print(
-                    "\n[bold green]✅ Ficha del libro actualizada magistralmente.[/bold green]\n")
+                    "\n[bold green]Ficha del libro actualizada magistralmente.[/bold green]\n")
             else:
                 console.print(
-                    f"\n[bold red]❌ Error al actualizar: {update_response.text}[/bold red]\n")
+                    f"\n[bold red]Error al actualizar: {update_response.text}[/bold red]\n")
         else:
             console.print("\n[dim]Saliendo sin guardar cambios.[/dim]\n")
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de red: {e}[/bold red]")
+        console.print(f"[bold red]Error de red: {e}[/bold red]")
 
 
 @book_app.command(name="consolidate")
 def consolidate_mangas():
     """Escanea la biblioteca, agrupa tomos de mangas sueltos y los fusiona en sagas únicas."""
     console.print(
-        "\n[bold cyan]🐉 INICIANDO MOTOR DE CONSOLIDACIÓN DE SAGAS 🐉[/bold cyan]\n")
+        "\n[bold cyan]INICIANDO MOTOR DE CONSOLIDACIÓN DE SAGAS[/bold cyan]\n")
     try:
         resp = httpx.get(API_LIBRARY)
         all_books = resp.json()
@@ -719,11 +775,10 @@ def consolidate_mangas():
         # Diccionario: { "chainsaw man": [(book_dict, "1"), (book_dict, "2")] }
         sagas = {}
 
-        # 1. Fase de Extracción: Agrupamos todos los tomos sueltos
+        # Agrupa todos los tomos sueltos
         for book in all_books:
             base_title, tomo = parse_manga_title(book['title'])
             if tomo:
-                # 🚀 LÓGICA DE PARTICIONAMIENTO: Agrupamos por Título Y Formato
                 base_key = (base_title.lower(), book.get('format_type'))
 
                 if base_key not in sagas:
@@ -732,13 +787,12 @@ def consolidate_mangas():
 
         fusion_count = 0
 
-        # 2. Fase de Transformación y Carga (ETL)
-        # 🚀 Desempaquetamos correctamente la tupla del diccionario
+        # Desempaqueta correctamente la tupla del diccionario
         for base_key_tuple, tomos_detectados in sagas.items():
             base_key_name = base_key_tuple[0]    # Ej: "batman"
             base_key_format = base_key_tuple[1]  # Ej: "COMIC"
 
-            # Buscamos si el usuario ya había creado manualmente la saga Master para ese formato
+            # Busca si el usuario ya había creado manualmente la saga Master para ese formato
             posibles_masters = [b for b in all_books if b['title'].lower(
             ) == base_key_name and b.get('format_type') == base_key_format]
 
@@ -749,23 +803,22 @@ def consolidate_mangas():
                 tomos_lista = [t.strip()
                                for t in tomos_str.split(',') if t.strip()]
             elif len(tomos_detectados) > 1:
-                # Si no hay master pero hay varios tomos, convertimos el primer tomo en el Master
+                # Si no hay master pero hay varios tomos, convierte el primer tomo en el Master
                 master_tuple = tomos_detectados.pop(0)
                 master = master_tuple[0]
                 tomos_lista = [master_tuple[1]]
 
-                # Promovemos el registro en la API
                 console.print(
                     f"[dim]Promoviendo '{master['title']}' a Master Saga...[/dim]")
                 httpx.patch(
-                    # 🚀 Usamos el nombre y formato extraídos de la tupla
+                    # Usa el nombre y formato extraídos de la tupla
                     f"{API_LIBRARY}{master['id']}/", json={"title": base_key_name.title(), "format_type": base_key_format})
                 master['title'] = base_key_name.title()
                 master_details = {}
             else:
-                continue  # Es solo 1 tomo suelto y no hay master, lo ignoramos
+                continue  # Es solo 1 tomo suelto y no hay master, ignora
 
-            # Inyectamos los demás tomos en el master
+            # Inyecta los demás tomos en el master
             tomos_a_eliminar = []
             for t_tuple in tomos_detectados:
                 tomo_book = t_tuple[0]
@@ -777,18 +830,18 @@ def consolidate_mangas():
             if not tomos_a_eliminar and not posibles_masters:
                 continue
 
-            # Actualizamos el Master con la nueva lista de tomos
+            # Actualiza el Master con la nueva lista de tomos
             tomos_lista.sort(key=lambda x: int(x) if x.isdigit() else x)
             master_details['tomos_obtenidos'] = ", ".join(tomos_lista)
             httpx.patch(
                 f"{API_LIBRARY}{master['id']}/", json={"details": master_details})
 
-            # Eliminamos los registros huérfanos que ya fueron absorbidos
+            # Elimina los registros huérfanos que ya fueron absorbidos
             for del_id in tomos_a_eliminar:
                 httpx.delete(f"{API_LIBRARY}{del_id}/")
 
             console.print(
-                f"✅ Saga [bold green]'{master['title']}'[/bold green] consolidada. Tomos actuales: {master_details['tomos_obtenidos']}")
+                f"Saga [bold green]'{master['title']}'[/bold green] consolidada. Tomos actuales: {master_details['tomos_obtenidos']}")
             fusion_count += len(tomos_a_eliminar)
 
         if fusion_count == 0:
@@ -796,7 +849,108 @@ def consolidate_mangas():
                 "[yellow]No se encontraron tomos huérfanos. Tu biblioteca está optimizada.[/yellow]\n")
         else:
             console.print(
-                f"\n[bold magenta]✨ Consolidación terminada. Se absorbieron {fusion_count} registros redundantes.[/bold magenta]\n")
+                f"\n[bold magenta]Consolidación terminada. Se absorbieron {fusion_count} registros redundantes.[/bold magenta]\n")
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
+
+
+@book_app.command(name="inbox")
+def process_inbox():
+    """Procesa los ISBNs pendientes escaneados desde el celular."""
+    console.print("\n[bold cyan]BANDEJA DE ENTRADA[/bold cyan]")
+
+    try:
+        resp = httpx.get(API_INBOX)
+        resp.raise_for_status()
+        items = resp.json()
+    except Exception as e:
+        console.print(f"[bold red]Error de red: {e}[/bold red]")
+        return
+
+    if not items:
+        console.print(
+            "\n[green]La bandeja está vacía. No hay escaneos pendientes.[/green]\n")
+        return
+
+    console.print(
+        f"[dim]Tienes {len(items)} tomo(s) esperando ser procesados...[/dim]\n")
+
+    for item in items:
+        inbox_id = item['id']
+        isbn = item['isbn']
+        console.print(f"\n{'-'*50}")
+        console.print(f"[bold yellow]Procesando ISBN: {isbn}[/bold yellow]")
+
+        previews = fetch_book_by_isbn(isbn)
+        if not previews:
+            console.print(
+                f"[bold red]No se encontró información en la red para {isbn}.[/bold red]")
+            if Confirm.ask("¿Eliminar este ISBN corrupto de la bandeja?"):
+                httpx.delete(f"{API_INBOX}{inbox_id}/")
+            continue
+
+        preview = None
+        if len(previews) == 1:
+            preview = previews[0]
+            console.print(
+                f"[dim green]✓ Único resultado encontrado (Fuente: {preview.get('source', 'API')}).[/dim green]")
+        else:
+            console.print(
+                f"\n[bold cyan]Múltiples orígenes detectados. Elige la mejor versión:[/bold cyan]")
+            table = Table(box=box.SIMPLE_HEAVY, header_style="bold yellow")
+            table.add_column("#", justify="right")
+            table.add_column("Oráculo", style="cyan")
+            table.add_column("Título", style="bold white")
+            table.add_column("Páginas", justify="right")
+
+            for idx, p in enumerate(previews):
+                t_title = p.get('title', 'Desconocido')
+                t_title = t_title[:45] + \
+                    "..." if len(t_title) > 45 else t_title
+                table.add_row(
+                    str(idx + 1), p.get('source',
+                                        'Desconocido'), t_title, str(p.get('page_count', '-'))
+                )
+            console.print(table)
+
+            choices = [str(i) for i in range(1, len(previews) + 1)] + ["0"]
+            choice_idx = Prompt.ask(
+                "\nSelecciona la opción correcta [dim](0 para saltar libro)[/dim]", choices=choices, default="1")
+
+            if choice_idx == "0":
+                console.print(
+                    "[yellow]Saltando al siguiente libro...[/yellow]")
+                continue
+
+            preview = previews[int(choice_idx) - 1]
+
+        # Muestra la vista previa final
+        console.print(
+            f"\n[bold magenta]► Seleccionado: {preview.get('title')} ({preview.get('source')})[/bold magenta]")
+
+        if Confirm.ask("¿Confirmas el registro en la biblioteca?"):
+            payload_scan = {
+                "isbn": isbn,
+                "book_data": sanitize_payload(preview)
+            }
+            try:
+                # Lo registra en la biblioteca
+                reg_resp = httpx.post(API_SCAN, json=payload_scan)
+                if reg_resp.status_code in [200, 201]:
+                    console.print(
+                        f"[bold green]Registrado con éxito.[/bold green]")
+                    # Lo eliminamos del Purgatorio
+                    httpx.delete(f"{API_INBOX}{inbox_id}/")
+                else:
+                    console.print(
+                        f"[bold red]Error al registrar: {reg_resp.text}[/bold red]")
+            except Exception as e:
+                console.print(
+                    f"[bold red]Error de comunicación: {e}[/bold red]")
+        else:
+            console.print(
+                "[dim]Se mantendrá en la bandeja de entrada para después.[/dim]")
+
+    console.print(
+        f"\n{'-'*50}\n[bold cyan]Procesamiento de la bandeja finalizado.[/bold cyan]\n")

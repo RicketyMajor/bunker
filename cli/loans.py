@@ -20,7 +20,7 @@ API_LOANS = "http://localhost:8000/api/books/loans/"
 def lend_book():
     """Presta un libro de tu biblioteca a un amigo."""
     try:
-        # 1. Obtener todos los libros y filtrar solo los que están en casa
+        # Obtener todos los libros y filtrar solo los que están en casa
         response = httpx.get(API_LIBRARY)
         books = response.json()
         available_books = [b for b in books if not b.get('is_loaned')]
@@ -30,9 +30,9 @@ def lend_book():
                 "[yellow]No tienes libros disponibles para prestar en este momento.[/yellow]")
             return
 
-        # 2. Interfaz Inmersiva: Mostrar opciones
+        # Mostrar opciones
         console.print()
-        table = Table(title="[bold cyan]📦 INVENTARIO DISPONIBLE[/bold cyan]",
+        table = Table(title="[bold cyan]INVENTARIO DISPONIBLE[/bold cyan]",
                       box=box.SIMPLE_HEAVY, header_style="bold cyan", border_style="cyan")
         table.add_column("ID", style="dim", justify="right")
         table.add_column("Título", style="bold white")
@@ -45,19 +45,18 @@ def lend_book():
         console.print(Align.center(table))
         console.print()
 
-        # 3. Recopilar datos
+        # Recopilar datos
         book_id = Prompt.ask(
             "\n[bold yellow]Ingresa el ID del libro que vas a prestar[/bold yellow]")
         friend_name = Prompt.ask(
             "[bold yellow]¿A quién se lo vas a prestar?[/bold yellow]")
 
-        # 🛡️ BARRERA UX
         if not Confirm.ask(f"\n¿Confirmas que entregarás este libro a {friend_name}?"):
             console.print(
                 "\n[yellow]Préstamo cancelado. El libro sigue en tu estantería.[/yellow]\n")
             return
 
-        # 4. Lógica de Amigos (Buscar o Crear)
+        # Lógica de Amigos
         friends_resp = httpx.get(API_FRIENDS)
         friend_id = None
         for f in friends_resp.json():
@@ -72,10 +71,10 @@ def lend_book():
                 friend_id = f_post.json()['id']
             else:
                 console.print(
-                    f"[red]❌ Error registrando al amigo: {f_post.text}[/red]")
+                    f"[red]Error registrando al amigo: {f_post.text}[/red]")
                 return
 
-        # 5. Registrar el Préstamo
+        # Registrar el Préstamo
         loan_payload = {
             "book": int(book_id),
             "friend": friend_id,
@@ -87,13 +86,13 @@ def lend_book():
             # 6. Actualizar el estado del libro (Transacción distribuida simulada)
             httpx.patch(f"{API_LIBRARY}{book_id}/", json={"is_loaned": True})
             console.print(
-                f"\n[bold green]✅ ¡Éxito! El libro se ha registrado como prestado a {friend_name}.[/bold green]\n")
+                f"\n[bold green]El libro se ha registrado como prestado a {friend_name} correctamente.[/bold green]\n")
         else:
             console.print(
-                f"[red]❌ Error creando préstamo: {loan_post.text}[/red]")
+                f"[red]Error creando préstamo: {loan_post.text}[/red]")
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @loan_app.command(name="list")
@@ -105,7 +104,7 @@ def list_loans():
 
         if not loans:
             console.print(
-                "\n[yellow]No tienes ningún libro prestado actualmente. ¡Tu colección está completa![/yellow]\n")
+                "\n[yellow]No tienes ningún libro prestado actualmente. Tienes todos tus libros en casa.[/yellow]\n")
             return
 
         console.print()
@@ -130,39 +129,38 @@ def list_loans():
         console.print(Align.center(table))
         console.print()
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")
 
 
 @loan_app.command(name="return")
 def return_book(loan_id: int = typer.Argument(..., help="ID del préstamo a devolver")):
     """Devuelve un libro prestado a tu biblioteca física."""
 
-    # 🛡️ BARRERA UX
     if not Confirm.ask(f"¿Confirmas que el préstamo #{loan_id} ya está físicamente de vuelta en tu estantería?"):
         console.print("\n[yellow]Devolución cancelada.[/yellow]\n")
         return
 
     try:
-        # 1. Obtenemos el préstamo para saber qué libro debemos devolver
+        # Obtiene el préstamo para saber qué libro se debe devolver
         resp = httpx.get(f"{API_LOANS}{loan_id}/")
         if resp.status_code == 404:
             console.print(
-                f"[bold red]❌ Préstamo #{loan_id} no encontrado.[/bold red]")
+                f"[bold red]Préstamo #{loan_id} no encontrado.[/bold red]")
             return
 
         loan = resp.json()
         book_id = loan['book']
 
-        # 2. Eliminamos el registro del préstamo (Devolución)
+        # Elimina el registro del préstamo (Devolución)
         delete_resp = httpx.delete(f"{API_LOANS}{loan_id}/")
 
         if delete_resp.status_code == 204:
-            # 3. Actualizamos el libro a "En Biblioteca"
+            # Actualiza el libro a "En Biblioteca"
             httpx.patch(f"{API_LIBRARY}{book_id}/", json={"is_loaned": False})
             console.print(
-                f"\n[bold green]✅ ¡Libro devuelto! Vuelve a estar disponible en tu estantería física.[/bold green]\n")
+                f"\n[bold green]¡Libro devuelto! Vuelve a estar disponible en tu estantería física.[/bold green]\n")
         else:
-            console.print(f"[red]❌ Error procesando la devolución.[/red]")
+            console.print(f"[red]Error procesando la devolución.[/red]")
 
     except Exception as e:
-        console.print(f"[bold red]❌ Error de conexión: {e}[/bold red]")
+        console.print(f"[bold red]Error de conexión: {e}[/bold red]")

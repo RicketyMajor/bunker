@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from .views import log_pages, finish_book, tracker_stats, AnnualRecordViewSet
 
+
 #  enrutador y registra las nuevas vistas automáticas
 router = DefaultRouter()
 router.register(r'library', views.BookViewSet, basename='library')
@@ -15,6 +16,7 @@ router.register(r'loans', views.LoanViewSet, basename='loans')
 router.register(r'tracker/annual', AnnualRecordViewSet,
                 basename='tracker-annual')
 router.register(r'directories', views.DirectoryViewSet, basename='directories')
+router.register(r'inbox', views.ScanInboxViewSet, basename='inbox')
 
 urlpatterns = [
     # endpoints

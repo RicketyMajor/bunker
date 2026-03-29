@@ -1,14 +1,15 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory
+from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
 from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework import viewsets
 from .serializers import BookSerializer, WatcherSerializer, WishlistItemSerializer, FriendSerializer, LoanSerializer, AnnualRecordSerializer, DirectorySerializer
-import django_filters
 from cli.api import fetch_book_by_isbn
+import django_filters
+from .serializers import ScanInboxSerializer
 
 
 @api_view(['POST'])
@@ -272,3 +273,11 @@ class DirectoryViewSet(viewsets.ModelViewSet):
     """Provee operaciones CRUD para los directorios del Sistema de Archivos."""
     queryset = Directory.objects.all().order_by('name')
     serializer_class = DirectorySerializer
+
+# Asegúrate de importar ScanInbox y ScanInboxSerializer
+
+
+class ScanInboxViewSet(viewsets.ModelViewSet):
+    """Provee operaciones CRUD para la bandeja de entrada del escáner móvil."""
+    queryset = ScanInbox.objects.all().order_by('date_scanned')
+    serializer_class = ScanInboxSerializer

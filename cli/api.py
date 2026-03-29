@@ -63,8 +63,6 @@ def fetch_from_comicvine(isbn: str) -> Optional[Dict]:
             "description": description[:800] + "..." if len(description) > 800 else description,
         }
     except Exception as e:
-        console.print(
-            f"[dim yellow] Comic Vine falló ({e}). Pasando a Google Books...[/dim yellow]")
         return None
 
 
@@ -80,13 +78,13 @@ def fetch_from_google_books(isbn: str) -> Optional[Dict]:
         try:
             response = requests.get(url, timeout=10)
 
-            # Interceptamos el estrangulamiento de red
+            # Intercepta el estrangulamiento de red
             if response.status_code == 429:
                 sleep_time = (2 ** attempt) + random.uniform(0, 1)
                 console.print(
                     f"[dim yellow] Estrangulamiento en Google (429). Reintentando en {sleep_time:.1f}s...[/dim yellow]")
                 time.sleep(sleep_time)
-                continue  # Volvemos a intentar el ciclo
+                continue
 
             response.raise_for_status()
             data = response.json()
@@ -114,8 +112,6 @@ def fetch_from_google_books(isbn: str) -> Optional[Dict]:
                 "description": volume_info.get("description", ""),
             }
         except Exception as e:
-            console.print(
-                f"[dim yellow] Falló Google Books ({e}). Intentando Fallback final...[/dim yellow]")
             return None
 
     return None  # Si agota los 3 intentos, se rinde y pasa a OpenLibrary

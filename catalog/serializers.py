@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, Directory
+from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, Directory, ScanInbox
 from .models import AnnualRecord
 
 
@@ -76,4 +76,10 @@ class AnnualRecordSerializer(serializers.ModelSerializer):
 class DirectorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Directory
+        fields = '__all__'
+
+
+class ScanInboxSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScanInbox
         fields = '__all__'
