@@ -447,9 +447,14 @@ def add_book_wizard():
 
         # Datos base
         title = Prompt.ask("Título del libro")
-        # El autor ahora es opcional en la BD, así que permitimos dejarlo en blanco
         author_name = Prompt.ask(
             "Autor [dim](Deja en blanco si es desconocido)[/dim]", default="")
+        publisher_name = Prompt.ask(
+            "Editorial [dim](Deja en blanco si es desconocido)[/dim]", default="")
+        pages_input = Prompt.ask(
+            "Número de páginas [dim](Deja en blanco si no lo sabes)[/dim]", default="")
+        genres_input = Prompt.ask(
+            "Géneros (separados por coma) [dim](Ej: Sci-Fi, Fantasía)[/dim]", default="")
 
         console.print("\n[cyan]Formato del libro:[/cyan]")
         console.print("1. NOVEL (Novela estándar)")
@@ -484,11 +489,18 @@ def add_book_wizard():
             "format_type": format_type,
             "details": details,
             "is_read": Confirm.ask("¿Ya leíste este libro?"),
+            "publisher": publisher_name.strip() if publisher_name.strip() else None,
         }
 
-        # Maneja el autor como un diccionario anidado si el usuario lo ingresó
+        if pages_input.isdigit():
+            payload["page_count"] = int(pages_input)
+
         if author_name.strip():
+            # Maneja el autor como un diccionario anidado si el usuario lo ingresó
             payload["author_input"] = author_name.strip()
+
+        if genres_input.strip():
+            payload["genre_input"] = genres_input.strip()
 
         try:
             clean_payload = sanitize_payload(payload)
@@ -555,9 +567,16 @@ def book_details(book_id: int = typer.Argument(..., help="ID del libro")):
         tech_text = Text(justify="center")
         tech_text.append(f"❖ Editorial: ", style="bold white")
         tech_text.append(f"{book.get('publisher') or '-'}\n", style="yellow")
+
+        generos = book.get('genre_list', [])
+        generos_str = ", ".join(generos) if generos else "Sin clasificar"
+        tech_text.append(f"✧ Género(s): ", style="bold white")
+
+        tech_text.append(f"{generos_str}\n", style="cyan")
         tech_text.append(f"◈ Formato: ", style="bold white")
         tech_text.append(
             f"{book.get('format_type') or '-'}\n", style="magenta")
+
         tech_text.append(f"◷ Publicación: ", style="bold white")
         tech_text.append(f"{book.get('publish_date') or '-'}\n", style="green")
 
@@ -654,9 +673,12 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
             table.add_row("3", "Autor", book.get('author_name', '-'))
             table.add_row("4", "Editorial", book.get('publisher', '-'))
             table.add_row("5", "Formato", book.get('format_type', '-'))
-            table.add_row("6", "Páginas", str(book.get('page_count', '-')))
-            table.add_row("7", "Leído", "Sí" if book.get('is_read') else "No")
-            table.add_row("8", "Detalles (Tomos/Cuentos)",
+            generos_str = ", ".join(book.get('genre_list', [])) if book.get(
+                'genre_list') else "-"
+            table.add_row("6", "Géneros", generos_str)
+            table.add_row("7", "Páginas", str(book.get('page_count', '-')))
+            table.add_row("8", "Leído", "Sí" if book.get('is_read') else "No")
+            table.add_row("9", "Detalles (Tomos/Cuentos)",
                           str(book.get('details', '-')))
             table.add_row(
                 "0", "[bold green]Guardar Cambios y Salir[/bold green]", "")
@@ -664,7 +686,7 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
             console.print(table)
 
             choice = Prompt.ask("Selecciona el número a editar", choices=[
-                                str(i) for i in range(8)], default="0")
+                                str(i) for i in range(10)], default="0")
 
             if choice == "0":
                 break
@@ -730,17 +752,23 @@ def edit_book(book_id: int = typer.Argument(..., help="ID del libro a editar")):
                 else:
                     console.print("[red]Formato no válido.[/red]")
             elif choice == "6":
+                val = Prompt.ask("Nuevos géneros (separados por coma)", default=", ".join(
+                    book.get('genre_list', [])))
+                payload['genre_input'] = val
+                book['genre_list'] = [g.strip() for g in val.split(
+                    ",") if g.strip()]
+            elif choice == "7":
                 val = Prompt.ask("Cantidad de páginas",
                                  default=str(book.get('page_count', '')))
                 if val.isdigit():
                     payload['page_count'] = int(val)
                     book['page_count'] = int(val)
-            elif choice == "7":
+            elif choice == "8":
                 val = Confirm.ask(
                     "¿Marcar libro como completado/leído?", default=book.get('is_read', False))
                 payload['is_read'] = val
                 book['is_read'] = val
-            elif choice == "8":
+            elif choice == "9":
                 console.print(
                     "[dim]Los detalles se actualizan automáticamente al cambiar el Formato (Opción 4).[/dim]")
 

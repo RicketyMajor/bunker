@@ -4,7 +4,7 @@ from . import views
 from .views import log_pages, finish_book, tracker_stats, AnnualRecordViewSet
 
 
-#  enrutador y registra las nuevas vistas automáticas
+# enrutador y registra las nuevas vistas automáticas
 router = DefaultRouter()
 router.register(r'library', views.BookViewSet, basename='library')
 router.register(r'watchers-crud', views.WatcherViewSet,

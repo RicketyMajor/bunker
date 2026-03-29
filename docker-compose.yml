@@ -1,5 +1,5 @@
 services:
-  # 1. El contenedor de la base de datos
+  # El contenedor de la base de datos
   db:
     image: postgres:15-alpine
     volumes:
@@ -11,11 +11,11 @@ services:
     ports:
       - "5433:5432"
 
-  # 2. El contenedor de tu aplicación Django / CLI
+  # El contenedor aplicación Django / CLI
   web:
     build: .
-    # Sincronizamos la carpeta actual con el contenedor para no tener que reconstruir 
-    # la imagen cada vez que edites una línea de código en Python.
+    # Sincroniza la carpeta actual con el contenedor para no tener que reconstruir 
+    # la imagen cada vez que se edite una línea de código en Python.
     volumes:
       - .:/app
     ports:
@@ -26,18 +26,18 @@ services:
       - POSTGRES_DB=library_db
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=supersecret
-      - POSTGRES_HOST=db  # ¡Magia de Docker! El host es el nombre del servicio 'db'
+      - POSTGRES_HOST=db  
       - POSTGRES_PORT=5432
 
 # --- Microservicio Node.js ---
   scraper:
-    build: ./scraper # Le indicamos que busque el Dockerfile en la carpeta scraper
+    build: ./scraper # Busca el Dockerfile en la carpeta scraper
     volumes:
-      - ./scraper:/app # Sincronizamos los archivos en vivo para desarrollo
-      - /app/node_modules # Evitamos sobreescribir los módulos de Node del contenedor
+      - ./scraper:/app # Sincroniza los archivos en vivo para desarrollo
+      - /app/node_modules # Evita sobreescribir los módulos de Node del contenedor
     depends_on:
       - web # El scraper necesita que Django esté vivo para poder enviarle datos
 
-# Definimos el volumen persistente para que los datos sobrevivan a reinicios
+# volumen persistente para que los datos sobrevivan a reinicios
 volumes:
   postgres_data:

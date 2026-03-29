@@ -5,38 +5,57 @@ from .models import AnnualRecord
 
 class BookSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.name', read_only=True)
-    author_input = serializers.CharField(
-        write_only=True, required=False, allow_blank=True)
+
+    # Campo calculado para que el CLI lea los géneros
+    genre_list = serializers.SerializerMethodField()
 
     class Meta:
         model = Book
         fields = '__all__'
-        # Evita que DRF nos exija el ID (PK) original
-        extra_kwargs = {'author': {'read_only': True}}
+
+    def get_genre_list(self, obj):
+        return [g.name for g in obj.genres.all()]
 
     def create(self, validated_data):
-        # Extrae el texto del autor antes de guardar el libro
-        author_name = validated_data.pop('author_input', None)
+        author_input = validated_data.pop('author_input', None)
+        genre_input = validated_data.pop(
+            'genre_input', None)
 
-        # Si viene un nombre, aplica la lógica "get_or_create"
-        if author_name:
-            author, _ = Author.objects.get_or_create(name=author_name.strip())
+        # Guardado del autor
+        if author_input:
+            author, _ = Author.objects.get_or_create(name=author_input.strip())
             validated_data['author'] = author
 
-        # Guarda el libro normalmente con el autor ya asignado
-        return super().create(validated_data)
+        # Creamos el libro
+        book = super().create(validated_data)
+
+        # Si el usuario escribió géneros manualmente, lo conecta
+        if genre_input:
+            genres = [g.strip() for g in genre_input.split(',') if g.strip()]
+            for g_name in genres:
+                genre, _ = Genre.objects.get_or_create(name=g_name)
+                book.genres.add(genre)
+
+        return book
 
     def update(self, instance, validated_data):
-        # Extrae el author_input si el usuario lo envió en el PATCH
         author_input = validated_data.pop('author_input', None)
+        genre_input = validated_data.pop(
+            'genre_input', None)
 
-        # Si hay un autor nuevo, lo buscamos o lo crea, y se lo asigna a la instancia
         if author_input:
-            author, created = Author.objects.get_or_create(
-                name=author_input.strip())
+            author, _ = Author.objects.get_or_create(name=author_input.strip())
             instance.author = author
 
-        # actualización normal del resto de los campos
+        # Si el usuario edita los géneros, reescribe la relación Many-to-Many
+        if genre_input is not None:
+            genres = [g.strip() for g in genre_input.split(',') if g.strip()]
+            genre_objs = []
+            for g_name in genres:
+                genre, _ = Genre.objects.get_or_create(name=g_name)
+                genre_objs.append(genre)
+            instance.genres.set(genre_objs)
+
         return super().update(instance, validated_data)
 
 
