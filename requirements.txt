@@ -5,6 +5,7 @@ certifi==2026.2.25
 charset-normalizer==3.4.6
 click==8.1.8
 click-repl==0.3.0
+colorama==0.4.6
 Django==6.0.3
 django-filter==25.2
 djangorestframework==3.16.1
@@ -12,18 +13,25 @@ h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
 idna==3.11
+-e git+ssh://git@github.com/RicketyMajor/library_manager.git@9dc84cc85ff1840c6a39c72a5f56970430bb927c#egg=library_cli
+linkify-it-py==2.1.0
 markdown-it-py==4.0.0
+mdit-py-plugins==0.5.0
 mdurl==0.1.2
+platformdirs==4.9.4
 prompt_toolkit==3.0.52
 psycopg2-binary==2.9.11
 pyfiglet==1.0.4
 Pygments==2.19.2
+python-dotenv==1.2.2
+qrcode==8.2
 requests==2.32.5
 rich==14.3.3
 shellingham==1.5.4
 sqlparse==0.5.5
+textual==8.2.1
 typer==0.11.1
 typing_extensions==4.15.0
+uc-micro-py==2.0.0
 urllib3==2.6.3
 wcwidth==0.6.0
-python-dotenv==1.0.1

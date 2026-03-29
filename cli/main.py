@@ -27,7 +27,7 @@ from cli.loans import loan_app
 from cli.wishlist import wishlist_app
 from cli.tracker import tracker_app
 from cli.directories import dir_app
-
+from cli.tui.app import NeoLibraryApp
 
 console = Console()
 app = typer.Typer(
@@ -460,17 +460,17 @@ def run_scraper():
 
 @app.command(name="shell")
 def interactive_shell():
-    """Inicia el entorno inmersivo de la Biblioteca."""
+    """Inicia el entorno inmersivo de pantalla completa (TUI)."""
 
+    # Limpiamos la pantalla por estética antes de entrar al búfer alternativo
     click.clear()
 
-    show_welcome_screen()
+    # Invocamos al orquestador para asegurar que los servidores Docker estén vivos
+    ensure_infrastructure_up()
 
-    ctx = click.get_current_context()
-
-    prompt_style = HTML(
-        "<ansicyan><b>library</b></ansicyan> <ansimagenta>❯</ansimagenta> ")
-    repl(ctx, prompt_kwargs={"message": prompt_style})
+    # Inicializamos y corremos la aplicación Textual
+    app_tui = NeoLibraryApp()
+    app_tui.run()
 
 
 if __name__ == "__main__":
