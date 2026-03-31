@@ -3,6 +3,7 @@ import datetime
 import webbrowser
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Markdown, TabbedContent, Tree
+from textual.binding import Binding
 from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
 from textual import work
 from .constants import *
@@ -25,15 +26,16 @@ class NeoLibraryApp(App):
     }
     #sidebar.-visible { display: block; }
     
-    IsbnModal, FullEditModal, LendModal, DirModal { align: center middle; }
+    IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal { align: center middle; }
     #isbn_dialog { width: 40; height: 15; padding: 1 2; border: heavy $accent; background: $surface; }
-    #full_edit_dialog { width: 60; height: 80%; padding: 1 2; border: heavy $warning; background: $surface; }
+    #full_edit_dialog { width: 60; height: 90%; padding: 1 2; border: heavy $warning; background: $surface; } 
+    .edit_label { text-style: bold; margin-top: 1; color: $text-muted; }
     #lend_dialog { width: 40; height: 15; padding: 1 2; border: heavy $success; background: $surface; }
     #dir_dialog { width: 40; height: 17; padding: 1 2; border: heavy $accent; background: $surface; }
     .modal_title { text-style: bold; margin-bottom: 1; }
     .form_buttons { height: auto; margin-top: 1; align: center middle; }
     Button { margin: 0 1; }
-    #tracker_content { height: auto; margin: 1 2; padding: 0 1; border-left: thick $success; background: $surface; }
+    #tracker_content { height: auto; margin: 1 2 0 2; padding: 1; border: solid $success; background: $surface; }
     #annual_table { height: 1fr; margin: 0 2 1 2; }
     #sync_dialog { width: 80%; height: 80%; padding: 1 2; border: heavy $success; background: $surface; }
     #watcher_dialog, #pages_dialog { width: 40; height: 15; padding: 1 2; border: heavy $accent; background: $surface; }
@@ -44,11 +46,12 @@ class NeoLibraryApp(App):
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
         ("ctrl+t", "toggle_dark", "Tema"),
-        ("1", "switch_tab('tab_library')", "Inv"),
-        ("2", "switch_tab('tab_inbox')", "Inbox"),
-        ("3", "switch_tab('tab_loans')", "Préstamos"),
-        ("4", "switch_tab('tab_tracker')", "Hábitos"),
-        ("5", "switch_tab('tab_wishlist')", "Tablón"),
+        Binding("1", "switch_tab('tab_library')",
+                "1-5 Cambiar Pestañas", show=True),
+        Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
+        Binding("3", "switch_tab('tab_loans')", "Préstamos", show=False),
+        Binding("4", "switch_tab('tab_tracker')", "Hábitos", show=False),
+        Binding("5", "switch_tab('tab_wishlist')", "Tablón", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -205,12 +208,7 @@ class NeoLibraryApp(App):
     def populate_tracker(self, stats: dict, annual: list) -> None:
         # 1. Panel de Markdown superior
         md = self.query_one("#tracker_content", Markdown)
-        text = f"""
-# ∑ Hábitos de Lectura ({stats.get('current_month', 'Mes')} {stats.get('current_year', '')})
----
-* **Páginas leídas este mes:** `{stats.get('pages_this_month', 0)}`
-* **Libros terminados este mes:** `{stats.get('books_this_month', 0)}`
-"""
+        text = f"""**Mes de {stats.get('current_month', '')}:** Páginas leídas: `{stats.get('pages_this_month', 0)}`  |  Obras terminadas: `{stats.get('books_this_month', 0)}`"""
         md.update(text)
 
         # 2. Tabla Anual inferior
@@ -334,11 +332,10 @@ class NeoLibraryApp(App):
         if dir_id == "root":
             filtered_books = [
                 b for b in self.all_books if b.get('directory') is None]
-            self.notify("Mostrando raíz (Archivos sin agrupar)")
         else:
             filtered_books = [
                 b for b in self.all_books if b.get('directory') == dir_id]
-            self.notify(f"Universo filtrado ({len(filtered_books)} obras)")
+
         self.populate_books(filtered_books)
         self.action_switch_tab("tab_library")
 

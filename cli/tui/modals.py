@@ -37,15 +37,31 @@ class FullEditModal(ModalScreen[dict]):
         with Vertical(id="full_edit_dialog"):
             yield Label(f"✏️ Editando: {self.book.get('title')}", classes="modal_title")
             with VerticalScroll():
-                yield Input(value=self.book.get('title', ''), id="inp_title", placeholder="Título")
-                yield Input(value=self.book.get('subtitle', ''), id="inp_sub", placeholder="Subtítulo")
-                yield Input(value=self.book.get('author_name', ''), id="inp_author", placeholder="Autor")
-                yield Input(value=self.book.get('format_type', ''), id="inp_format", placeholder="Formato (NOVEL, MANGA...)")
-                yield Input(value=self.book.get('publisher', ''), id="inp_publisher", placeholder="Editorial")
+                yield Label("Título de la obra:", classes="edit_label")
+                yield Input(value=self.book.get('title', ''), id="inp_title")
+
+                yield Label("Subtítulo (Opcional):", classes="edit_label")
+                yield Input(value=self.book.get('subtitle', ''), id="inp_sub")
+
+                yield Label("Autor Principal:", classes="edit_label")
+                yield Input(value=self.book.get('author_name', ''), id="inp_author")
+
+                yield Label("Formato (NOVEL, MANGA, COMIC, ANTHOLOGY, ACADEMIC):", classes="edit_label")
+                yield Input(value=self.book.get('format_type', ''), id="inp_format")
+
+                yield Label("Editorial:", classes="edit_label")
+                yield Input(value=self.book.get('publisher', ''), id="inp_publisher")
+
+                yield Label("Géneros (separados por coma):", classes="edit_label")
                 generos_str = ", ".join(self.book.get(
                     'genre_list', [])) if self.book.get('genre_list') else ""
-                yield Input(value=generos_str, id="inp_genres", placeholder="Géneros (separados por coma)")
-                yield Input(value=str(self.book.get('page_count', '')), id="inp_pages", placeholder="Páginas")
+                yield Input(value=generos_str, id="inp_genres")
+
+                yield Label("Número total de páginas:", classes="edit_label")
+                yield Input(value=str(self.book.get('page_count', '')), id="inp_pages")
+
+                # Checkbox al final
+                yield Label("")  # Espaciador
                 yield Checkbox("✔ Libro Completado/Leído", value=self.book.get('is_read', False), id="chk_read")
 
             with Horizontal(classes="form_buttons"):
@@ -59,7 +75,8 @@ class FullEditModal(ModalScreen[dict]):
                 "title": self.query_one("#inp_title", Input).value,
                 "subtitle": self.query_one("#inp_sub", Input).value,
                 "author_input": self.query_one("#inp_author", Input).value,
-                "format_type": self.query_one("#inp_format", Input).value,
+                # Asegura mayúsculas
+                "format_type": self.query_one("#inp_format", Input).value.upper(),
                 "publisher": self.query_one("#inp_publisher", Input).value,
                 "genre_input": self.query_one("#inp_genres", Input).value,
                 "is_read": self.query_one("#chk_read", Checkbox).value,
