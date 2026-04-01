@@ -1,8 +1,8 @@
-# ☢️ BUNKER (NeoLibrary 3.0)
+# BUNKER (NeoLibrary 3.0)
 
 Bunker es un Centro de Operaciones Multimedia operado 100% desde la terminal (TUI). Diseñado con una arquitectura de microservicios, permite gestionar tu biblioteca de libros y colección de películas físicas, apoyado por Scrapers que vigilan nuevos lanzamientos en segundo plano.
 
-## ✨ Características Principales
+## Características Principales
 
 - **Interfaz TUI:** Navegación por pestañas, modales flotantes, y un "Grid Cinematográfico" construidos con Textual y Typer.
 - **Scraper (Node.js):** Un scraper asíncrono que busca novedades literarias en Google Books y estrenos cinematográficos en The Movie Database (TMDB).
