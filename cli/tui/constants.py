@@ -10,3 +10,6 @@ API_FRIENDS = "http://localhost:8000/api/books/friends/"
 API_TRACKER_PAGES = "http://localhost:8000/api/books/tracker/pages/"
 API_TRACKER_FINISH = "http://localhost:8000/api/books/tracker/finish/"
 API_WATCHERS = "http://localhost:8000/api/books/watchers-crud/"
+# --- RUTAS DEL VIDEOCLUB (MOVIE SHELL) ---
+API_MOVIES = "http://localhost:8000/api/movies/inventory/"
+API_MOVIE_DIRS = "http://localhost:8000/api/movies/directories/"

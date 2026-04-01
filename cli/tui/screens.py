@@ -5,6 +5,7 @@ from textual.widgets import Header, Footer, Markdown, Button, Label
 from textual.containers import VerticalScroll, Vertical, Horizontal, Grid
 from textual import work
 from .constants import API_LIBRARY
+from .movie_screens import MovieMainScreen
 
 
 class BookDetailsScreen(Screen):
@@ -158,10 +159,8 @@ class BunkerLauncherScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_lib":
-            # Al quitar esta pantalla, revela la Biblioteca que ya cargó en el fondo
             self.app.pop_screen()
         elif event.button.id == "btn_movie":
-            self.app.notify(
-                "Fase 57: Construyendo el sector del Videoclub...", severity="warning")
+            self.app.push_screen(MovieMainScreen())
         elif event.button.id == "btn_quit":
             self.app.exit()
