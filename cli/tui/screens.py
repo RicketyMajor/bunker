@@ -1,8 +1,8 @@
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown
-from textual.containers import VerticalScroll, Vertical, Grid
+from textual.widgets import Header, Footer, Markdown, Button, Label
+from textual.containers import VerticalScroll, Vertical, Horizontal, Grid
 from textual import work
 from .constants import API_LIBRARY
 
@@ -117,3 +117,51 @@ class BookDetailsScreen(Screen):
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
+
+
+class BunkerLauncherScreen(Screen):
+    """La pantalla de bienvenida y centro de selección de operaciones."""
+
+    CSS = """
+    #launcher_root { 
+        align: center middle; 
+        background: $surface-darken-2;
+    }
+    #launcher_panel {
+        width: 50;
+        height: auto;
+        padding: 2 4;
+        border: heavy $success;
+        background: $surface;
+        content-align: center middle;
+    }
+    .launcher_title { 
+        text-align: center; 
+        text-style: bold; 
+        color: $success; 
+        margin-bottom: 2; 
+    }
+    .launcher_btn { 
+        width: 100%; 
+        margin-bottom: 1; 
+        text-style: bold; 
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="launcher_root"):
+            with Vertical(id="launcher_panel"):
+                yield Label("B U N K E R", classes="launcher_title")
+                yield Button("1. Acceder a la Biblioteca", id="btn_lib", classes="launcher_btn", variant="primary")
+                yield Button("2. Acceder al Videoclub", id="btn_movie", classes="launcher_btn", variant="warning")
+                yield Button("3. Salir del Sistema", id="btn_quit", classes="launcher_btn", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_lib":
+            # Al quitar esta pantalla, revela la Biblioteca que ya cargó en el fondo
+            self.app.pop_screen()
+        elif event.button.id == "btn_movie":
+            self.app.notify(
+                "Fase 57: Construyendo el sector del Videoclub...", severity="warning")
+        elif event.button.id == "btn_quit":
+            self.app.exit()

@@ -7,11 +7,11 @@ from textual.binding import Binding
 from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
 from textual import work
 from .constants import *
-from .screens import BookDetailsScreen
+from .screens import BookDetailsScreen, BunkerLauncherScreen
 from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal
 
 
-class NeoLibraryApp(App):
+class BunkerApp(App):
     all_books = []
 
     CSS = """
@@ -90,6 +90,7 @@ class NeoLibraryApp(App):
                 break
 
     def on_mount(self) -> None:
+        self.push_screen(BunkerLauncherScreen())
         t_books = self.query_one("#books_table", DataTable)
         t_books.cursor_type = "row"
         t_books.zebra_stripes = True

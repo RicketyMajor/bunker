@@ -2,8 +2,10 @@ pyproject.toml
 cli/__init__.py
 cli/api.py
 cli/books.py
+cli/directories.py
 cli/loans.py
 cli/main.py
+cli/tracker.py
 cli/wishlist.py
 library_cli.egg-info/PKG-INFO
 library_cli.egg-info/SOURCES.txt

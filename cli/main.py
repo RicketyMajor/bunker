@@ -27,7 +27,7 @@ from cli.loans import loan_app
 from cli.wishlist import wishlist_app
 from cli.tracker import tracker_app
 from cli.directories import dir_app
-from cli.tui.app import NeoLibraryApp
+from cli.tui.app import BunkerApp
 
 console = Console()
 app = typer.Typer(
@@ -164,7 +164,7 @@ def get_dashboard_stats():
 def show_welcome_screen():
     """Genera la cabecera visual y el dashboard dinámico de la aplicación."""
 
-    ascii_art = pyfiglet.figlet_format("LIBRARY", font="slant")
+    ascii_art = pyfiglet.figlet_format("BUNKER", font="slant")
     ascii_text = Text(ascii_art, style="bold cyan")
 
     # Obtiene los datos dinámicos
@@ -458,18 +458,12 @@ def run_scraper():
             f"[bold red]Error al ejecutar el scraper: {e}[/bold red]")
 
 
-@app.command(name="shell")
-def interactive_shell():
-    """Inicia el entorno inmersivo de pantalla completa (TUI)."""
-
-    # Limpiamos la pantalla por estética antes de entrar al búfer alternativo
+@app.command(name="enter")
+def enter_bunker():
+    """Inicia el Centro de Operaciones Bunker (TUI)."""
     click.clear()
-
-    # Invocamos al orquestador para asegurar que los servidores Docker estén vivos
     ensure_infrastructure_up()
-
-    # Inicializamos y corremos la aplicación Textual
-    app_tui = NeoLibraryApp()
+    app_tui = BunkerApp()
     app_tui.run()
 
 

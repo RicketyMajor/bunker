@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: library-cli
 Version: 1.0.0
-Summary: Un CLI interactivo para gestionar mi biblioteca distribuida
+Summary: Un CLI interactivo para gestionar mi biblioteca personal, con funcionalidades de seguimiento de lectura, préstamos, wishlist y directorios personalizados.
 Requires-Dist: typer[all]
 Requires-Dist: httpx
 Requires-Dist: click-repl

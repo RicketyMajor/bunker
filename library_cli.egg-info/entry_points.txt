@@ -1,2 +1,2 @@
 [console_scripts]
-library = cli.main:app
+bunker = cli.main:app
