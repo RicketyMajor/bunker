@@ -126,7 +126,7 @@ async function runScrapers(keywords) {
                 const verification = await verifyNewRelease(item.title);
 
                 if (!verification.isNew) {
-                    console.log(`   ♻️  Descartado por Reposición: '${item.title}' (Publicado originalmente en ${verification.year})`);
+                    console.log(`    Descartado por Reposición: '${item.title}' (Publicado originalmente en ${verification.year})`);
                     continue; 
                 }
 
@@ -138,10 +138,10 @@ async function runScrapers(keywords) {
 }
 
 async function main() {
-    console.log("\n🚀 --- Iniciando ciclo de vigilancia distribuida ---");
+    console.log("\n--- Iniciando ciclo de vigilancia ---");
     const keywords = await getWatchers();
     await runScrapers(keywords);
-    console.log("🏁 --- Ciclo de vigilancia terminado ---\n");
+    console.log("--- Ciclo de vigilancia terminado ---\n");
 }
 
 main();

@@ -18,15 +18,18 @@ class BookDetailsScreen(Screen):
     #details_root { padding: 1 2; }
     
     #header_panel { 
-        content-align: center middle; 
-        height: auto; 
-        margin-bottom: 1; 
+        border: heavy $accent; 
+        background: $surface;
+        margin-bottom: 1;
+        padding: 1 2;
+        height: auto;
+        text-align: center; 
     }
     
     #details_grid { 
-        grid-size: 2; /* Dos columnas */
-        grid-columns: 1fr 2fr; /* La sinopsis (der) ocupa el doble que la técnica (izq) */
-        grid-gutter: 2; /* Espacio entre columnas */
+        grid-size: 2;
+        grid-columns: 1fr 2fr;
+        grid-gutter: 2;
     }
     
     .info_panel { 
@@ -66,14 +69,16 @@ class BookDetailsScreen(Screen):
             pass
 
     def render_details(self, book: dict) -> None:
-        # Cabecera (Centro)
+        # Cabecera
         title = book.get('title', 'Sin Título').upper()
         subtitle = f"*{book.get('subtitle')}*" if book.get('subtitle') else ""
         author = book.get('author_name', 'Desconocido')
-        self.query_one("#header_panel", Markdown).update(
-            f"# {title}\n{subtitle}\n### ✎ {author}")
 
-        # Ficha Técnica (Izquierda)
+        # Título y autor centrados dentro de su panel
+        header_md = f"# {title}\n{subtitle}\n### ✎ Autor: {author}"
+        self.query_one("#header_panel", Markdown).update(header_md)
+
+        # Ficha Técnica
         generos_str = ", ".join(book.get('genre_list', [])) if book.get(
             'genre_list') else "Sin clasificar"
         estado = "✔ Leído" if book.get('is_read') else "✘ Pendiente"

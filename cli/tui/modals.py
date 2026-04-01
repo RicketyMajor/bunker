@@ -3,7 +3,7 @@ import io
 import asyncio
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
-from textual.widgets import Input, Button, Label, Checkbox, RichLog
+from textual.widgets import Input, Button, Label, Checkbox, RichLog, Select
 from textual.containers import Vertical, Horizontal, VerticalScroll
 from pathlib import Path
 
@@ -39,31 +39,27 @@ class FullEditModal(ModalScreen[dict]):
         with Vertical(id="full_edit_dialog"):
             yield Label(f"Editando: {self.book.get('title')}", classes="modal_title")
             with VerticalScroll():
-                yield Label("Título de la obra:", classes="edit_label")
+                yield Label("Título de la obra (*):", classes="edit_label")
                 yield Input(value=self.book.get('title', ''), id="inp_title")
-
                 yield Label("Subtítulo (Opcional):", classes="edit_label")
                 yield Input(value=self.book.get('subtitle', ''), id="inp_sub")
-
                 yield Label("Autor Principal:", classes="edit_label")
                 yield Input(value=self.book.get('author_name', ''), id="inp_author")
-
-                yield Label("Formato (NOVEL, MANGA, COMIC, ANTHOLOGY, ACADEMIC, POEM):", classes="edit_label")
-                yield Input(value=self.book.get('format_type', ''), id="inp_format")
+                # Widget Select para los formatos
+                yield Label("Formato:", classes="edit_label")
+                FORMATS = [(f, f) for f in ["NOVEL", "MANGA",
+                                            "COMIC", "ANTHOLOGY", "ACADEMIC", "POEM"]]
+                yield Select(FORMATS, value=self.book.get('format_type', 'NOVEL'), id="sel_format")
 
                 yield Label("Editorial:", classes="edit_label")
                 yield Input(value=self.book.get('publisher', ''), id="inp_publisher")
-
                 yield Label("Géneros (separados por coma):", classes="edit_label")
                 generos_str = ", ".join(self.book.get(
                     'genre_list', [])) if self.book.get('genre_list') else ""
                 yield Input(value=generos_str, id="inp_genres")
-
                 yield Label("Número total de páginas:", classes="edit_label")
                 yield Input(value=str(self.book.get('page_count', '')), id="inp_pages")
-
-                # Checkbox al final
-                yield Label("")  # Espaciador
+                yield Label("")
                 yield Checkbox("✔ Libro Completado/Leído", value=self.book.get('is_read', False), id="chk_read")
 
             with Horizontal(classes="form_buttons"):
@@ -77,8 +73,8 @@ class FullEditModal(ModalScreen[dict]):
                 "title": self.query_one("#inp_title", Input).value,
                 "subtitle": self.query_one("#inp_sub", Input).value,
                 "author_input": self.query_one("#inp_author", Input).value,
-                # Asegura mayúsculas
-                "format_type": self.query_one("#inp_format", Input).value.upper(),
+                # Extraído del Select
+                "format_type": self.query_one("#sel_format", Select).value,
                 "publisher": self.query_one("#inp_publisher", Input).value,
                 "genre_input": self.query_one("#inp_genres", Input).value,
                 "is_read": self.query_one("#chk_read", Checkbox).value,
@@ -113,9 +109,14 @@ class DirModal(ModalScreen[dict]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dir_dialog"):
-            yield Label("📁 Nuevo Universo/Directorio", classes="modal_title")
+            yield Label("📁 Nuevo Directorio", classes="modal_title")
             yield Input(placeholder="Nombre (Ej: DC Comics)", id="inp_dirname")
-            yield Input(placeholder="Color (red, cyan, green...)", value="cyan", id="inp_dircolor")
+
+            yield Label("Color:", classes="edit_label")
+            COLORS = [(c.capitalize(), c) for c in ["red", "green",
+                                                    "yellow", "blue", "magenta", "cyan", "white"]]
+            yield Select(COLORS, value="cyan", id="sel_dircolor")
+
             with Horizontal(classes="form_buttons"):
                 yield Button("Crear", variant="success", id="btn_save")
                 yield Button("Cancelar", variant="error", id="btn_cancel")
@@ -124,7 +125,8 @@ class DirModal(ModalScreen[dict]):
         if event.button.id == "btn_save":
             self.dismiss({
                 "name": self.query_one("#inp_dirname", Input).value,
-                "color_hex": self.query_one("#inp_dircolor", Input).value
+                # Extraído del Select
+                "color_hex": self.query_one("#sel_dircolor", Select).value
             })
         else:
             self.dismiss(None)
@@ -135,7 +137,7 @@ class SyncConsoleModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="sync_dialog"):
-            yield Label("👾 Matrix Scraper Network", classes="modal_title")
+            yield Label("Matrix Scraper Network", classes="modal_title")
             # RichLog es un widget especializado en recibir texto de terminal
             yield RichLog(id="sync_log", highlight=True, markup=True)
             yield Button("Cerrar Conexión", variant="error", id="btn_cancel")
@@ -273,9 +275,10 @@ class ManualAddModal(ModalScreen[dict]):
                 yield Label("Autor Principal:", classes="edit_label")
                 yield Input(id="inp_author", placeholder="Ej: Charles Baudelaire")
 
-                yield Label("Formato (NOVEL, MANGA, COMIC, ANTHOLOGY, ACADEMIC, POEM):", classes="edit_label")
-                # 🚀 POEM por defecto como ejemplo
-                yield Input(value="POEM", id="inp_format")
+                yield Label("Formato:", classes="edit_label")
+                FORMATS = [(f, f) for f in ["NOVEL", "MANGA",
+                                            "COMIC", "ANTHOLOGY", "ACADEMIC", "POEM"]]
+                yield Select(FORMATS, value="POEM", id="sel_format")
 
                 yield Label("Editorial:", classes="edit_label")
                 yield Input(id="inp_publisher")
@@ -300,7 +303,7 @@ class ManualAddModal(ModalScreen[dict]):
                 "title": self.query_one("#inp_title", Input).value,
                 "subtitle": self.query_one("#inp_sub", Input).value,
                 "author_input": self.query_one("#inp_author", Input).value,
-                "format_type": self.query_one("#inp_format", Input).value.upper(),
+                "format_type": self.query_one("#sel_format", Select).value,
                 "publisher": self.query_one("#inp_publisher", Input).value,
                 "genre_input": self.query_one("#inp_genres", Input).value,
                 "is_read": self.query_one("#chk_read", Checkbox).value,
@@ -440,3 +443,31 @@ class WatchersListModal(ModalScreen[int]):
             self.dismiss(int(val) if val.isdigit() else None)
         else:
             self.dismiss(None)
+
+
+class MoveToDirModal(ModalScreen[str]):
+    """Diálogo para transferir un libro a un directorio existente."""
+
+    def __init__(self, dirs: list, **kwargs):
+        super().__init__(**kwargs)
+        self.dirs = dirs
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="move_dir_dialog"):
+            yield Label("Mover Ejemplar", classes="modal_title")
+            yield Label("Selecciona la carpeta de destino:", classes="edit_label")
+
+            # Genera las opciones: Primero la raíz, luego los directorios
+            options = [("📁 Raíz (Sacar de la carpeta)", "root")] + \
+                [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
+            yield Select(options, id="sel_dest")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Transferir", variant="success", id="btn_move")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_move":
+            self.dismiss(self.query_one("#sel_dest", Select).value)
+        else:
+            self.dismiss("cancel")

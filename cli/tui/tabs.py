@@ -8,6 +8,7 @@ class InventoryTab(TabPane):
     BINDINGS = [
         ("a", "app.add_book", "Añadir (ISBN)"),
         ("e", "app.edit_book", "Editar Ficha"),
+        ("m", "app.move_book", "Mover a Carpeta"),
         ("d", "app.show_details", "Ver Detalles"),
         ("l", "app.lend_book", "Prestar a Amigo"),
         ("c", "app.create_dir", "Crear Carpeta"),

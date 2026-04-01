@@ -8,7 +8,7 @@ from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
 from textual import work
 from .constants import *
 from .screens import BookDetailsScreen
-from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal
+from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal
 
 
 class NeoLibraryApp(App):
@@ -28,28 +28,35 @@ class NeoLibraryApp(App):
     
     IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal { align: center middle; }
     #isbn_dialog { width: 40; height: 15; padding: 1 2; border: heavy $accent; background: $surface; }
-    #full_edit_dialog { width: 60; height: 90%; padding: 1 2; border: heavy $warning; background: $surface; } 
+    #full_edit_dialog { width: 80; height: 90%; padding: 1 2; border: heavy $warning; background: $surface; } 
     .edit_label { text-style: bold; margin-top: 1; color: $text-muted; }
     #lend_dialog { width: 40; height: 15; padding: 1 2; border: heavy $success; background: $surface; }
     #dir_dialog { width: 40; height: 17; padding: 1 2; border: heavy $accent; background: $surface; }
     .modal_title { text-style: bold; margin-bottom: 1; }
     .form_buttons { height: auto; margin-top: 1; align: center middle; }
+
     Button { margin: 0 1; }
     #tracker_content { height: auto; margin: 1 2 0 2; padding: 1; border: solid $success; background: $surface; }
     #annual_table { height: 1fr; margin: 0 2 1 2; }
     #sync_dialog { width: 80%; height: 80%; padding: 1 2; border: heavy $success; background: $surface; }
     #watcher_dialog, #pages_dialog { width: 40; height: 15; padding: 1 2; border: heavy $accent; background: $surface; }
     #sync_log { height: 1fr; border: solid $primary; background: #0c0c0c; }
+
     AddMenuModal, ManualAddModal { align: center middle; }
     #add_menu_dialog { width: 40; height: auto; padding: 1 2; border: heavy $accent; background: $surface; }
     #add_menu_dialog Button { width: 100%; margin-bottom: 1; }
+
     ScannerModal { align: center middle; }
     #scanner_dialog { width: 50; height: 35; padding: 1 2; border: heavy $success; background: $surface; }
     #scanner_qr { height: 1fr; background: #000000; color: #ffffff; text-align: center; } 
+
     FinishBookModal, WatchersListModal { align: center middle; }
     #finish_dialog { width: 50; height: 22; padding: 1 2; border: heavy $warning; background: $surface; }
-    #watchers_list_dialog { width: 50; height: 25; padding: 1 2; border: heavy $accent; background: $surface; }
+    #watchers_list_dialog { width: 80; height: 25; padding: 1 2; border: heavy $accent; background: $surface; }
     #watchers_scroll { height: 1fr; border: solid $primary; padding: 1; margin-bottom: 1; }
+
+    MoveToDirModal { align: center middle; }
+    #move_dir_dialog { width: 50; height: 22; padding: 1 2; border: heavy $accent; background: $surface; content-align: center middle;}
     """
 
     BINDINGS = [
@@ -181,11 +188,25 @@ class NeoLibraryApp(App):
         tree.root.data = "root"
         tree.clear()
 
+        self.all_dirs = dirs  # Guarda en memoria para usarlo luego al Mover
+
         for d in dirs:
-            count = sum(1 for b in self.all_books if b.get(
-                'directory') == d['id'])
+            dir_books = [b for b in self.all_books if b.get(
+                'directory') == d['id']]
+            count = len(dir_books)
             node_label = f"[{d.get('color_hex', 'cyan')}]■ {d['name']}[/] [dim]({count})[/dim]"
-            tree.root.add(node_label, data=d['id'])
+
+            # Añade la carpeta
+            dir_node = tree.root.add(node_label, data=d['id'])
+
+            # Añade los libros como "Hojas" dentro de la carpeta
+            for b in dir_books:
+                status = "✔" if b.get('is_read') else "✘"
+                # Formato: "ID - Título [Estado]"
+                title_short = b['title'][:25] + \
+                    "..." if len(b['title']) > 25 else b['title']
+                dir_node.add_leaf(
+                    f"[dim]{b['id']}[/dim] {title_short} [{status}]", data=f"book_{b['id']}")
 
     def populate_books(self, books: list) -> None:
         table = self.query_one("#books_table", DataTable)
@@ -216,12 +237,16 @@ class NeoLibraryApp(App):
                 'loan_date', ''), loan.get('due_date', ''), status, key=str(loan.get('id')))
 
     def populate_tracker(self, stats: dict, annual: list) -> None:
-        # 1. Panel de Markdown superior
         md = self.query_one("#tracker_content", Markdown)
-        text = f"""**Mes de {stats.get('current_month', '')}:** Páginas leídas: `{stats.get('pages_this_month', 0)}`  |  Obras terminadas: `{stats.get('books_this_month', 0)}`"""
+
+        # El conteo de obras terminadas ahora es el largo de la lista anual
+        obras_anuales = len(annual)
+
+        # Muestra la info de forma horizontal
+        text = f"""**Mes de {stats.get('current_month', '')}:** Páginas: `{stats.get('pages_this_month', 0)}`  |  **Total Año:** `{obras_anuales} obras terminadas`"""
         md.update(text)
 
-        # 2. Tabla Anual inferior
+        # Actualización de la tabla
         table = self.query_one("#annual_table", DataTable)
         table.clear()
         for rec in annual:
@@ -378,13 +403,18 @@ class NeoLibraryApp(App):
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         if event.node.data is None:
             return
-        dir_id = event.node.data
-        if dir_id == "root":
+
+        data_val = str(event.node.data)
+        # Si el usuario hace clic en un archivo, ignora el evento de filtro
+        if data_val.startswith("book_"):
+            return
+
+        if data_val == "root":
             filtered_books = [
                 b for b in self.all_books if b.get('directory') is None]
         else:
-            filtered_books = [
-                b for b in self.all_books if b.get('directory') == dir_id]
+            filtered_books = [b for b in self.all_books if str(
+                b.get('directory')) == data_val]
 
         self.populate_books(filtered_books)
         self.action_switch_tab("tab_library")
@@ -753,6 +783,44 @@ class NeoLibraryApp(App):
                 self.app.call_from_thread(
                     self.notify, "Lanzamiento oculto para siempre.", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.notify, f"Error: {e}", severity="error")
+
+# ================= TRANSFERENCIA ENTRE DIRECTORIOS =================
+    def action_move_book(self) -> None:
+        if self.query_one("#main_tabs", TabbedContent).active != "tab_library":
+            return
+        table = self.query_one("#books_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            if row_key:
+                def do_move(dest_val: str) -> None:
+                    if dest_val != "cancel":
+                        target_id = None if dest_val == "root" else int(
+                            dest_val)
+                        self.process_move_book(row_key, target_id)
+
+                # Le pasa la lista de directorios almacenada en memoria
+                self.push_screen(MoveToDirModal(
+                    getattr(self, 'all_dirs', [])), do_move)
+        except Exception:
+            self.notify("Selecciona un libro en la tabla.", severity="warning")
+
+    @work(thread=True)
+    def process_move_book(self, book_id: str, dest_dir: int | None) -> None:
+        try:
+            resp = httpx.patch(f"{API_LIBRARY}{book_id}/",
+                               json={"directory": dest_dir}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.notify, "¡Libro transferido de carpeta!", title="Éxito")
+                # Refresca el árbol visualmente
+                self.app.call_from_thread(self.load_all_data)
+            else:
+                self.app.call_from_thread(
+                    self.notify, "Error al transferir.", severity="error")
         except Exception as e:
             self.app.call_from_thread(
                 self.notify, f"Error: {e}", severity="error")
