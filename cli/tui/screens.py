@@ -235,7 +235,8 @@ class BunkerLauncherScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_lib":
-            self.app.pop_screen()
+            from .library_screen import LibraryMainScreen
+            self.app.push_screen(LibraryMainScreen())
         elif event.button.id == "btn_movie":
             from .movie_screens import MovieMainScreen
             self.app.push_screen(MovieMainScreen())

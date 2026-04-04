@@ -56,7 +56,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'library_manager.urls'
+ROOT_URLCONF = 'bunker_core.urls'
 
 TEMPLATES = [
     {
@@ -73,7 +73,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'library_manager.wsgi.application'
+WSGI_APPLICATION = 'bunker_core.wsgi.application'
 
 
 # Database

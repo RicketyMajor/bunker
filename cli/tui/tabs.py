@@ -4,15 +4,14 @@ from textual.containers import Vertical
 
 
 class InventoryTab(TabPane):
-    """Pestaña 1: El Inventario Principal."""
     BINDINGS = [
-        ("a", "app.add_book", "Añadir (ISBN)"),
-        ("e", "app.edit_book", "Editar Ficha"),
-        ("m", "app.move_book", "Mover a Carpeta"),
-        ("d", "app.show_details", "Ver Detalles"),
-        ("l", "app.lend_book", "Prestar a Amigo"),
-        ("c", "app.create_dir", "Crear Carpeta"),
-        ("x", "app.delete_book", "Eliminar Ficha"),
+        ("a", "screen.add_book", "Añadir (ISBN)"),
+        ("e", "screen.edit_book", "Editar Ficha"),
+        ("m", "screen.move_book", "Mover a Carpeta"),
+        ("d", "screen.show_details", "Ver Detalles"),
+        ("l", "screen.lend_book", "Prestar a Amigo"),
+        ("c", "screen.create_dir", "Crear Carpeta"),
+        ("x", "screen.delete_book", "Eliminar Ficha"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -20,10 +19,9 @@ class InventoryTab(TabPane):
 
 
 class InboxTab(TabPane):
-    """Pestaña 2: El Purgatorio."""
     BINDINGS = [
-        ("enter", "app.process_inbox", "Procesar Escaneo"),
-        ("x", "app.delete_inbox", "Descartar Escaneo"),
+        ("enter", "screen.process_inbox", "Procesar Escaneo"),
+        ("x", "screen.delete_inbox", "Descartar Escaneo"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -32,7 +30,7 @@ class InboxTab(TabPane):
 
 class LoansTab(TabPane):
     BINDINGS = [
-        ("r", "app.return_book", "Devolver a Estantería"),
+        ("r", "screen.return_book", "Devolver a Estantería"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -42,8 +40,8 @@ class LoansTab(TabPane):
 class TrackerTab(TabPane):
     """Pestaña 4: Hábitos y lectura."""
     BINDINGS = [
-        ("p", "app.log_pages", "Anotar Páginas"),
-        ("f", "app.finish_book", "Registrar Terminado"),
+        ("p", "screen.log_pages", "Anotar Páginas"),
+        ("f", "screen.finish_book", "Registrar Terminado"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -55,12 +53,12 @@ class TrackerTab(TabPane):
 class WishlistTab(TabPane):
     """Pestaña 5: El radar del Scraper."""
     BINDINGS = [
-        ("s", "app.sync_scraper", "Sincronizar Scraper"),
-        ("w", "app.add_watcher", "Vigilar Autor"),
-        ("v", "app.view_watchers", "Ver/Borrar Vigilados"),
-        ("d", "app.wishlist_details", "Ver Enlace"),
-        ("x", "app.delete_wishlist", "Ocultar Lanzamiento"),
-        ("c", "app.clear_wishlist", "Limpiar Todo"),
+        ("s", "screen.sync_scraper", "Sincronizar Scraper"),
+        ("w", "screen.add_watcher", "Vigilar Autor"),
+        ("v", "screen.view_watchers", "Ver/Borrar Vigilados"),
+        ("d", "screen.wishlist_details", "Ver Enlace"),
+        ("x", "screen.delete_wishlist", "Ocultar Lanzamiento"),
+        ("c", "screen.clear_wishlist", "Limpiar Todo"),
     ]
 
     def compose(self) -> ComposeResult:
