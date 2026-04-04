@@ -28,19 +28,29 @@ class BunkerApp(App):
     #sidebar.-visible { display: block; }
     
     IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal { align: center middle; }
-    #isbn_dialog { width: 40; height: 15; padding: 1 2; border: heavy $accent; background: $surface; }
+    
     #full_edit_dialog { width: 80; height: 90%; padding: 1 2; border: heavy $warning; background: $surface; } 
     .edit_label { text-style: bold; margin-top: 1; color: $text-muted; }
-    #lend_dialog { width: 40; height: 15; padding: 1 2; border: heavy $success; background: $surface; }
-    #dir_dialog { width: 40; height: 17; padding: 1 2; border: heavy $accent; background: $surface; }
+    
     .modal_title { text-style: bold; margin-bottom: 1; }
-    .form_buttons { height: auto; margin-top: 1; align: center middle; }
+    .form_buttons { height: auto; margin-top: 2; align: center middle; }
+
+    #isbn_dialog, #lend_dialog, #dir_dialog, #watcher_dialog, #pages_dialog, #move_dir_dialog, #add_menu_dialog {
+        width: 45%; 
+        min-width: 40;
+        height: auto; 
+        padding: 1 2; 
+        border: heavy $accent; 
+        background: $surface; 
+    }
+
+    #lend_dialog { border: heavy $success; }
 
     Button { margin: 0 1; }
     #tracker_content { height: auto; margin: 1 2 0 2; padding: 1; border: solid $success; background: $surface; }
     #annual_table { height: 1fr; margin: 0 2 1 2; }
     #sync_dialog { width: 80%; height: 80%; padding: 1 2; border: heavy $success; background: $surface; }
-    #watcher_dialog, #pages_dialog { width: 40; height: 15; padding: 1 2; border: heavy $accent; background: $surface; }
+    
     #sync_log { height: 1fr; border: solid $primary; background: #0c0c0c; }
 
     AddMenuModal, ManualAddModal { align: center middle; }
@@ -57,7 +67,7 @@ class BunkerApp(App):
     #watchers_scroll { height: 1fr; border: solid $primary; padding: 1; margin-bottom: 1; }
 
     MoveToDirModal { align: center middle; }
-    #move_dir_dialog { width: 50; height: 22; padding: 1 2; border: heavy $accent; background: $surface; content-align: center middle;}
+    
     """
 
     BINDINGS = [
