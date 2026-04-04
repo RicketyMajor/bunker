@@ -1,7 +1,7 @@
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown, DataTable
+from textual.widgets import Header, Footer, Markdown, DataTable, Label
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual import work
 from .constants import API_MOVIES
@@ -14,8 +14,18 @@ class MovieDetailsScreen(Screen):
 
     CSS = """
     #movie_root { padding: 1 2; }
-    #movie_header { border: heavy $warning; background: $surface; margin-bottom: 1; padding: 1 2; text-align: center; }
+    #movie_header { 
+        border: heavy $warning; 
+        background: $surface; 
+        margin-bottom: 1; 
+        padding: 1 2; 
+        align: center middle;
+        content-align: center middle;
+    }
     
+    #movie_title { text-style: bold; color: $text; }
+    #movie_subtitle { color: $text-muted; margin-top: 1; }
+
     #movie_grid { 
         grid-size: 3; 
         grid-columns: 1fr 2fr 2fr; /* Póster (1x) | Técnica (2x) | Cast & Sinopsis (2x) */
@@ -40,7 +50,9 @@ class MovieDetailsScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         with VerticalScroll(id="movie_root"):
-            yield Markdown("Cargando cintas...", id="movie_header")
+            with Vertical(id="movie_header"):
+                yield Label("Cargando cintas...", id="movie_title")
+                yield Label("", id="movie_og_title")
             with Grid(id="movie_grid"):
                 with Vertical(id="poster_panel"):
                     yield Markdown(id="poster_content")  # Col 1
@@ -65,9 +77,11 @@ class MovieDetailsScreen(Screen):
     def render_details(self, m: dict) -> None:
         # Cabecera
         title = m.get('title', 'Sin Título').upper()
-        og_title = f"*{m.get('original_title')}*" if m.get('original_title') else ""
-        self.query_one("#movie_header", Markdown).update(
-            f"# 🎬 {title}\n{og_title}")
+        og_title = f"[i]{m.get('original_title')}[/i]" if m.get(
+            'original_title') else ""
+
+        self.query_one("#movie_title", Label).update(f"[bold]🎬 {title}[/bold]")
+        self.query_one("#movie_og_title", Label).update(og_title)
 
         # Col 1: Póster Tipográfico
         poster_md = f"## {title}\n\n🎬\n\n**{m.get('release_year', '-')}**\n\n*[dim]TMDB Data[/dim]*"

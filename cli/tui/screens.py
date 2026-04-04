@@ -24,8 +24,12 @@ class BookDetailsScreen(Screen):
         margin-bottom: 1;
         padding: 1 2;
         height: auto;
-        text-align: center; 
+        align: center middle;
+        content-align: center middle;
     }
+    
+    #header_title { text-style: bold; color: $text; }
+    #header_author { color: $success; margin-top: 1; }
     
     #details_grid { 
         grid-size: 2;
@@ -49,7 +53,10 @@ class BookDetailsScreen(Screen):
         yield Header(show_clock=True)
         # CONTENEDORES GRID
         with VerticalScroll(id="details_root"):
-            yield Markdown("Cargando...", id="header_panel")
+            with Vertical(id="header_panel"):
+                yield Label("Cargando...", id="header_title")
+                yield Label("", id="header_subtitle")
+                yield Label("", id="header_author")
             with Grid(id="details_grid"):
                 with Vertical(classes="info_panel"):
                     yield Markdown(id="tech_panel")
@@ -72,12 +79,12 @@ class BookDetailsScreen(Screen):
     def render_details(self, book: dict) -> None:
         # Cabecera
         title = book.get('title', 'Sin Título').upper()
-        subtitle = f"*{book.get('subtitle')}*" if book.get('subtitle') else ""
+        subtitle = f"[i]{book.get('subtitle')}[/i]" if book.get('subtitle') else ""
         author = book.get('author_name', 'Desconocido')
 
-        # Título y autor centrados dentro de su panel
-        header_md = f"# {title}\n{subtitle}\n### ✎ Autor: {author}"
-        self.query_one("#header_panel", Markdown).update(header_md)
+        self.query_one("#header_title", Label).update(f"[bold]{title}[/bold]")
+        self.query_one("#header_subtitle", Label).update(subtitle)
+        self.query_one("#header_author", Label).update(f"✎ Autor: {author}")
 
         # Ficha Técnica
         generos_str = ", ".join(book.get('genre_list', [])) if book.get(
