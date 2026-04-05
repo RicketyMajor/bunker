@@ -627,8 +627,8 @@ class LibraryMainScreen(Screen):
     def action_sync_scraper(self) -> None:
         if self.query_one("#main_tabs", TabbedContent).active != "tab_wishlist":
             return
-        # Abre la consola
-        self.app.push_screen(SyncConsoleModal())
+        # Llama explícitamente al contenedor de libros
+        self.app.push_screen(SyncConsoleModal(service_name="scraper-books"))
 
     def action_add_watcher(self) -> None:
         if self.query_one("#main_tabs", TabbedContent).active != "tab_wishlist":

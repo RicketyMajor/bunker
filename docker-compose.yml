@@ -29,16 +29,26 @@ services:
       - POSTGRES_HOST=db  
       - POSTGRES_PORT=5432
 
-# --- Microservicio Node.js ---
-  scraper:
-    build: ./scraper # Busca el Dockerfile en la carpeta scraper
-    env_file:
-      - .env # Pasa la clave de TMDB al contenedor
+# --- Microservicios Distribuidos Node.js ---
+  scraper-books:
+    build: ./scraper
+    command: npm run start:books
     volumes:
-      - ./scraper:/app # Sincroniza los archivos en vivo para desarrollo
-      - /app/node_modules # Evita sobreescribir los módulos de Node del contenedor
+      - ./scraper:/app
+      - /app/node_modules
     depends_on:
-      - web # El scraper necesita que Django esté vivo para poder enviarle datos
+      - web
+
+  scraper-movies:
+    build: ./scraper
+    command: npm run start:movies
+    env_file:
+      - .env # Pasa la clave TMDB_API_KEY
+    volumes:
+      - ./scraper:/app
+      - /app/node_modules
+    depends_on:
+      - web
 
 # volumen persistente para que los datos sobrevivan a reinicios
 volumes:

@@ -135,29 +135,30 @@ class DirModal(ModalScreen[dict]):
 class SyncConsoleModal(ModalScreen[None]):
     """La Terminal de Matrix: Ejecuta el Scraper Dockerizado en vivo."""
 
+    def __init__(self, service_name: str = "scraper-books", **kwargs):
+        super().__init__(**kwargs)
+        self.service_name = service_name
+
     def compose(self) -> ComposeResult:
         with Vertical(id="sync_dialog"):
-            yield Label("Matrix Scraper Network", classes="modal_title")
-            # RichLog es un widget especializado en recibir texto de terminal
+            yield Label(f"Matrix Scraper Network [{self.service_name}]", classes="modal_title")
             yield RichLog(id="sync_log", highlight=True, markup=True)
             yield Button("Cerrar Conexión", variant="error", id="btn_cancel")
 
     async def on_mount(self) -> None:
         log = self.query_one("#sync_log", RichLog)
-        log.write("[bold cyan]Iniciando rastreo web distribuido...[/bold cyan]")
+        log.write(
+            f"[bold cyan]Iniciando rastreo web en {self.service_name}...[/bold cyan]")
 
-        # Retrocedemos 3 carpetas (cli/tui/modals.py -> cli/tui -> cli -> raiz)
         project_dir = Path(__file__).resolve().parent.parent.parent
 
         try:
-            # Lanza Docker sin congelar la interfaz
             process = await asyncio.create_subprocess_exec(
-                "docker-compose", "run", "--rm", "scraper",
+                "docker-compose", "run", "--rm", self.service_name,
                 cwd=str(project_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            # Crea un hilo de fondo que lee la salida de Node.js línea por línea
             asyncio.create_task(self.read_output(process, log))
         except Exception as e:
             log.write(f"[bold red]Error iniciando el sabueso: {e}[/bold red]")
@@ -167,11 +168,10 @@ class SyncConsoleModal(ModalScreen[None]):
             line = await process.stdout.readline()
             if not line:
                 break
-            # Escribimos en el panel de Matrix
             log.write(line.decode().rstrip())
         await process.wait()
         log.write(
-            f"\n[bold green]Rastreo finalizado. Puedes cerrar esta ventana.[/bold green]")
+            "\n[bold green]Rastreo finalizado. Puedes cerrar esta ventana.[/bold green]")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(None)

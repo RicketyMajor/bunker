@@ -4,7 +4,8 @@
   "description": "Microservicio para extraer novedades de mangas y libros",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start:books": "node book_radar.js",
+    "start:movies": "node movie_radar.js"
   },
   "dependencies": {
     "axios": "^1.6.8",
