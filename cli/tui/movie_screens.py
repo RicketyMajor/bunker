@@ -266,8 +266,12 @@ class MovieMainScreen(Screen):
                     self.app.notify, "¡Película procesada y guardada en el Videoclub!", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
             else:
-                error_msg = resp.json().get('error', 'Error desconocido') if resp.status_code in [
-                    400, 404] else resp.text
+                # BLINDAJE ANTI-CONGELAMIENTOS: Si Django escupe HTML gigante, lo interceptamos
+                if resp.status_code >= 500:
+                    error_msg = "Error 500: Fallo interno de Django. Revisa los logs de Docker."
+                else:
+                    error_msg = resp.json().get('error', 'Error desconocido') if resp.status_code in [
+                        400, 404] else str(resp.text)[:100]
                 self.app.call_from_thread(
                     self.app.notify, f"Error: {error_msg}", severity="error")
         except Exception as e:

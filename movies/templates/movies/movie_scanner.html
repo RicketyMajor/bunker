@@ -80,67 +80,58 @@
     <script>
       const csrfToken = "{{ csrf_token }}";
 
+      let isScanning = false;
+
       function onScanSuccess(decodedText, decodedResult) {
+        if (isScanning) return;
+        isScanning = true;
+
         const statusDiv = document.getElementById("status");
-        statusDiv.innerHTML = `⏳ Procesando código: ${decodedText}...`;
+        statusDiv.innerHTML = `⏳ Inyectando EAN: ${decodedText}...`;
         statusDiv.style.color = "#00d2ff";
 
-        html5QrcodeScanner
-          .clear()
-          .then(() => {
-            // Apunta al Purgatorio (inbox) en lugar de scan directo
-            // APUNTA AL INBOX DEL VIDEOCLUB
-            fetch("/api/movies/receive-barcode/", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              // ENVÍA EL BARCODE EN LUGAR DEL ISBN
-              body: JSON.stringify({ barcode: decodedText }),
-            })
-              .then((response) =>
-                response
-                  .json()
-                  .then((data) => ({ status: response.status, body: data })),
-              )
-              .then((res) => {
-                if (res.status === 201 || res.status === 200) {
-                  statusDiv.innerHTML = `
-                    ¡Capturado!<br>Código EAN ${decodedText} enviado al Inbox del Videoclub.<br>
-                    <button class="btn-restart" onclick="window.location.reload()">
-                      Escanear siguiente película
-                    </button>
-                  `;
-                  statusDiv.style.color = "#00ff00";
-                } else {
-                  let errMsg = res.body.barcode
-                    ? "Esta película ya está en el Inbox."
-                    : "El código fue guardado crudo (No encontrado en el comercio).";
-                  statusDiv.innerHTML = `
-                    Aviso: ${errMsg}<br>
-                    <button class="btn-restart btn-error" onclick="window.location.reload()">
-                      Intentar de nuevo
-                    </button>
-                  `;
-                  statusDiv.style.color = "#ffcc00"; // Lo ponemos amarillo en lugar de rojo si es aviso
-                }
-              })
-              .catch((error) => {
-                console.error("Error en la petición:", error);
-                statusDiv.innerHTML = `
-                  Error de conexión con el servidor.<br>
-                  <button class="btn-restart btn-error" onclick="window.location.reload()">
-                    Intentar de nuevo
-                  </button>
-                `;
-                statusDiv.style.color = "#ff4444";
-              });
+        // Pausamos visualmente el escáner
+        html5QrcodeScanner.pause();
+
+        fetch("/api/movies/receive-barcode/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ barcode: decodedText }),
+        })
+          .then((response) =>
+            response
+              .json()
+              .then((data) => ({ status: response.status, body: data })),
+          )
+          .then((res) => {
+            if (res.status === 201 || res.status === 200) {
+              statusDiv.innerHTML = `¡Capturado! Código ${decodedText} en el Inbox.`;
+              statusDiv.style.color = "#00ff00";
+            } else {
+              statusDiv.innerHTML = `Aviso: ${res.body.error || "Ya registrado"}`;
+              statusDiv.style.color = "#ffcc00";
+            }
+
+            // MAGIA DE VELOCIDAD: Esperamos 1.5 segundos para que leas el mensaje,
+            // y reactivamos la cámara SIN recargar la página.
+            setTimeout(() => {
+              statusDiv.innerHTML = "Esperando siguiente código...";
+              statusDiv.style.color = "#ffcc00";
+              html5QrcodeScanner.resume();
+              isScanning = false;
+            }, 1500);
           })
           .catch((error) => {
-            console.error("Fallo al detener el escáner.", error);
+            statusDiv.innerHTML = `Error de red. Intenta de nuevo.`;
+            statusDiv.style.color = "#ff4444";
+            setTimeout(() => {
+              html5QrcodeScanner.resume();
+              isScanning = false;
+            }, 2000);
           });
       }
-
       let html5QrcodeScanner = new Html5QrcodeScanner(
         "reader",
         {
