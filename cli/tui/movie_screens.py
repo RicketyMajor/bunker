@@ -7,13 +7,15 @@ from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
 from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS
-from .modals import AddMovieMenuModal, MovieScannerModal, LendModal
+from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal
 
 
 class MovieInventoryTab(TabPane):
     BINDINGS = [
-        ("a", "screen.add_movie", "Añadir (Manual)"),
+        ("a", "screen.add_movie", "Añadir Película"),
         ("d", "screen.show_details", "Ver Detalles"),
+        ("l", "screen.lend_movie", "Prestar a Amigo"),
+        ("x", "screen.delete_movie", "Eliminar Ficha"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -22,12 +24,22 @@ class MovieInventoryTab(TabPane):
 
 class MovieInboxTab(TabPane):
     BINDINGS = [
-        ("enter", "screen.process_barcode", "Procesar Escaneo UPC"),
+        Binding("enter", "screen.process_barcode",
+                "Procesar Escaneo UPC", show=True),
         ("x", "screen.delete_inbox", "Descartar"),
     ]
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="movie_inbox_table")
+
+
+class MovieLoansTab(TabPane):
+    BINDINGS = [
+        ("r", "screen.return_movie", "Devolver a Bóveda"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield DataTable(id="movie_loans_table")
 
 
 class MovieDetailsScreen(Screen):
@@ -109,20 +121,27 @@ class MovieMainScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         with TabbedContent(initial="tab_cartelera", id="movie_tabs"):
-            yield MovieInventoryTab("Inventario", id="tab_cartelera")
-            yield MovieInboxTab("◈ Inbox Físico", id="tab_inbox")
+            yield MovieInventoryTab("◈ Inventario", id="tab_cartelera")
+            yield MovieInboxTab("◈ Inbox", id="tab_inbox")
+            yield MovieLoansTab("◈ Préstamos", id="tab_prestamos")
         yield Footer()
 
     def on_mount(self) -> None:
         t_movies = self.query_one("#movies_table", DataTable)
         t_movies.cursor_type = "row"
         t_movies.zebra_stripes = True
-        t_movies.add_columns("ID", "Título", "Director", "Año", "Visto")
+        t_movies.add_columns("ID", "Título", "Director",
+                             "Año", "Visto")
 
         t_inbox = self.query_one("#movie_inbox_table", DataTable)
         t_inbox.cursor_type = "row"
         t_inbox.zebra_stripes = True
         t_inbox.add_columns("ID", "Código EAN/UPC", "Fecha de Escaneo")
+
+        t_loans = self.query_one("#movie_loans_table", DataTable)
+        t_loans.cursor_type = "row"
+        t_loans.zebra_stripes = True
+        t_loans.add_columns("ID", "Título", "Amigo", "Estado")
 
         self.load_movies()
 
@@ -146,12 +165,22 @@ class MovieMainScreen(Screen):
             pass
 
     def populate_movies(self, movies: list) -> None:
-        table = self.query_one("#movies_table", DataTable)
-        table.clear()
+        table_inv = self.query_one("#movies_table", DataTable)
+        table_loans = self.query_one("#movie_loans_table", DataTable)
+        table_inv.clear()
+        table_loans.clear()
+
         for m in movies:
-            status = "✔" if m.get('is_watched') else "✘"
-            table.add_row(str(m.get('id')), m.get('title', '').upper(), m.get(
-                'director', '-'), str(m.get('release_year', '-')), status, key=str(m.get('id')))
+            # Llenar Inventario
+            if not m.get('is_loaned'):
+                status = "✔" if m.get('is_watched') else "✘"
+                table_inv.add_row(str(m.get('id')), m.get('title', '').upper(), m.get(
+                    'director', '-'), str(m.get('release_year', '-')), status, key=str(m.get('id')))
+            # Llenar Préstamos
+            else:
+                amigo = m.get('friend_name') or 'Desconocido'  # <- CAMBIO AQUÍ
+                table_loans.add_row(str(m.get('id')), m.get('title', '').upper(),
+                                    amigo, "⇋ Prestada", key=str(m.get('id')))
 
     def populate_inbox(self, items: list) -> None:
         table = self.query_one("#movie_inbox_table", DataTable)
@@ -207,7 +236,6 @@ class MovieMainScreen(Screen):
 
         def handle_menu_choice(choice: str) -> None:
             if choice == "scan":
-                # Levantamos el túnel exclusivo de películas
                 self.app.push_screen(MovieScannerModal())
             elif choice == "name":
                 def handle_title(title: str | None) -> None:
@@ -217,10 +245,28 @@ class MovieMainScreen(Screen):
                         self.process_movie_scan(title)
                 self.app.push_screen(LendModal(), handle_title)
             elif choice == "full":
-                self.app.notify(
-                    "Modo 100% Manual en construcción...", severity="warning")
+                # CONECTAMOS EL FORMULARIO MANUAL AL BACKEND
+                def handle_manual_save(payload: dict | None) -> None:
+                    if payload:
+                        self.process_manual_movie(payload)
+                self.app.push_screen(ManualMovieAddModal(), handle_manual_save)
 
         self.app.push_screen(AddMovieMenuModal(), handle_menu_choice)
+
+    @work(thread=True)
+    def process_manual_movie(self, payload: dict) -> None:
+        try:
+            resp = httpx.post(f"{API_MOVIES}", json=payload, timeout=5.0)
+            if resp.status_code == 201:
+                self.app.call_from_thread(
+                    self.app.notify, "Película archivada manualmente.", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error guardando la cinta.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
 
     @work(thread=True)
     def process_movie_scan(self, title: str) -> None:
@@ -303,3 +349,82 @@ class MovieMainScreen(Screen):
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
+
+    # --- SISTEMA DE BORRADO ---
+    def action_delete_movie(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_cartelera":
+            return
+        table = self.query_one("#movies_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            title = table.get_row(row_key)[1]
+
+            def handle_confirm(confirm: bool) -> None:
+                if confirm:
+                    self.execute_delete_movie(row_key)
+
+            self.app.push_screen(ConfirmModal(
+                f"¿Destruir los registros de '{title}'?"), handle_confirm)
+        except Exception:
+            self.app.notify("Selecciona una película.", severity="warning")
+
+    @work(thread=True)
+    def execute_delete_movie(self, movie_id: str) -> None:
+        try:
+            httpx.delete(f"{API_MOVIES}{movie_id}/", timeout=5.0)
+            self.app.call_from_thread(
+                self.app.notify, "Cinta incinerada.", title="Éxito")
+            self.app.call_from_thread(self.load_movies)
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Error al eliminar.", severity="error")
+
+    # --- SISTEMA DE PRÉSTAMOS ---
+    def action_lend_movie(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_cartelera":
+            return
+        table = self.query_one("#movies_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+
+            def handle_lend(friend_name: str | None) -> None:
+                if friend_name:
+                    # AHORA SÍ enviamos el nombre del amigo al backend
+                    self.update_movie_status(
+                        row_key, {"is_loaned": True, "friend_name": friend_name})
+
+            self.app.push_screen(LendModal(), handle_lend)
+        except Exception:
+            self.app.notify("Selecciona una película.", severity="warning")
+
+    def action_return_movie(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_prestamos":
+            return
+        table = self.query_one("#movie_loans_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+
+            # Limpiamos el nombre del amigo al devolverla
+            self.update_movie_status(
+                row_key, {"is_loaned": False, "friend_name": ""})
+
+        except Exception:
+            self.app.notify("Selecciona una película prestada.",
+                            severity="warning")
+
+    @work(thread=True)
+    def update_movie_status(self, movie_id: str, payload: dict) -> None:
+        try:
+            resp = httpx.patch(f"{API_MOVIES}{movie_id}/",
+                               json=payload, timeout=5.0)
+            if resp.status_code == 200:
+                msg = "Película devuelta a la bóveda." if not payload.get(
+                    "is_loaned") else "Película marcada como prestada."
+                self.app.call_from_thread(self.app.notify, msg, title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de red: {e}", severity="error")

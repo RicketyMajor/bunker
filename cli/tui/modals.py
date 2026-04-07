@@ -568,3 +568,63 @@ class AddMovieMenuModal(ModalScreen[str]):
             self.dismiss("full")
         else:
             self.dismiss("cancel")
+
+
+class ManualMovieAddModal(ModalScreen[dict]):
+    """Formulario gigante para crear una película desde cero."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="full_edit_dialog"):
+            yield Label("Ingreso 100% Manual de Película", classes="modal_title")
+            with VerticalScroll():
+                yield Label("Título de la cinta (*):", classes="edit_label")
+                yield Input(id="inp_title", placeholder="Ej: El Padrino")
+
+                yield Label("Director:", classes="edit_label")
+                yield Input(id="inp_director", placeholder="Ej: Francis Ford Coppola")
+
+                yield Label("Año de Lanzamiento:", classes="edit_label")
+                yield Input(id="inp_year", placeholder="Ej: 1972")
+
+                yield Label("Duración (minutos):", classes="edit_label")
+                yield Input(id="inp_duration", placeholder="Ej: 175")
+
+                yield Label("Formato:", classes="edit_label")
+                FORMATS = [(f, f)
+                           for f in ["BLU-RAY", "DVD", "4K", "VHS", "DIGITAL"]]
+                yield Select(FORMATS, value="BLU-RAY", id="sel_format")
+
+                yield Label("Géneros (separados por coma):", classes="edit_label")
+                yield Input(id="inp_genres", placeholder="Ej: Drama, Crimen")
+
+                yield Label("")  # Espaciador
+                yield Checkbox("✔ Ya he visto esta película", value=False, id="chk_watched")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Guardar en Videoclub", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            payload = {
+                "title": self.query_one("#inp_title", Input).value,
+                "director": self.query_one("#inp_director", Input).value,
+                "format_type": self.query_one("#sel_format", Select).value,
+                "is_watched": self.query_one("#chk_watched", Checkbox).value,
+            }
+
+            # Validaciones numéricas y de listas
+            year = self.query_one("#inp_year", Input).value
+            dur = self.query_one("#inp_duration", Input).value
+            genres = self.query_one("#inp_genres", Input).value
+
+            if year.isdigit():
+                payload["release_year"] = int(year)
+            if dur.isdigit():
+                payload["duration_minutes"] = int(dur)
+            if genres:
+                payload["genres"] = [g.strip() for g in genres.split(",")]
+
+            self.dismiss(payload)
+        elif event.button.id == "btn_cancel":
+            self.dismiss(None)

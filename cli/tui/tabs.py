@@ -1,6 +1,7 @@
 from textual.app import ComposeResult
 from textual.widgets import TabPane, DataTable, Markdown
 from textual.containers import Vertical
+from textual.binding import Binding
 
 
 class InventoryTab(TabPane):
@@ -20,7 +21,9 @@ class InventoryTab(TabPane):
 
 class InboxTab(TabPane):
     BINDINGS = [
-        ("enter", "screen.process_inbox", "Procesar Escaneo"),
+        # Forzamos a Textual a mostrar el Enter en el Footer
+        Binding("enter", "screen.process_inbox",
+                "Procesar Escaneo", show=True),
         ("x", "screen.delete_inbox", "Descartar Escaneo"),
     ]
 

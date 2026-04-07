@@ -37,6 +37,8 @@ class Movie(models.Model):
     is_watched = models.BooleanField(default=False)
     is_loaned = models.BooleanField(default=False)
 
+    friend_name = models.CharField(max_length=255, blank=True, null=True)
+
     directory = models.ForeignKey(
         MovieDirectory, null=True, blank=True, on_delete=models.SET_NULL, related_name='movies')
     created_at = models.DateTimeField(auto_now_add=True)
