@@ -25,7 +25,7 @@ class MovieInventoryTab(TabPane):
 class MovieInboxTab(TabPane):
     BINDINGS = [
         Binding("enter", "screen.process_barcode",
-                "Procesar Escaneo UPC", show=True),
+                "Procesar Escaneo UPC", show=True, priority=True),
         ("x", "screen.delete_inbox", "Descartar"),
     ]
 
@@ -108,7 +108,8 @@ class MovieDetailsScreen(Screen):
 
 class MovieMainScreen(Screen):
     BINDINGS = [
-        ("escape", "go_back", "Volver al Bunker"),
+        ("escape", "go_back", "Volver al Launcher"),
+        ("q", "quit", "Salir"),
         Binding("1", "switch_tab('tab_cartelera')", "1-2 Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
     ]
@@ -143,7 +144,12 @@ class MovieMainScreen(Screen):
         t_loans.zebra_stripes = True
         t_loans.add_columns("ID", "Título", "Amigo", "Estado")
 
+        self.title = "BUNKER"
+        self.sub_title = "Módulo de Videoclub"
         self.load_movies()
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
 
     @work(thread=True)
     def load_movies(self) -> None:
@@ -346,9 +352,6 @@ class MovieMainScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
-
-    def action_go_back(self) -> None:
-        self.app.pop_screen()
 
     # --- SISTEMA DE BORRADO ---
     def action_delete_movie(self) -> None:

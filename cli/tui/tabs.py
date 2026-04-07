@@ -21,9 +21,8 @@ class InventoryTab(TabPane):
 
 class InboxTab(TabPane):
     BINDINGS = [
-        # Fuerza a Textual a mostrar el Enter en el Footer
         Binding("enter", "screen.process_inbox",
-                "Procesar Escaneo", show=True),
+                "Procesar Escaneo", show=True, priority=True),
         ("x", "screen.delete_inbox", "Descartar Escaneo"),
     ]
 

@@ -38,6 +38,7 @@ class LibraryMainScreen(Screen):
     """
 
     BINDINGS = [
+        ("escape", "go_back", "Volver al Launcher"),
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
         ("ctrl+t", "toggle_dark", "Tema"),
@@ -95,7 +96,12 @@ class LibraryMainScreen(Screen):
         t_annual.zebra_stripes = True
         t_annual.add_columns("ID", "Título", "Autor", "Propiedad", "Terminado")
 
+        self.title = "BUNKER"
+        self.sub_title = "Módulo de Biblioteca"
         self.load_all_data()
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
 
     @work(thread=True)
     def load_all_data(self) -> None:
@@ -815,7 +821,3 @@ class LibraryMainScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
-
-    # función para que el botón escape funcione
-    def action_go_back(self) -> None:
-        self.app.pop_screen()

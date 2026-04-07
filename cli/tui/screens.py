@@ -1,4 +1,6 @@
 # Añade esto a tus importaciones al inicio del archivo
+from textual.containers import VerticalScroll, Vertical, Grid
+from textual.widgets import Label, Button
 from textual.widgets import ProgressBar
 import httpx
 from textual.app import ComposeResult
@@ -242,36 +244,98 @@ class BunkerLauncherScreen(Screen):
     #launcher_root { 
         align: center middle; 
         background: $surface-darken-2;
-    }
-    #launcher_panel {
-        width: 50;
-        height: auto;
         padding: 2 4;
-        border: heavy $success;
-        background: $surface;
-        content-align: center middle;
+        /* Habilitamos el scroll vertical nativo si la terminal es pequeña */
+        overflow-y: auto; 
     }
-    .launcher_title { 
+    #sys_status {
+        width: 80;
+        text-align: right;
+        color: $warning;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    .ascii_logo { 
         text-align: center; 
         text-style: bold; 
         color: $success; 
         margin-bottom: 2; 
     }
+    #launcher_grid {
+        grid-size: 2;
+        grid-gutter: 1 4; /* Reducimos el espacio vertical entre filas de 2 a 1 */
+        width: 80;
+        height: auto;
+        margin-bottom: 2;
+    }
+    .module_panel {
+        height: auto; /* Dejamos que el panel abrace su contenido, ahorrando espacio */
+        padding: 1 2;
+        border: heavy $primary;
+        background: $surface;
+        align: center middle;
+        content-align: center middle;
+    }
+    .module_panel_offline {
+        height: auto;
+        padding: 1 2;
+        border: dashed $error;
+        background: $surface-darken-1;
+        align: center middle;
+        content-align: center middle;
+        opacity: 0.7;
+    }
+    .module_title { 
+        text-align: center; 
+        text-style: bold; 
+        margin-bottom: 1; 
+    }
     .launcher_btn { 
         width: 100%; 
-        margin-bottom: 1; 
         text-style: bold; 
+    }
+    #btn_quit {
+        width: 80;
+        text-style: bold;
     }
     """
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="launcher_root"):
-            with Vertical(id="launcher_panel"):
-                yield Label("☢️  B U N K E R  ☢️", classes="launcher_title")
-                yield Button("1. Acceder a la Biblioteca", id="btn_lib", classes="launcher_btn", variant="primary")
-                yield Button("2. Acceder al Videoclub", id="btn_movie", classes="launcher_btn", variant="warning")
-                yield Button("3. Centro de Mando", id="btn_dash", classes="launcher_btn", variant="success")
-                yield Button("4. Salir del Sistema", id="btn_quit", classes="launcher_btn", variant="error")
+        ascii_art = """
+        ██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗ 
+        ██╔══██╗██║   ██║████╗  ██║██║ ██╔╝██╔════╝██╔══██╗
+        ██████╔╝██║   ██║██╔██╗ ██║█████╔╝ █████╗  ██████╔╝
+        ██╔══██╗██║   ██║██║╚██╗██║██╔═██╗ ██╔══╝  ██╔══██╗
+        ██████╔╝╚██████╔╝██║ ╚████║██║  ██╗███████╗██║  ██║
+        ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+        """
+        # Cambiamos Vertical por VerticalScroll para blindar la responsividad
+        with VerticalScroll(id="launcher_root"):
+            yield Label("SISTEMA: [green]ONLINE[/green] | NÚCLEO: [green]ESTABLE[/green]", id="sys_status")
+            yield Label(ascii_art, classes="ascii_logo")
+
+            with Grid(id="launcher_grid"):
+                # Módulo 1: Biblioteca
+                with Vertical(classes="module_panel"):
+                    yield Label("📚 MÓDULO 1: BIBLIOTECA", classes="module_title", id="lbl_lib")
+                    yield Button("INICIAR ENLACE", id="btn_lib", classes="launcher_btn", variant="primary")
+
+                # Módulo 2: Videoclub
+                with Vertical(classes="module_panel"):
+                    yield Label("🎬 MÓDULO 2: VIDEOCLUB", classes="module_title")
+                    yield Button("INICIAR ENLACE", id="btn_movie", classes="launcher_btn", variant="warning")
+
+                # Módulo 3: Centro de Mando
+                with Vertical(classes="module_panel"):
+                    yield Label("☢️ MÓDULO 3: MÉTRICAS GLOBALES", classes="module_title")
+                    yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
+
+                # Módulo 4 y 5: Espacio para el futuro
+                with Vertical(classes="module_panel_offline"):
+                    yield Label("[red]⚠️ MÓDULOS 4 Y 5[/red]", classes="module_title")
+                    yield Button("SISTEMAS OFFLINE", id="btn_null", classes="launcher_btn", variant="default", disabled=True)
+
+            yield Button("DESCONECTAR SISTEMA (Salir)", id="btn_quit", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_lib":
@@ -281,6 +345,7 @@ class BunkerLauncherScreen(Screen):
             from .movie_screens import MovieMainScreen
             self.app.push_screen(MovieMainScreen())
         elif event.button.id == "btn_dash":
+            from .screens import BunkerDashboardScreen
             self.app.push_screen(BunkerDashboardScreen())
         elif event.button.id == "btn_quit":
             self.app.exit()
