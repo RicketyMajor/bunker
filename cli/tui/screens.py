@@ -1,3 +1,5 @@
+# Añade esto a tus importaciones al inicio del archivo
+from textual.widgets import ProgressBar
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
@@ -6,6 +8,7 @@ from textual.containers import VerticalScroll, Vertical, Horizontal, Grid
 from textual import work
 from .constants import API_LIBRARY, API_TRACKER, API_MOVIES
 from .movie_screens import MovieMainScreen
+from textual.widgets import ProgressBar
 
 
 class BookDetailsScreen(Screen):
@@ -128,30 +131,46 @@ class BookDetailsScreen(Screen):
 
 
 class BunkerDashboardScreen(Screen):
-    """El centro de mando global con estadísticas unificadas."""
+    """El centro de mando global con estadísticas unificadas y patrón BFF."""
 
     BINDINGS = [
         ("escape, b, left", "go_back", "Volver al Menú Principal"),
     ]
 
     CSS = """
-    #dashboard_root { padding: 2 4; align: center middle; }
-    .dash_title { text-align: center; text-style: bold; color: $accent; margin-bottom: 2; width: 100%; }
-    #dash_grid { grid-size: 2; grid-gutter: 4; height: auto; }
-    .dash_panel { border: heavy $primary; padding: 1 2; background: $surface; height: 15; }
-    .dash_panel_title { text-align: center; text-style: bold; color: $success; margin-bottom: 1; border-bottom: solid $success; }
+    #dashboard_root { padding: 1 2; align: center middle; }
+    .dash_title { text-align: center; text-style: bold; color: $success; margin-bottom: 1; width: 100%; }
+    
+    #dash_grid { grid-size: 2; grid-gutter: 2; height: 16; margin-bottom: 1; }
+    .dash_panel { border: heavy $primary; padding: 1 2; background: $surface; }
+    .dash_panel_title { text-align: center; text-style: bold; color: $warning; margin-bottom: 1; border-bottom: solid $warning; }
+    
+    #feed_panel { border: heavy $accent; padding: 1 2; background: $surface; height: auto; }
+    .progress_label { margin-top: 1; color: $text-muted; text-style: bold; }
+    ProgressBar { margin-bottom: 1; }
     """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dashboard_root"):
-            yield Label("CENTRO DE MANDO GLOBAL", classes="dash_title")
+            yield Label("☢️  CENTRO DE MANDO GLOBAL  ☢️", classes="dash_title")
+
             with Grid(id="dash_grid"):
                 with Vertical(classes="dash_panel"):
                     yield Label("SECTOR LITERARIO", classes="dash_panel_title")
+                    yield Label("Progreso de Lectura de la Colección:", classes="progress_label")
+                    yield ProgressBar(id="bar_books", show_eta=False)
                     yield Markdown("Calculando métricas...", id="dash_books")
+
                 with Vertical(classes="dash_panel"):
                     yield Label("SECTOR CINEMATOGRÁFICO", classes="dash_panel_title")
+                    yield Label("Progreso de Visionado:", classes="progress_label")
+                    yield ProgressBar(id="bar_movies", show_eta=False)
                     yield Markdown("Calculando métricas...", id="dash_movies")
+
+            with Vertical(id="feed_panel"):
+                yield Label("ÚLTIMA ACTIVIDAD EN EL BUNKER", classes="dash_panel_title")
+                yield Markdown("Sincronizando radares...", id="dash_feed")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -160,40 +179,57 @@ class BunkerDashboardScreen(Screen):
     @work(thread=True)
     def fetch_global_stats(self) -> None:
         try:
-            # Extrae métricas literarias de forma segura
-            b_resp = httpx.get(API_TRACKER, timeout=5.0)
-            books_stats = b_resp.json() if b_resp.status_code == 200 else {}
-
-            # Extrae métricas de cine de forma segura
-            m_resp = httpx.get(API_MOVIES, timeout=5.0)
-            movies_list = m_resp.json() if m_resp.status_code == 200 else []
-
-            # Cálculos
-            movies_watched = len(
-                [m for m in movies_list if m.get('is_watched')])
-            movies_total = len(movies_list)
-
-            self.app.call_from_thread(
-                self.render_dashboard, books_stats, movies_watched, movies_total)
+            from .constants import API_DASHBOARD
+            # Una sola llamada en lugar de descargar toda la base de datos
+            resp = httpx.get(API_DASHBOARD, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.app.call_from_thread(self.render_dashboard, data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, f"Error del servidor BFF: {resp.status_code}", severity="error")
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error cargando el Centro de Mando: {e}", severity="error")
 
-    def render_dashboard(self, b_stats: dict, m_watched: int, m_total: int) -> None:
-        # Render libros
+    def render_dashboard(self, data: dict) -> None:
+        b = data.get("books", {})
+        m = data.get("movies", {})
+        feed = data.get("feed", [])
+
+        # 1. Actualizar Barras de Progreso
+        bar_books = self.query_one("#bar_books", ProgressBar)
+        bar_movies = self.query_one("#bar_movies", ProgressBar)
+
+        bar_books.total = b.get("total", 1)
+        bar_books.progress = b.get("read", 0)
+
+        bar_movies.total = m.get("total", 1)
+        bar_movies.progress = m.get("watched", 0)
+
+        # 2. Renderizar Libros
         book_md = f"""
-* **Páginas leídas este mes:** `{b_stats.get('pages_this_month', 0)}`
-* **Libros terminados este mes:** `{b_stats.get('books_this_month', 0)}`
+* **Total en Colección:** `{b.get('total', 0)}` obras
+* **Obras Terminadas:** `{b.get('read', 0)}`
+* **Horas de Lectura Est.:** `{b.get('hours', 0)} hrs`
         """
         self.query_one("#dash_books", Markdown).update(book_md)
 
-        # Render películas
+        # 3. Renderizar Películas
         movie_md = f"""
-* **Películas Vistas (Histórico):** `{m_watched}`
-* **Total en Colección:** `{m_total}`
-* **Pendientes de ver:** `{m_total - m_watched}`
+* **Total en Bóveda:** `{m.get('total', 0)}` cintas
+* **Cintas Vistas:** `{m.get('watched', 0)}`
+* **Horas de Visionado:** `{m.get('hours', 0)} hrs`
         """
         self.query_one("#dash_movies", Markdown).update(movie_md)
+
+        # 4. Renderizar Feed Curado
+        if not feed:
+            feed_lines = ["* *Sin actividad detectada en el Bunker.*"]
+        else:
+            feed_lines = [f"* {line}" for line in feed]
+
+        self.query_one("#dash_feed", Markdown).update("\n".join(feed_lines))
 
     def action_go_back(self) -> None:
         self.app.pop_screen()

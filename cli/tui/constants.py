@@ -19,3 +19,5 @@ API_MOVIE_PROCESS = "http://localhost:8000/api/movies/process-barcode/"
 API_MOVIE_SCAN = "http://localhost:8000/api/movies/scan/"
 API_MOVIE_WATCHERS = "http://localhost:8000/api/movies/watchers/"
 API_MOVIE_WISHLIST = "http://localhost:8000/api/movies/wishlist/"
+
+API_DASHBOARD = "http://localhost:8000/api/dashboard/"

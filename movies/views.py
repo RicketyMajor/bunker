@@ -81,7 +81,7 @@ class MovieInboxViewSet(viewsets.ModelViewSet):
 def clean_movie_title(raw_title):
     if not raw_title:
         return None
-    # Eliminamos ruidos comerciales y etiquetas de edición
+    # Elimina ruidos comerciales y etiquetas de edición
     clean = re.sub(r'(?i)(blu-ray|bluray|dvd|4k|uhd|steelbook|edición|edition|import|combo|pack|mint|rare|sealed|new|widescreen|fullscreen|region \d)', '', raw_title)
     clean = re.split(r'[-(\[|:]', clean)[0].strip()
     clean = re.sub(r'^\d+\s+', '', clean)
@@ -129,7 +129,7 @@ def resolve_barcode_exhaustively(barcode):
     if title:
         return clean_movie_title(title)
 
-    # 3. Nodo de emergencia (Scraper de UPCIndex que ya teníamos)
+    # 3. Nodo de emergencia (Scraper de UPCIndex)
     try:
         resp = requests.get(
             f"https://www.upcindex.com/{barcode}", headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
@@ -182,12 +182,12 @@ def process_barcode(request):
     words = clean_title.split()
 
     if not movie_data:
-        # PLAN B (TMDB): Intentamos buscar solo las primeras 3 palabras
+        # Intenta buscar solo las primeras 3 palabras
         if len(words) > 3:
             short_title = " ".join(words[:3])
             movie_data = search_movie_tmdb(short_title)
 
-            # PLAN C (TMDB): Intentamos con las primeras 2
+            # Intentamos con las primeras 2
             if not movie_data and len(words) > 2:
                 shorter_title = " ".join(words[:2])
                 movie_data = search_movie_tmdb(shorter_title)

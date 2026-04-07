@@ -23,24 +23,24 @@ def search_movie_tmdb(title: str):
         if not results:
             return None
 
-        # Tomamos la primera coincidencia
+        # Toma la primera coincidencia
         movie_data = results[0]
         movie_id = movie_data.get('id')
 
-        # Hacemos una segunda petición para obtener detalles completos (como duración y director)
+        # Hacem una segunda petición para obtener detalles completos (como duración y director)
         detail_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=es-ES&append_to_response=credits"
         detail_resp = requests.get(detail_url).json()
 
-        # Extraemos el director del bloque 'credits'
+        # Extrae el director del bloque 'credits'
         crew = detail_resp.get('credits', {}).get('crew', [])
         director = next(
             (member['name'] for member in crew if member['job'] == 'Director'), "Desconocido")
 
-        # Extraemos el reparto (Top 3 actores)
+        # Extrae el reparto (Top 3 actores)
         cast_list = detail_resp.get('credits', {}).get('cast', [])[:3]
         cast_names = ", ".join([actor['name'] for actor in cast_list])
 
-        # Mapeamos a nuestro modelo de Django
+        # Mapea al modelo de Django
         return {
             "title": detail_resp.get('title'),
             "original_title": detail_resp.get('original_title'),

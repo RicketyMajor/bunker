@@ -25,7 +25,6 @@
         color: #aaaaaa;
       }
 
-      /* Contenedor del escáner */
       #reader {
         width: 100%;
         max-width: 500px;
@@ -44,7 +43,6 @@
         padding: 10px;
       }
 
-      /* Estilos para el nuevo botón de reinicio */
       .btn-restart {
         margin-top: 15px;
         padding: 12px 24px;
@@ -87,10 +85,10 @@
         isScanning = true;
 
         const statusDiv = document.getElementById("status");
-        statusDiv.innerHTML = `⏳ Inyectando EAN: ${decodedText}...`;
+        statusDiv.innerHTML = `Inyectando EAN: ${decodedText}...`;
         statusDiv.style.color = "#00d2ff";
 
-        // Pausamos visualmente el escáner
+        // Pausa visualmente el escáner
         html5QrcodeScanner.pause();
 
         fetch("/api/movies/receive-barcode/", {
@@ -114,8 +112,8 @@
               statusDiv.style.color = "#ffcc00";
             }
 
-            // MAGIA DE VELOCIDAD: Esperamos 1.5 segundos para que leas el mensaje,
-            // y reactivamos la cámara SIN recargar la página.
+            // Espera 1.5 segundos para que leas el mensaje,
+            // y reactiva la cámara sin recargar la página.
             setTimeout(() => {
               statusDiv.innerHTML = "Esperando siguiente código...";
               statusDiv.style.color = "#ffcc00";

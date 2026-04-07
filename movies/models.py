@@ -29,7 +29,7 @@ class Movie(models.Model):
     format_type = models.CharField(
         max_length=20, choices=FORMAT_CHOICES, default='BLU-RAY')
 
-    # Usa JSONField para guardar la lista de géneros fácilmente
+    # Usa JSONField para guardar la lista de géneros
     genres = models.JSONField(default=list, blank=True)
     synopsis = models.TextField(blank=True)
     poster_url = models.URLField(blank=True, null=True)
@@ -67,7 +67,6 @@ class MovieWishlist(models.Model):
         null=True, blank=True, help_text="ID oficial para obtener el póster luego")
 
     date_found = models.DateTimeField(auto_now_add=True)
-    # El martillo de borrado (Soft Delete)
     is_rejected = models.BooleanField(default=False)
 
     def __str__(self):

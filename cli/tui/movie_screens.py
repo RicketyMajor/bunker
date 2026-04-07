@@ -245,7 +245,7 @@ class MovieMainScreen(Screen):
                         self.process_movie_scan(title)
                 self.app.push_screen(LendModal(), handle_title)
             elif choice == "full":
-                # CONECTAMOS EL FORMULARIO MANUAL AL BACKEND
+                # CONECTA EL FORMULARIO MANUAL AL BACKEND
                 def handle_manual_save(payload: dict | None) -> None:
                     if payload:
                         self.process_manual_movie(payload)
@@ -312,7 +312,7 @@ class MovieMainScreen(Screen):
                     self.app.notify, "¡Película procesada y guardada en el Videoclub!", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
             else:
-                # BLINDAJE ANTI-CONGELAMIENTOS: Si Django escupe HTML gigante, lo interceptamos
+                # Si Django escupe HTML gigante, lo interceptamos
                 if resp.status_code >= 500:
                     error_msg = "Error 500: Fallo interno de Django. Revisa los logs de Docker."
                 else:
@@ -391,7 +391,7 @@ class MovieMainScreen(Screen):
 
             def handle_lend(friend_name: str | None) -> None:
                 if friend_name:
-                    # AHORA SÍ enviamos el nombre del amigo al backend
+                    # envia el nombre del amigo al backend
                     self.update_movie_status(
                         row_key, {"is_loaned": True, "friend_name": friend_name})
 
@@ -407,7 +407,7 @@ class MovieMainScreen(Screen):
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
 
-            # Limpiamos el nombre del amigo al devolverla
+            # Limpia el nombre del amigo al devolverla
             self.update_movie_status(
                 row_key, {"is_loaned": False, "friend_name": ""})
 

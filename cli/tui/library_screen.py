@@ -272,14 +272,14 @@ class LibraryMainScreen(Screen):
 
         self.app.push_screen(AddMenuModal(), handle_menu_choice)
 
-    # Camino 1: ISBN
+    # ISBN
     def handle_isbn_input(self, isbn: str | None) -> None:
         if isbn:
             self.app.notify(
                 f"Buscando oráculos globales para {isbn}...", title="Escáner")
             self.process_isbn_add(isbn)
 
-    # Camino 2: Ingreso Manual
+    # Ingreso Manual
     def handle_manual_input(self, payload: dict | None) -> None:
         if payload and payload.get("title"):  # Validación básica
             self.app.notify("Guardando ingreso manual en el servidor...")
