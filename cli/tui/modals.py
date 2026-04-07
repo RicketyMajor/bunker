@@ -628,3 +628,33 @@ class ManualMovieAddModal(ModalScreen[dict]):
             self.dismiss(payload)
         elif event.button.id == "btn_cancel":
             self.dismiss(None)
+
+
+class DeleteDirModal(ModalScreen[str]):
+    """Diálogo para eliminar un directorio existente."""
+
+    def __init__(self, dirs: list, **kwargs):
+        super().__init__(**kwargs)
+        self.dirs = dirs
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="move_dir_dialog"):  # Reutiliza el CSS del otro modal
+            yield Label("Destruir Directorio", classes="modal_title")
+            yield Label("Selecciona la carpeta a eliminar:", classes="edit_label")
+            yield Label("[dim]Los ítems en su interior volverán a la raíz.[/dim]", classes="edit_label")
+
+            options = [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
+            yield Select(options, id="sel_dest")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Destruir", variant="error", id="btn_delete")
+                yield Button("Cancelar", variant="primary", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_delete":
+            try:
+                self.dismiss(self.query_one("#sel_dest", Select).value)
+            except:
+                self.dismiss("cancel")
+        else:
+            self.dismiss("cancel")

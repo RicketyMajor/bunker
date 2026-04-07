@@ -317,22 +317,22 @@ class BunkerLauncherScreen(Screen):
             with Grid(id="launcher_grid"):
                 # Módulo 1: Biblioteca
                 with Vertical(classes="module_panel"):
-                    yield Label("📚 MÓDULO 1: BIBLIOTECA", classes="module_title", id="lbl_lib")
+                    yield Label("MÓDULO 1: BIBLIOTECA", classes="module_title", id="lbl_lib")
                     yield Button("INICIAR ENLACE", id="btn_lib", classes="launcher_btn", variant="primary")
 
                 # Módulo 2: Videoclub
                 with Vertical(classes="module_panel"):
-                    yield Label("🎬 MÓDULO 2: VIDEOCLUB", classes="module_title")
+                    yield Label("MÓDULO 2: VIDEOCLUB", classes="module_title")
                     yield Button("INICIAR ENLACE", id="btn_movie", classes="launcher_btn", variant="warning")
 
                 # Módulo 3: Centro de Mando
                 with Vertical(classes="module_panel"):
-                    yield Label("☢️ MÓDULO 3: MÉTRICAS GLOBALES", classes="module_title")
+                    yield Label("MÓDULO 3: MÉTRICAS GLOBALES", classes="module_title")
                     yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
 
                 # Módulo 4 y 5: Espacio para el futuro
                 with Vertical(classes="module_panel_offline"):
-                    yield Label("[red]⚠️ MÓDULOS 4 Y 5[/red]", classes="module_title")
+                    yield Label("[red]MÓDULOS 4 Y 5[/red]", classes="module_title")
                     yield Button("SISTEMAS OFFLINE", id="btn_null", classes="launcher_btn", variant="default", disabled=True)
 
             yield Button("DESCONECTAR SISTEMA (Salir)", id="btn_quit", variant="error")

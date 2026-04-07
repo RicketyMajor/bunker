@@ -10,7 +10,7 @@ from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
 from textual import work
 from .constants import *
 from .screens import BookDetailsScreen
-from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal
+from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal, DeleteDirModal
 
 
 class LibraryMainScreen(Screen):
@@ -42,6 +42,7 @@ class LibraryMainScreen(Screen):
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
         ("ctrl+t", "toggle_dark", "Tema"),
+        ("shift+x", "action_delete_dir", "Borrar Carpeta"),
         Binding("1", "switch_tab('tab_library')",
                 "1-5 Cambiar Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
@@ -821,3 +822,71 @@ class LibraryMainScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
+
+    # ================= ELIMINAR DIRECTORIOS =================
+    def action_delete_dir(self) -> None:
+        sidebar = self.query_one("#sidebar", Tree)
+
+        # navegando por el Ctrl+B
+        if sidebar.has_focus:
+            selected_node = sidebar.cursor_node
+            if not selected_node or selected_node.data is None:
+                return
+
+            data_val = str(selected_node.data)
+
+            # contra borrado de raíz o archivos
+            if data_val == "root":
+                self.app.notify(
+                    "Eso no se puede hacer. La raíz es inamovible.", severity="error")
+                return
+            if data_val.startswith("book_"):
+                self.app.notify(
+                    "Debes seleccionar una carpeta, no un archivo.", severity="warning")
+                return
+
+            dir_id = data_val
+            dir_name = next((d['name'] for d in getattr(
+                self, 'all_dirs', []) if str(d['id']) == dir_id), "Directorio")
+
+            def do_confirm_tree(confirm: bool) -> None:
+                if confirm:
+                    self.process_delete_dir(dir_id)
+
+            self.app.push_screen(ConfirmModal(
+                f"¿Seguro que deseas destruir la carpeta '{dir_name}'?"), do_confirm_tree)
+
+        # la tabla normal
+        else:
+            if self.query_one("#main_tabs", TabbedContent).active != "tab_library":
+                return
+
+            # Usa la lista desplegable segura y luego pide confirmación
+            def do_select(dir_id: str) -> None:
+                if dir_id != "cancel" and dir_id is not None:
+                    dir_name = next((d['name'] for d in getattr(
+                        self, 'all_dirs', []) if str(d['id']) == dir_id), "Directorio")
+
+                    def do_confirm_table(confirm: bool) -> None:
+                        if confirm:
+                            self.process_delete_dir(dir_id)
+
+                    self.app.push_screen(ConfirmModal(
+                        f"¿Seguro que deseas destruir '{dir_name}'?"), do_confirm_table)
+
+            self.app.push_screen(DeleteDirModal(
+                getattr(self, 'all_dirs', [])), do_select)
+
+    @work(thread=True)
+    def process_delete_dir(self, dir_id: str) -> None:
+        try:
+            if httpx.delete(f"{API_DIRECTORIES}{dir_id}/", timeout=5.0).status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Directorio destruido. Los libros han vuelto a la raíz.", title="Éxito")
+                self.app.call_from_thread(self.load_all_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al borrar.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de red: {e}", severity="error")

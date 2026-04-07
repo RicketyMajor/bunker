@@ -2,12 +2,12 @@ import httpx
 from textual.app import ComposeResult
 from textual.events import ScreenResume
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedContent, TabPane
+from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedContent, TabPane, Tree
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
-from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS
-from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal
+from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS
+from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal
 
 
 class MovieInventoryTab(TabPane):
@@ -15,7 +15,10 @@ class MovieInventoryTab(TabPane):
         ("a", "screen.add_movie", "Añadir Película"),
         ("d", "screen.show_details", "Ver Detalles"),
         ("l", "screen.lend_movie", "Prestar a Amigo"),
+        ("m", "screen.move_movie", "Mover a Carpeta"),
+        ("c", "screen.create_dir", "Crear Carpeta"),
         ("x", "screen.delete_movie", "Eliminar Ficha"),
+        ("shift+x", "screen.delete_dir", "Borrar Carpeta"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -107,9 +110,14 @@ class MovieDetailsScreen(Screen):
 
 
 class MovieMainScreen(Screen):
+    all_movies = []
+    all_dirs = []
+
     BINDINGS = [
         ("escape", "go_back", "Volver al Launcher"),
         ("q", "quit", "Salir"),
+        ("ctrl+b", "toggle_sidebar", "Explorador"),
+        ("shift+x", "action_delete_dir", "Borrar Carpeta"),
         Binding("1", "switch_tab('tab_cartelera')", "1-2 Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
     ]
@@ -117,10 +125,22 @@ class MovieMainScreen(Screen):
     CSS = """
     Screen { background: $surface-darken-1; }
     DataTable { height: 1fr; margin: 1 2; }
+    #sidebar {
+        dock: left; 
+        width: 35; 
+        max-width: 50%;
+        height: 100%;
+        background: $surface-darken-2; 
+        border-right: vkey $background;
+        display: none;
+        overflow-x: auto; 
+    }
+    #sidebar.-visible { display: block; }
     """
 
     def compose(self) -> ComposeResult:
         yield Header()
+        yield Tree("📁 Raíz del Videoclub", id="sidebar")  # El Árbol Lateral
         with TabbedContent(initial="tab_cartelera", id="movie_tabs"):
             yield MovieInventoryTab("◈ Inventario", id="tab_cartelera")
             yield MovieInboxTab("◈ Inbox", id="tab_inbox")
@@ -131,8 +151,7 @@ class MovieMainScreen(Screen):
         t_movies = self.query_one("#movies_table", DataTable)
         t_movies.cursor_type = "row"
         t_movies.zebra_stripes = True
-        t_movies.add_columns("ID", "Título", "Director",
-                             "Año", "Visto")
+        t_movies.add_columns("ID", "Título", "Director", "Año", "Visto")
 
         t_inbox = self.query_one("#movie_inbox_table", DataTable)
         t_inbox.cursor_type = "row"
@@ -153,15 +172,23 @@ class MovieMainScreen(Screen):
 
     @work(thread=True)
     def load_movies(self) -> None:
-        # Cargar Cartelera
         try:
-            resp = httpx.get(API_MOVIES, timeout=5.0)
-            if resp.status_code == 200:
-                self.app.call_from_thread(self.populate_movies, resp.json())
+            movies_resp = httpx.get(API_MOVIES, timeout=5.0)
+            dirs_resp = httpx.get(API_MOVIE_DIRS, timeout=5.0)
+
+            if movies_resp.status_code == 200:
+                self.all_movies = movies_resp.json()
+                dirs = dirs_resp.json() if dirs_resp.status_code == 200 else []
+
+                # Filtra para mostrar solo la raíz por defecto
+                orphan = [m for m in self.all_movies if m.get(
+                    'directory') is None]
+                self.app.call_from_thread(self.populate_movies, orphan)
+                self.app.call_from_thread(self.populate_tree, dirs)
         except Exception:
             pass
 
-        # Cargar Inbox de Películas
+        # Cargar Inbox Físico
         try:
             resp_inbox = httpx.get(API_MOVIE_INBOX, timeout=5.0)
             if resp_inbox.status_code == 200:
@@ -200,17 +227,13 @@ class MovieMainScreen(Screen):
 
     def on_screen_resume(self, event: ScreenResume) -> None:
         """
-        [EVENTO NATIVO] 
-        Se dispara automáticamente cada vez que se cierra un modal (como el del escáner).
-        ¡Esto crea el efecto de actualización en tiempo real!
+        Se dispara automáticamente cada vez que se cierra un modal. Efecto de actualización en tiempo real
         """
         self.load_movies()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """
-        [EVENTO NATIVO]
-        Atrapa la tecla 'Enter' que el DataTable consume por defecto, 
-        y la redirige a nuestras funciones lógicas.
+        Atrapa la tecla 'Enter' que el DataTable consume por defecto, y la redirige a nuestras funciones lógicas.
         """
         if event.control.id == "movie_inbox_table":
             self.action_process_barcode()
@@ -431,3 +454,165 @@ class MovieMainScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error de red: {e}", severity="error")
+
+    # --- EXPLORADOR DE ARCHIVOS (SIDEBAR) ---
+    def populate_tree(self, dirs: list) -> None:
+        tree = self.query_one("#sidebar", Tree)
+        tree.root.expand()
+        tree.root.data = "root"
+        tree.clear()
+
+        self.all_dirs = dirs
+
+        for d in dirs:
+            dir_movies = [m for m in self.all_movies if m.get(
+                'directory') == d['id']]
+            count = len(dir_movies)
+            node_label = f"[{d.get('color_hex', 'cyan')}]■ {d['name']}[/] [dim]({count})[/dim]"
+
+            dir_node = tree.root.add(node_label, data=d['id'])
+            for m in dir_movies:
+                status = "✔" if m.get('is_watched') else "✘"
+                dir_node.add_leaf(
+                    f"[dim]{m['id']}[/dim] {m['title']} [{status}]", data=f"movie_{m['id']}")
+
+    def action_toggle_sidebar(self) -> None:
+        sidebar = self.query_one("#sidebar", Tree)
+        sidebar.toggle_class("-visible")
+        if sidebar.has_class("-visible"):
+            sidebar.focus()
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        if event.node.data is None:
+            return
+        data_val = str(event.node.data)
+        if data_val.startswith("movie_"):
+            return
+
+        if data_val == "root":
+            filtered = [m for m in self.all_movies if m.get(
+                'directory') is None]
+        else:
+            filtered = [m for m in self.all_movies if str(
+                m.get('directory')) == data_val]
+
+        self.populate_movies(filtered)
+        self.action_switch_tab("tab_cartelera")
+
+    # --- ACCIONES DE DIRECTORIOS ---
+    def action_create_dir(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_cartelera":
+            return
+
+        def do_create(payload: dict | None) -> None:
+            if payload:
+                self.process_create_dir(payload)
+        self.app.push_screen(DirModal(), do_create)
+
+    @work(thread=True)
+    def process_create_dir(self, payload: dict) -> None:
+        try:
+            if httpx.post(API_MOVIE_DIRS, json=payload, timeout=5.0).status_code == 201:
+                self.app.call_from_thread(
+                    self.app.notify, f"Directorio '{payload['name']}' creado", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
+
+    def action_move_movie(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_cartelera":
+            return
+        table = self.query_one("#movies_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            if row_key:
+                def do_move(dest_val: str) -> None:
+                    if dest_val != "cancel":
+                        target_id = None if dest_val == "root" else int(
+                            dest_val)
+                        self.process_move_movie(row_key, target_id)
+                self.app.push_screen(MoveToDirModal(
+                    getattr(self, 'all_dirs', [])), do_move)
+        except Exception:
+            self.app.notify("Selecciona una cinta de la tabla.",
+                            severity="warning")
+
+    @work(thread=True)
+    def process_move_movie(self, movie_id: str, dest_dir: int | None) -> None:
+        try:
+            resp = httpx.patch(f"{API_MOVIES}{movie_id}/",
+                               json={"directory": dest_dir}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, "¡Cinta transferida de carpeta!", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al transferir.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de red: {e}", severity="error")
+
+    def action_delete_dir(self) -> None:
+        sidebar = self.query_one("#sidebar", Tree)
+
+        # Navegación por Ctrl+B
+        if sidebar.has_focus:
+            selected_node = sidebar.cursor_node
+            if not selected_node or selected_node.data is None:
+                return
+
+            data_val = str(selected_node.data)
+
+            if data_val == "root":
+                self.app.notify(
+                    "Eso no se puede hacer. La raíz es inamovible.", severity="error")
+                return
+            if data_val.startswith("movie_"):
+                self.app.notify(
+                    "Debes seleccionar una carpeta, no un archivo.", severity="warning")
+                return
+
+            dir_id = data_val
+            dir_name = next((d['name'] for d in getattr(
+                self, 'all_dirs', []) if str(d['id']) == dir_id), "Directorio")
+
+            def do_confirm_tree(confirm: bool) -> None:
+                if confirm:
+                    self.process_delete_dir(dir_id)
+
+            self.app.push_screen(ConfirmModal(
+                f"¿Seguro que deseas destruir la carpeta '{dir_name}'?"), do_confirm_tree)
+
+        # En la pestaña de Inventario
+        else:
+            if self.query_one("#movie_tabs", TabbedContent).active != "tab_cartelera":
+                return
+
+            def do_select(dir_id: str) -> None:
+                if dir_id != "cancel" and dir_id is not None:
+                    dir_name = next((d['name'] for d in getattr(
+                        self, 'all_dirs', []) if str(d['id']) == dir_id), "Directorio")
+
+                    def do_confirm_table(confirm: bool) -> None:
+                        if confirm:
+                            self.process_delete_dir(dir_id)
+
+                    self.app.push_screen(ConfirmModal(
+                        f"¿Seguro que deseas destruir '{dir_name}'?"), do_confirm_table)
+
+            self.app.push_screen(DeleteDirModal(
+                getattr(self, 'all_dirs', [])), do_select)
+
+    @work(thread=True)
+    def process_delete_dir(self, dir_id: str) -> None:
+        try:
+            if httpx.delete(f"{API_MOVIE_DIRS}{dir_id}/", timeout=5.0).status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Carpeta destruida. Las cintas volvieron a la raíz.", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
