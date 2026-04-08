@@ -658,3 +658,50 @@ class DeleteDirModal(ModalScreen[str]):
                 self.dismiss("cancel")
         else:
             self.dismiss("cancel")
+
+
+class LogMinutesModal(ModalScreen[int]):
+    """Diálogo rápido para el Tracker de Videoclub."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="pages_dialog"):
+            yield Label("Anotar Minutos Vistos Hoy", classes="modal_title")
+            yield Input(placeholder="Ej: 120", id="inp_minutes")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Guardar", variant="success", id="btn_add")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_add":
+            val = self.query_one("#inp_minutes", Input).value
+            self.dismiss(int(val) if val.isdigit() else None)
+        else:
+            self.dismiss(None)
+
+
+class FinishMovieModal(ModalScreen[dict]):
+    """Diálogo para registrar una película como vista en el año."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="finish_dialog"):
+            yield Label("Registrar Película Vista", classes="modal_title")
+            yield Label("Título de la cinta:", classes="edit_label")
+            yield Input(id="inp_title", placeholder="Ej: Interstellar")
+            yield Label("Director:", classes="edit_label")
+            yield Input(id="inp_director", placeholder="Ej: Christopher Nolan")
+            yield Label("")
+            yield Checkbox("✔ La tengo en mi bóveda física", value=True, id="chk_owned")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Registrar Victoria", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            self.dismiss({
+                "title": self.query_one("#inp_title", Input).value,
+                "director": self.query_one("#inp_director", Input).value,
+                "is_owned": self.query_one("#chk_owned", Checkbox).value
+            })
+        else:
+            self.dismiss(None)

@@ -6,8 +6,8 @@ from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedCo
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
-from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS
-from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal
+from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH
+from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, LogMinutesModal, FinishMovieModal
 
 
 class MovieInventoryTab(TabPane):
@@ -109,6 +109,18 @@ class MovieDetailsScreen(Screen):
         self.app.pop_screen()
 
 
+class MovieTrackerTab(TabPane):
+    BINDINGS = [
+        ("m", "screen.log_minutes", "Anotar Minutos"),
+        ("f", "screen.finish_movie", "Registrar Cinta Vista"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Markdown("Cargando métricas cinematográficas...", id="movie_tracker_content")
+            yield DataTable(id="movie_annual_table")
+
+
 class MovieMainScreen(Screen):
     all_movies = []
     all_dirs = []
@@ -118,8 +130,11 @@ class MovieMainScreen(Screen):
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
         ("shift+x", "action_delete_dir", "Borrar Carpeta"),
-        Binding("1", "switch_tab('tab_cartelera')", "1-2 Pestañas", show=True),
+        Binding("1", "switch_tab('tab_cartelera')", "1-4 Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
+        Binding("3", "switch_tab('tab_prestamos')", "Préstamos", show=False),
+        Binding("4", "switch_tab('tab_tracker')",
+                "Hábitos", show=False),
     ]
 
     CSS = """
@@ -142,9 +157,10 @@ class MovieMainScreen(Screen):
         yield Header()
         yield Tree("📁 Raíz del Videoclub", id="sidebar")  # El Árbol Lateral
         with TabbedContent(initial="tab_cartelera", id="movie_tabs"):
-            yield MovieInventoryTab("◈ Inventario", id="tab_cartelera")
+            yield MovieInventoryTab("▤ Inventario", id="tab_cartelera")
             yield MovieInboxTab("◈ Inbox", id="tab_inbox")
-            yield MovieLoansTab("◈ Préstamos", id="tab_prestamos")
+            yield MovieLoansTab("⇋ Préstamos", id="tab_prestamos")
+            yield MovieTrackerTab("∑ Hábitos", id="tab_tracker")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -162,6 +178,12 @@ class MovieMainScreen(Screen):
         t_loans.cursor_type = "row"
         t_loans.zebra_stripes = True
         t_loans.add_columns("ID", "Título", "Amigo", "Estado")
+
+        t_annual = self.query_one("#movie_annual_table", DataTable)
+        t_annual.cursor_type = "row"
+        t_annual.zebra_stripes = True
+        t_annual.add_columns("ID", "Título", "Director",
+                             "Propiedad", "Visto El")
 
         self.title = "BUNKER"
         self.sub_title = "Módulo de Videoclub"
@@ -197,6 +219,16 @@ class MovieMainScreen(Screen):
         except Exception:
             pass
 
+        # Cargar Hábitos y Registro Anual de Películas
+        try:
+            tracker = httpx.get(API_MOVIE_TRACKER, timeout=5.0).json()
+            annual = httpx.get(API_MOVIE_TRACKER_ANNUAL, timeout=5.0).json()
+            if isinstance(tracker, dict):
+                self.app.call_from_thread(
+                    self.populate_tracker, tracker, annual)
+        except Exception:
+            pass
+
     def populate_movies(self, movies: list) -> None:
         table_inv = self.query_one("#movies_table", DataTable)
         table_loans = self.query_one("#movie_loans_table", DataTable)
@@ -221,6 +253,26 @@ class MovieMainScreen(Screen):
         for item in items:
             table.add_row(str(item.get('id')), item.get(
                 'barcode', '-'), item.get('date_scanned', '')[:10], key=str(item.get('id')))
+
+    def populate_tracker(self, stats: dict, annual: list) -> None:
+        md = self.query_one("#movie_tracker_content", Markdown)
+        cintas_anuales = len(annual)
+        text = f"""**Mes de {stats.get('current_month', '')}:** Minutos de vuelo: `{stats.get('minutes_this_month', 0)}`  |  **Total Año:** `{cintas_anuales} cintas vistas`"""
+        md.update(text)
+
+        table = self.query_one("#movie_annual_table", DataTable)
+        table.clear()
+        for rec in annual:
+            owned_str = "✔ Bóveda" if rec.get(
+                'is_owned') else "⇋ Cine/Streaming"
+            table.add_row(
+                str(rec.get('id')),
+                rec.get('title', '').upper(),
+                rec.get('director', 'Desconocido'),
+                owned_str,
+                rec.get('date_watched', '')[:10],
+                key=str(rec.get('id'))
+            )
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one("#movie_tabs", TabbedContent).active = tab_id
@@ -612,6 +664,58 @@ class MovieMainScreen(Screen):
             if httpx.delete(f"{API_MOVIE_DIRS}{dir_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Carpeta destruida. Las cintas volvieron a la raíz.", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
+
+    # ================= TRACKER CINEMATOGRÁFICO =================
+    def action_log_minutes(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_tracker":
+            return
+
+        def do_log(minutes: int | None) -> None:
+            if minutes:
+                self.process_log_minutes(minutes)
+        self.app.push_screen(LogMinutesModal(), do_log)
+
+    @work(thread=True)
+    def process_log_minutes(self, minutes: int) -> None:
+        try:
+            if httpx.post(API_MOVIE_TRACKER_MINUTES, json={"minutes": minutes}, timeout=5.0).status_code == 201:
+                self.app.call_from_thread(
+                    self.app.notify, f"{minutes} minutos anotados a la bitácora.", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
+
+    def action_finish_movie(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_tracker":
+            return
+
+        def do_finish(payload: dict | None) -> None:
+            if payload and payload.get('title'):
+                self.process_finish_movie(payload)
+        self.app.push_screen(FinishMovieModal(), do_finish)
+
+    @work(thread=True)
+    def process_finish_movie(self, payload: dict) -> None:
+        try:
+            # Registra en el Muro de la Fama
+            resp = httpx.post(API_MOVIE_TRACKER_FINISH,
+                              json=payload, timeout=5.0)
+            if resp.status_code == 201:
+                # Auto-marcar como visto en el Inventario si existe
+                lib_resp = httpx.get(API_MOVIES, params={
+                                     "title": payload['title']}, timeout=5.0)
+                if lib_resp.status_code == 200 and lib_resp.json():
+                    movie_id = lib_resp.json()[0]['id']
+                    httpx.patch(f"{API_MOVIES}{movie_id}/",
+                                json={"is_watched": True}, timeout=5.0)
+
+                self.app.call_from_thread(
+                    self.app.notify, "¡Cinta registrada en el Muro de la Fama!", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
         except Exception as e:
             self.app.call_from_thread(
