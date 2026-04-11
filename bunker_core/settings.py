@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'catalog',
     'rest_framework',
     'movies',
+    'posada',
 ]
 
 MIDDLEWARE = [
