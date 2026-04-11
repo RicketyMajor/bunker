@@ -1,4 +1,5 @@
 import httpx
+import io
 from textual.app import ComposeResult
 from textual.events import ScreenResume
 from textual.screen import Screen
@@ -7,13 +8,14 @@ from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
 from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
-from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal
+from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
 from .tabs import MovieWishlistTab
 
 
 class MovieInventoryTab(TabPane):
     BINDINGS = [
         ("a", "screen.add_movie", "Añadir Película"),
+        ("e", "screen.edit_movie", "Editar Ficha"),
         ("d", "screen.show_details", "Ver Detalles"),
         ("l", "screen.lend_movie", "Prestar a Amigo"),
         ("m", "screen.move_movie", "Mover a Carpeta"),
@@ -54,14 +56,14 @@ class MovieDetailsScreen(Screen):
     CSS = """
     #movie_root { padding: 1 2; }
     #movie_header {
-        border: heavy $warning; background: $surface; margin-bottom: 1; padding: 1 2;
-        align: center middle; content-align: center middle;
+        border: heavy $warning; background: $surface; margin-bottom: 1; padding: 0 1; /* Padding muy reducido */
+        align: center middle; content-align: center middle; height: auto; /* Se ajusta solo al texto */
     }
     #movie_title { text-style: bold; color: $text; }
     #movie_subtitle { color: $text-muted; margin-top: 1; }
-    #movie_grid { grid-size: 3; grid-columns: 1fr 2fr 2fr; grid-gutter: 2; }
-    .movie_panel { border: heavy $accent; padding: 0 1; background: $surface; height: auto; }
-    #poster_panel { border: double $success; text-align: center; color: $text; height: 100%; content-align: center middle; }
+    
+    #movie_grid { grid-size: 2; grid-columns: 1fr 2fr; grid-gutter: 2; } /* Pasamos a 2 columnas limpias */
+    .movie_panel { border: heavy $accent; padding: 0 1; background: $surface; height: 100%; }
     """
 
     def __init__(self, movie_id: str, **kwargs):
@@ -75,11 +77,10 @@ class MovieDetailsScreen(Screen):
                 yield Label("Cargando...", id="movie_title")
                 yield Label("", id="movie_subtitle")
             with Grid(id="movie_grid"):
-                with Vertical(classes="movie_panel", id="poster_panel"):
-                    yield Label("Póster")
                 with Vertical(classes="movie_panel"):
                     yield Markdown("### Ficha Técnica", id="movie_tech")
-                with Vertical(classes="movie_panel"):
+                # El contenedor tiene VerticalScroll
+                with VerticalScroll(classes="movie_panel"):
                     yield Markdown("### Sinopsis", id="movie_synopsis")
         yield Footer()
 
@@ -91,7 +92,8 @@ class MovieDetailsScreen(Screen):
         try:
             resp = httpx.get(f"{API_MOVIES}{self.movie_id}/", timeout=5.0)
             if resp.status_code == 200:
-                self.app.call_from_thread(self.render_details, resp.json())
+                movie_data = resp.json()
+                self.app.call_from_thread(self.render_details, movie_data)
         except Exception:
             pass
 
@@ -101,7 +103,12 @@ class MovieDetailsScreen(Screen):
         self.query_one("#movie_subtitle", Label).update(
             f"Dirigida por: {movie.get('director', 'Desconocido')}")
 
-        tech = f"**Año:** {movie.get('release_year', '-')}\n**Duración:** {movie.get('duration_minutes', '-')} min\n**Géneros:** {', '.join(movie.get('genres', []))}"
+        tech = f"**Director:** {movie.get('director', '-')}\n"
+        tech += f"**Guionistas:** {movie.get('writers', '-')}\n"
+        tech += f"**Estudio:** {movie.get('production_company', '-')}\n"
+        tech += f"**Elenco:** {movie.get('cast', '-')}\n\n---\n"
+        tech += f"**Año:** {str(movie.get('release_year') or '-')}\n**Duración:** {str(movie.get('duration_minutes') or '-')} min\n**Géneros:** {', '.join(movie.get('genres', []))}"
+
         self.query_one("#movie_tech", Markdown).update(tech)
         self.query_one("#movie_synopsis", Markdown).update(
             movie.get('synopsis', 'Sin descripción.'))
@@ -171,7 +178,8 @@ class MovieMainScreen(Screen):
         t_movies = self.query_one("#movies_table", DataTable)
         t_movies.cursor_type = "row"
         t_movies.zebra_stripes = True
-        t_movies.add_columns("ID", "Título", "Director", "Formato", "Visto")
+        t_movies.add_columns("ID", "Título", "Director",
+                             "Año", "Formato", "Visto")
 
         t_inbox = self.query_one("#movie_inbox_table", DataTable)
         t_inbox.cursor_type = "row"
@@ -263,6 +271,7 @@ class MovieMainScreen(Screen):
                     str(m.get('id')),
                     m.get('title', '').upper(),
                     m.get('director', '-'),
+                    str(m.get('release_year') or '-'),
                     m.get('format_type', 'BLU-RAY'),
                     status,
                     key=str(m.get('id'))
@@ -289,7 +298,9 @@ class MovieMainScreen(Screen):
     def populate_tracker(self, stats: dict, annual: list) -> None:
         md = self.query_one("#movie_tracker_content", Markdown)
         cintas_anuales = len(annual)
-        text = f"""**Mes de {stats.get('current_month', '')}:** Minutos de vuelo: `{stats.get('minutes_this_month', 0)}`  |  **Total Año:** `{cintas_anuales} cintas vistas`"""
+        cintas_mes = stats.get('movies_this_month', 0)
+        text = f"""**Mes de {stats.get('current_month', '')}:** `{cintas_mes} cintas vistas`  |  **Total Año:** `{cintas_anuales} cintas vistas`"""
+
         md.update(text)
 
         table = self.query_one("#movie_annual_table", DataTable)
@@ -356,7 +367,8 @@ class MovieMainScreen(Screen):
                         self.app.notify(
                             f"Consultando Oráculo para '{title}'...", title="TMDB")
                         self.process_movie_scan(title)
-                self.app.push_screen(LendModal(), handle_title)
+                # MovieTitleModal()
+                self.app.push_screen(MovieTitleModal(), handle_title)
             elif choice == "full":
                 # CONECTA EL FORMULARIO MANUAL AL BACKEND
                 def handle_manual_save(payload: dict | None) -> None:
@@ -676,25 +688,6 @@ class MovieMainScreen(Screen):
                 self.app.notify, f"Error: {e}", severity="error")
 
     # ================= TRACKER CINEMATOGRÁFICO =================
-    def action_log_minutes(self) -> None:
-        if self.query_one("#movie_tabs", TabbedContent).active != "tab_tracker":
-            return
-
-        def do_log(minutes: int | None) -> None:
-            if minutes:
-                self.process_log_minutes(minutes)
-        self.app.push_screen(LogMinutesModal(), do_log)
-
-    @work(thread=True)
-    def process_log_minutes(self, minutes: int) -> None:
-        try:
-            if httpx.post(API_MOVIE_TRACKER_MINUTES, json={"minutes": minutes}, timeout=5.0).status_code == 201:
-                self.app.call_from_thread(
-                    self.app.notify, f"{minutes} minutos anotados a la bitácora.", title="Éxito")
-                self.app.call_from_thread(self.load_movies)
-        except Exception as e:
-            self.app.call_from_thread(
-                self.app.notify, f"Error: {e}", severity="error")
 
     def action_finish_movie(self) -> None:
         if self.query_one("#movie_tabs", TabbedContent).active != "tab_tracker":
@@ -847,3 +840,55 @@ class MovieMainScreen(Screen):
                 item.get('director') or "-", item.get('release_year') or "-",
                 date_str, key=str(item.get('id'))
             )
+
+    # --- SISTEMA DE EDICIÓN MANUAL ---
+    def action_edit_movie(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_cartelera":
+            self.app.notify(
+                "La edición solo está disponible en el Inventario.", severity="warning")
+            return
+        table = self.query_one("#movies_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            if row_key:
+                self.app.notify("Descargando ficha de edición...", timeout=1)
+                self.fetch_and_edit_movie(row_key)
+        except Exception:
+            self.app.notify(
+                "Selecciona una película en la tabla primero.", severity="warning")
+
+    @work(thread=True)
+    def fetch_and_edit_movie(self, movie_id: str) -> None:
+        try:
+            resp = httpx.get(f"{API_MOVIES}{movie_id}/", timeout=5.0)
+            if resp.status_code == 200:
+                movie = resp.json()
+                self.app.call_from_thread(
+                    self.open_edit_modal_sync, movie, movie_id)
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Error al obtener datos.", severity="error")
+
+    def open_edit_modal_sync(self, movie: dict, movie_id: str) -> None:
+        def save_changes(payload: dict | None) -> None:
+            if payload:
+                self.app.notify("Actualizando el servidor central...")
+                self.process_edit_movie(movie_id, payload)
+        self.app.push_screen(MovieFullEditModal(movie), save_changes)
+
+    @work(thread=True)
+    def process_edit_movie(self, movie_id: str, payload: dict) -> None:
+        try:
+            resp = httpx.patch(f"{API_MOVIES}{movie_id}/",
+                               json=payload, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, "¡Cinta recalibrada con éxito!", title="Éxito")
+                self.app.call_from_thread(self.load_movies)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al actualizar.", severity="error")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Error de red.", severity="error")

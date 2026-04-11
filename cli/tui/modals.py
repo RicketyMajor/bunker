@@ -708,3 +708,97 @@ class FinishMovieModal(ModalScreen[dict]):
             })
         else:
             self.dismiss(None)
+
+
+class MovieFullEditModal(ModalScreen[dict]):
+    """Ventana flotante con Scroll para editar toda la ficha de la película."""
+
+    def __init__(self, movie: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.movie = movie
+
+    def compose(self) -> ComposeResult:
+        # Usamos el mismo ID para reciclar el CSS de scroll
+        with Vertical(id="full_edit_dialog"):
+            yield Label(f"Editando: {self.movie.get('title')}", classes="modal_title")
+            with VerticalScroll():
+                yield Label("Título de la cinta (*):", classes="edit_label")
+                yield Input(value=self.movie.get('title', ''), id="inp_title")
+
+                yield Label("Director:", classes="edit_label")
+                yield Input(value=self.movie.get('director', ''), id="inp_director")
+
+                yield Label("Guionistas:", classes="edit_label")
+                yield Input(value=self.movie.get('writers', ''), id="inp_writers")
+
+                yield Label("Productora:", classes="edit_label")
+                yield Input(value=self.movie.get('production_company', ''), id="inp_production")
+
+                yield Label("Formato:", classes="edit_label")
+                FORMATS = [(f, f)
+                           for f in ["BLU-RAY", "DVD", "4K", "VHS", "DIGITAL"]]
+                yield Select(FORMATS, value=self.movie.get('format_type', 'BLU-RAY'), id="sel_format")
+
+                yield Label("Año de Lanzamiento:", classes="edit_label")
+                yield Input(value=str(self.movie.get('release_year') or ''), id="inp_year")
+
+                yield Label("Duración (minutos):", classes="edit_label")
+                yield Input(value=str(self.movie.get('duration_minutes') or ''), id="inp_duration")
+
+                yield Label("Géneros (separados por coma):", classes="edit_label")
+                generos_str = ", ".join(self.movie.get(
+                    'genres', [])) if self.movie.get('genres') else ""
+                yield Input(value=generos_str, id="inp_genres")
+
+                yield Label("")  # Espaciador
+                yield Checkbox("✔ Ya he visto esta película", value=self.movie.get('is_watched', False), id="chk_watched")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Guardar Cambios", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            payload = {
+                "title": self.query_one("#inp_title", Input).value,
+                "director": self.query_one("#inp_director", Input).value,
+                "writers": self.query_one("#inp_writers", Input).value,
+                "production_company": self.query_one("#inp_production", Input).value,
+                "format_type": self.query_one("#sel_format", Select).value,
+                "is_watched": self.query_one("#chk_watched", Checkbox).value,
+            }
+
+            # Validaciones de números y listas
+            year = self.query_one("#inp_year", Input).value
+            dur = self.query_one("#inp_duration", Input).value
+            genres = self.query_one("#inp_genres", Input).value
+
+            if year.isdigit():
+                payload["release_year"] = int(year)
+            if dur.isdigit():
+                payload["duration_minutes"] = int(dur)
+            if genres:
+                payload["genres"] = [g.strip() for g in genres.split(",")]
+
+            self.dismiss(payload)
+        else:
+            self.dismiss(None)
+
+
+class MovieTitleModal(ModalScreen[str]):
+    """Pequeño diálogo para buscar una película por su nombre en TMDB."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="title_dialog"):  # Reutiliza CSS estándar de los modales pequeños
+            yield Label("Buscar en TMDB", classes="modal_title")
+            yield Label("Ingresa el título de la cinta:", classes="edit_label")
+            yield Input(placeholder="Ej: Blade Runner", id="inp_title")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Buscar", variant="success", id="btn_search")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_search":
+            self.dismiss(self.query_one("#inp_title", Input).value)
+        else:
+            self.dismiss(None)
