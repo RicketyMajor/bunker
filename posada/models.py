@@ -61,6 +61,16 @@ class GuildProfile(WealthMixin):
     level = models.PositiveIntegerField(default=1)
     experience = models.PositiveIntegerField(default=0)
 
+    @property
+    def net_worth_in_talents(self):
+        """Calcula el valor neto aproximado de toda la bóveda expresado en Talentos."""
+        total = self.talento
+        total += self.marco * 10
+        total += self.real * 2.5
+        total += self.sueldo / 32.0
+        total += self.iota / 10.0
+        return round(total, 2)
+
     def __str__(self):
         return f"Gremio Nivel {self.level} - XP: {self.experience}"
 

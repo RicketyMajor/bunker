@@ -9,4 +9,5 @@ urlpatterns = [
     path('api/movies/', include('movies.urls')),
     path('scanner/', scanner_view, name='scanner'),
     path('api/dashboard/', global_dashboard_view, name='dashboard'),
+    path('posada/', include('posada.urls')),
 ]

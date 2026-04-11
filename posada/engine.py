@@ -1,5 +1,5 @@
 import random
-from .models import GuildProfile, Adventurer, DeepWorkSession
+from .models import GuildProfile, Adventurer, DeepWorkSession, GuildProfile
 
 XP_PER_MINUTE = 10
 # Bono si la clase del aventurero hace sinergia con la tarea
@@ -157,7 +157,7 @@ def process_session_completion(session_id):
     # Fase de Mercado Autónomo
     market_phase(adventurers, event_log)
 
-    # 4. Experiencia (XP)
+    # Experiencia (XP)
     base_xp = session.duration_minutes * 10
     guild.experience += base_xp
     event_log.append(f"El Gremio gana {base_xp} XP.")
@@ -171,7 +171,13 @@ def process_session_completion(session_id):
     session.completed = True
     session.save()
 
-    return {"status": "success", "message": "Sesión completada y simulada."}
+    return {
+        "status": "success",
+        "message": "Sesión completada y simulada.",
+        "loot": loot,
+        "base_xp": base_xp,
+        "log": event_log
+    }
 
 
 def consolidate_wealth(guild_id):
