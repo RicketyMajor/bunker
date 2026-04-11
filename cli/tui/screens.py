@@ -199,7 +199,7 @@ class BunkerDashboardScreen(Screen):
         m = data.get("movies", {})
         feed = data.get("feed", [])
 
-        # 1. Actualizar Barras de Progreso
+        # Actualizar Barras de Progreso
         bar_books = self.query_one("#bar_books", ProgressBar)
         bar_movies = self.query_one("#bar_movies", ProgressBar)
 
@@ -209,7 +209,7 @@ class BunkerDashboardScreen(Screen):
         bar_movies.total = m.get("total", 1)
         bar_movies.progress = m.get("watched", 0)
 
-        # 2. Renderizar Libros
+        # Renderizar Libros
         book_md = f"""
 * **Total en Colección:** `{b.get('total', 0)}` obras
 * **Obras Terminadas:** `{b.get('read', 0)}`
@@ -217,7 +217,7 @@ class BunkerDashboardScreen(Screen):
         """
         self.query_one("#dash_books", Markdown).update(book_md)
 
-        # 3. Renderizar Películas
+        # Renderizar Películas
         movie_md = f"""
 * **Total en Bóveda:** `{m.get('total', 0)}` cintas
 * **Cintas Vistas:** `{m.get('watched', 0)}`
@@ -225,7 +225,7 @@ class BunkerDashboardScreen(Screen):
         """
         self.query_one("#dash_movies", Markdown).update(movie_md)
 
-        # 4. Renderizar Feed Curado
+        # Renderizar Feed Curado
         if not feed:
             feed_lines = ["* *Sin actividad detectada en el Bunker.*"]
         else:
@@ -330,10 +330,10 @@ class BunkerLauncherScreen(Screen):
                     yield Label("MÓDULO 3: MÉTRICAS GLOBALES", classes="module_title")
                     yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
 
-                # Módulo 4 y 5: Espacio para el futuro
-                with Vertical(classes="module_panel_offline"):
-                    yield Label("[red]MÓDULOS 4 Y 5[/red]", classes="module_title")
-                    yield Button("SISTEMAS OFFLINE", id="btn_null", classes="launcher_btn", variant="default", disabled=True)
+                # Módulo 4: La Posada
+                with Vertical(classes="module_panel"):
+                    yield Label("MÓDULO 4: LA POSADA", classes="module_title")
+                    yield Button("INGRESAR AL GREMIO", id="btn_posada", classes="launcher_btn", variant="primary")
 
             yield Button("DESCONECTAR SISTEMA (Salir)", id="btn_quit", variant="error")
 
@@ -347,5 +347,8 @@ class BunkerLauncherScreen(Screen):
         elif event.button.id == "btn_dash":
             from .screens import BunkerDashboardScreen
             self.app.push_screen(BunkerDashboardScreen())
+        elif event.button.id == "btn_posada":
+            from .posada_screens import PosadaMainScreen
+            self.app.push_screen(PosadaMainScreen())
         elif event.button.id == "btn_quit":
             self.app.exit()
