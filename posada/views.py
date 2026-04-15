@@ -1,8 +1,9 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import GuildProfile, Adventurer, DeepWorkSession
-from .engine import process_session_completion, generate_session_script, consolidate_wealth
+from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender
+import random
+from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats
 
 
 @api_view(['GET'])
@@ -21,17 +22,17 @@ def guild_status(request):
             "level": adv.level,
             "xp": adv.experience,
             "is_recovering": adv.is_recovering,
-            "wealth_summary": f"{adv.iota} iotas, {adv.copper_penny} copper pennies",
-
+            "wealth": {
+                "iron_half_penny": adv.iron_half_penny, "iron_penny": adv.iron_penny,
+                "ardite": adv.ardite, "drabin": adv.drabin, "copper_penny": adv.copper_penny,
+                "iota": adv.iota, "silver_penny": adv.silver_penny, "sueldo": adv.sueldo,
+                "talento": adv.talento, "real": adv.real, "marco": adv.marco
+            },
+            "wealth_summary": f"{adv.talento}T, {adv.iota}i, {adv.ardite}a",
             # --- STATS Y VIDA ---
-            "hp": f"{adv.current_hp}/{adv.max_hp}",
-            "str": adv.base_str,
-            "dex": adv.base_dex,
-            "con": adv.base_con,
-            "int": adv.base_int,
-            "wis": adv.base_wis,
-            "cha": adv.base_cha,
-            "luk": adv.base_luk,
+            "str": adv.base_str, "dex": adv.base_dex, "con": adv.base_con,
+            "int": adv.base_int, "wis": adv.base_wis, "cha": adv.base_cha, "luk": adv.base_luk,
+            "hp": adv.current_hp, "max_hp": adv.max_hp,
 
             # --- INVENTARIO (8 SLOTS) ---
             "equip_main_hand": adv.equip_main_hand.name if adv.equip_main_hand else "Desarmado",
@@ -137,14 +138,82 @@ def complete_session(request):
 
 @api_view(['POST'])
 def create_adventurer(request):
-    """Crea un nuevo aventurero inicial desde la TUI."""
+    """Crea un aventurero. Verifica el límite de cupos del Gremio."""
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+
+    # SISTEMA DE LÍMITE: 1 cupo por cada Nivel del Gremio
+    if Adventurer.objects.count() >= guild.level:
+        return Response({
+            "status": "error",
+            "message": f"Gremio Nv. {guild.level} lleno. Estudia y sube de nivel para tener más cupos."
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     data = request.data
+    stats = data.get('stats', None)
 
     adv = Adventurer.objects.create(
         name=data.get('name', 'Aventurero Desconocido'),
         adv_class=data.get('adv_class', 'FTR'),
         race=data.get('race', 'HUM'),
-        gender=data.get('gender', 'O')
+        gender=data.get('gender', 'O'),
+        max_hp=25,
+        current_hp=25,
+        # Si vienen stats de la taberna, los asignamos. Si no, 0.
+        base_str=stats['str'] if stats else 0, base_dex=stats['dex'] if stats else 0,
+        base_con=stats['con'] if stats else 0, base_int=stats['int'] if stats else 0,
+        base_wis=stats['wis'] if stats else 0, base_cha=stats['cha'] if stats else 0,
+        base_luk=stats['luk'] if stats else 0
     )
 
-    return Response({"status": "success", "message": f"{adv.name} se ha unido al Gremio."})
+    # Si es tu primer avatar manual (sin stats), el destino reparte los 13 pts.
+    if not stats:
+        distribute_random_stats(adv, 13)
+
+    return Response({"status": "success", "message": f"{adv.name} ha firmado el contrato."})
+
+
+@api_view(['GET'])
+def tavern_recruits(request):
+    """Genera 3 reclutas procedurales con nombres y stats aleatorios."""
+    prefixes = ["Thor", "Grim", "Ar", "Leg", "Kvoth", "El",
+                "Fae", "Gael", "Bae", "Mor", "Dae", "Val", "Gim"]
+    suffixes = ["din", "gar", "agorn", "olas", "e", "rond",
+                "lin", "dor", "th", "gan", "mon", "ria", "li"]
+
+    recruits = []
+    for _ in range(3):
+        # Generación de Identidad
+        name = random.choice(prefixes) + random.choice(suffixes)
+        adv_class_obj = random.choice(AdventurerClass.choices)
+        race_obj = random.choice(AdventurerRace.choices)
+        gender_obj = random.choice(AdventurerGender.choices)
+
+        # Reparto Procedural de los 13 Puntos Base
+        stats = {'str': 0, 'dex': 0, 'con': 0,
+                 'int': 0, 'wis': 0, 'cha': 0, 'luk': 0}
+        keys = list(stats.keys())
+        for _ in range(13):
+            stats[random.choice(keys)] += 1
+
+        recruits.append({
+            "name": name,
+            "adv_class": adv_class_obj[0],
+            "adv_class_display": adv_class_obj[1],
+            "race": race_obj[0],
+            "race_display": race_obj[1],
+            "gender": gender_obj[0],
+            "stats": stats
+        })
+    return Response({"recruits": recruits})
+
+
+@api_view(['DELETE'])
+def delete_adventurer(request, adv_id):
+    """Elimina un aventurero de la base de datos."""
+    try:
+        adv = Adventurer.objects.get(id=adv_id)
+        name = adv.name
+        adv.delete()
+        return Response({"status": "success", "message": f"{name} ha sido eliminado del Gremio."})
+    except Adventurer.DoesNotExist:
+        return Response({"status": "error", "message": "Aventurero no encontrado."}, status=status.HTTP_404_NOT_FOUND)

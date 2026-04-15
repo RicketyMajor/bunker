@@ -9,4 +9,7 @@ urlpatterns = [
          name='create_adventurer'),
     path('api/guild/consolidate/', views.consolidate_guild_wealth,
          name='consolidate_wealth'),
+    path('api/adventurer/delete/<int:adv_id>/',
+         views.delete_adventurer, name='delete_adventurer'),
+    path('api/tavern/', views.tavern_recruits, name='tavern_recruits'),
 ]

@@ -1,7 +1,7 @@
 from textual.app import ComposeResult
 from textual.screen import Screen, ModalScreen
 from textual.widgets import Header, Footer, Button, Label, TabbedContent, TabPane, DataTable, Log, Input, RadioSet, RadioButton, SelectionList, Select
-from textual.containers import Vertical, Horizontal, Grid
+from textual.containers import Vertical, Horizontal, Grid, VerticalScroll
 from textual.reactive import reactive
 from textual import work
 import httpx
@@ -206,14 +206,15 @@ class CharacterCreationModal(ModalScreen[dict]):
 
 
 class AdventurerDetailsModal(ModalScreen[None]):
-    """Ficha de personaje RPG detallada."""
+    """Ficha de personaje con scroll y desglose total de riqueza."""
 
     CSS = """
-    #adv_details_dialog { width: 70; height: auto; padding: 1 2; border: double $primary; background: $surface; }
+    #adv_details_dialog { width: 75; height: 35; padding: 1 2; border: double $primary; background: $surface; }
     .title_bar { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; }
-    .stats_grid { grid-size: 2; grid-columns: 1fr 1fr; grid-gutter: 1 2; margin-bottom: 1; border: solid $accent; padding: 1; }
-    .inv_grid { grid-size: 2; grid-columns: 1fr 1fr; grid-gutter: 0 1; border: solid $success; padding: 1; }
-    .section_title { color: $success; text-style: bold; }
+    .stats_grid { grid-size: 2; grid-columns: 1fr 1fr; border: solid $accent; padding: 1; margin-bottom: 1; height: auto; }
+    .wealth_grid { grid-size: 3; grid-columns: 1fr 1fr 1fr; border: solid $warning; padding: 1; margin-bottom: 1; height: auto; }
+    .inv_grid { grid-size: 2; grid-columns: 1fr 1fr; border: solid $success; padding: 1; height: auto; }
+    .section_title { color: $success; text-style: bold; margin-top: 1; }
     #btn_close_details { width: 100%; margin-top: 1; }
     """
 
@@ -224,38 +225,55 @@ class AdventurerDetailsModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         a = self.adv_data
         with Vertical(id="adv_details_dialog"):
-            yield Label(f"📜 {a.get('name')} | {a.get('class_name')} | {a.get('race')}", classes="title_bar")
-            yield Label(f"Nivel {a.get('level')} | XP: {a.get('xp')} | ❤️ HP: {a.get('hp')}")
+            yield Label(f"📜 FICHA: {a.get('name')} | {a.get('class_name')} | {a.get('race')}", classes="title_bar")
 
-            # Grilla de Estadísticas Base
-            yield Label("Atributos Base:", classes="section_title")
-            with Grid(classes="stats_grid"):
-                yield Label(f"Fuerza: {a.get('str')}")
-                yield Label(f"Inteligencia: {a.get('int')}")
-                yield Label(f"Destreza: {a.get('dex')}")
-                yield Label(f"Sabiduría: {a.get('wis')}")
-                yield Label(f"Constitución: {a.get('con')}")
-                yield Label(f"Carisma: {a.get('cha')}")
-                yield Label(f"Suerte: {a.get('luk')}")
-                yield Label(f"Riqueza: {a.get('wealth_summary')}")
+            # Usamos VerticalScroll para que quepa todo
+            with VerticalScroll():
+                yield Label(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP)")
 
-            # Grilla de Inventario (8 Slots)
-            yield Label("Inventario Equipado:", classes="section_title")
-            with Grid(classes="inv_grid"):
-                yield Label(f"Arma: {a.get('equip_main_hand', 'Desarmado')}")
-                yield Label(f"Secundaria: {a.get('equip_off_hand', 'Vacío')}")
-                yield Label(f"Cabeza: {a.get('equip_head', 'Vacío')}")
-                yield Label(f"Torso: {a.get('equip_torso', 'Ropa Común')}")
-                yield Label(f"Manos: {a.get('equip_hands', 'Vacío')}")
-                yield Label(f"Piernas: {a.get('equip_legs', 'Vacío')}")
-                yield Label(f"Pies: {a.get('equip_feet', 'Vacío')}")
-                yield Label(f"Accesorio: {a.get('equip_accessory', 'Vacío')}")
+                yield Label("Atributos:", classes="section_title")
+                with Grid(classes="stats_grid"):
+                    yield Label(f"💪 Fuerza: {a.get('str')}")
+                    yield Label(f"🧠 Inteligencia: {a.get('int')}")
+                    yield Label(f"🏃 Destreza: {a.get('dex')}")
+                    yield Label(f"🦉 Sabiduría: {a.get('wis')}")
+                    yield Label(f"🛡️ Constitución: {a.get('con')}")
+                    yield Label(f"🗣️ Carisma: {a.get('cha')}")
+                    yield Label(f"🍀 Suerte: {a.get('luk')}")
+
+                yield Label("Equipo:", classes="section_title")
+                with Grid(classes="inv_grid"):
+                    yield Label(f"🗡️ Mano Principal: {a.get('equip_main_hand')}")
+                    yield Label(f"🛡️ Mano Secundaria: {a.get('equip_off_hand')}")
+                    yield Label(f"🪖 Cabeza: {a.get('equip_head')}")
+                    yield Label(f"👕 Torso: {a.get('equip_torso')}")
+                    yield Label(f"🧤 Manos: {a.get('equip_hands')}")
+                    yield Label(f"👖 Piernas: {a.get('equip_legs')}")
+                    yield Label(f"👟 Pies: {a.get('equip_feet')}")
+                    yield Label(f"📿 Accesorio: {a.get('equip_accessory')}")
+                    yield Label("")
+
+                yield Label("Bóveda Personal (Todas las Monedas):", classes="section_title")
+                w = a.get('wealth', {})
+                with Grid(classes="wealth_grid"):
+                    yield Label(f"🟤 1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
+                    yield Label(f"🔘 P. Hierro: {w.get('iron_penny', 0)}")
+                    yield Label(f"⚪ Ardite: {w.get('ardite', 0)}")
+                    yield Label(f"🪙 Drabín: {w.get('drabin', 0)}")
+                    yield Label(f"🟠 P. Cobre: {w.get('copper_penny', 0)}")
+                    yield Label(f"🔹 Iota: {w.get('iota', 0)}")
+                    yield Label(f"⚪ P. Plata: {w.get('silver_penny', 0)}")
+                    yield Label(f"⚜️ Sueldo: {w.get('sueldo', 0)}")
+                    yield Label(f"🔱 Talento: {w.get('talento', 0)}")
+                    yield Label(f"🔷 Real: {w.get('real', 0)}")
+                    yield Label(f"👑 Marco: {w.get('marco', 0)}")
 
             yield Button("Cerrar Ficha", variant="primary", id="btn_close_details")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_close_details":
             self.dismiss(None)
+
 # --- PANTALLA PRINCIPAL ---
 
 
@@ -271,6 +289,9 @@ class PosadaMainScreen(Screen):
         ("p", "pause_timer", "Pausar / Continuar"),
         ("s", "stop_timer", "Detener / Huir"),
         ("d", "show_details", "Ver Detalles (Gremio)"),
+        ("x", "delete_adventurer", "Eliminar (Gremio)"),
+        ("r", "recruit", "Reclutar (Taberna)"),
+        ("f", "refresh_tavern", "Invitar Rondas [Refrescar] (Taberna)"),
         ("escape", "app.pop_screen", "Volver al Launcher"),
         ("q", "app.quit", "Salir de Bunker"),
     ]
@@ -331,6 +352,13 @@ class PosadaMainScreen(Screen):
                     yield Label("Todos los Aventureros Reclutados:")
                     yield DataTable(id="all_adventurers_table")
 
+                with TabPane("La Taberna", id="tab_tavern"):
+                    yield Label("Aventureros buscando un Gremio (Nivel 1):", classes="section_title")
+                    yield DataTable(id="tavern_table")
+                    with Horizontal(classes="timer_buttons"):
+                        yield Button("Reclutar Seleccionado (r)", id="btn_recruit", variant="success")
+                        yield Button("Invitar Rondas (f)", id="btn_refresh_tavern", variant="primary")
+
                 with TabPane("Tablón de Misiones", id="tab_missions"):
                     yield Label("Marca tus hábitos diarios para obtener recompensas rápidas.")
                     yield DataTable(id="missions_table")
@@ -348,6 +376,10 @@ class PosadaMainScreen(Screen):
         self.query_one("#event_log", Log).write_line(
             "La taberna está silenciosa. Esperando órdenes del Maestro...")
         self.clock_ticker = self.set_interval(1, self.tick_timer, pause=True)
+
+        self.query_one("#tavern_table", DataTable).add_columns(
+            "Nombre", "Clase", "Raza", "Estadísticas Base (13 pts)")
+        self.refresh_tavern_api()  # Llena la taberna al entrar
 
         # Sincroniza la interfaz con la base de datos
         self.sync_guild_status()
@@ -427,10 +459,12 @@ class PosadaMainScreen(Screen):
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.app.notify, "¡Avatar creado! Bienvenido a La Posada.", severity="success")
-                self.sync_guild_status()  # Recargamos la interfaz
+                self.sync_guild_status()
             else:
+                # error de cupo lleno
+                error_msg = resp.json().get("message", "Error al crear el personaje.")
                 self.app.call_from_thread(
-                    self.app.notify, "Error al crear el personaje.", severity="error")
+                    self.app.notify, error_msg, severity="error")
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, "Fallo de conexión.", severity="error")
@@ -552,6 +586,10 @@ class PosadaMainScreen(Screen):
         elif event.button.id == "btn_consolidate":
             # Llama a la API para ir al cambista
             self.request_consolidation()
+        elif event.button.id == "btn_recruit":
+            self.action_recruit()
+        elif event.button.id == "btn_refresh_tavern":
+            self.action_refresh_tavern()
 
     def action_show_details(self) -> None:
         """Abre la ficha del personaje seleccionado en la tabla del Gremio."""
@@ -697,3 +735,95 @@ class PosadaMainScreen(Screen):
         self.sync_guild_status()
         self.time_seconds = 25 * 60
         self.is_countdown = True
+
+# --- FUNCIONES DE GESTIÓN DE AVENTUREROS EN EL GREMIO ---
+    def action_delete_adventurer(self) -> None:
+        """Elimina al aventurero seleccionado en la tabla."""
+        if self.query_one(TabbedContent).active != "tab_guild":
+            return
+
+        table = self.query_one("#all_adventurers_table", DataTable)
+        try:
+            # Obtiene el ID del aventurero desde la llave de la fila
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key
+            adv_id = row_key.value
+            self.request_deletion(adv_id)
+        except Exception:
+            self.app.notify(
+                "Selecciona un aventurero de la tabla primero.", severity="warning")
+
+    @work(thread=True)
+    def request_deletion(self, adv_id: str) -> None:
+        """Llamada asíncrona para borrar el registro en Django."""
+        try:
+            resp = httpx.delete(
+                f"{API_POSADA_BASE}adventurer/delete/{adv_id}/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, resp.json().get("message"), severity="success")
+                self.sync_guild_status()  # Refrescar tabla
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "No se pudo eliminar al aventurero.", severity="error")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Fallo de conexión con el servidor.", severity="error")
+
+    def action_new_adventurer(self) -> None:
+        """Permite crear un nuevo aventurero manualmente si el gremio está vacío."""
+        if self.query_one(TabbedContent).active != "tab_guild":
+            return
+
+        # Revisa si hay aventureros en el caché
+        adventurers = getattr(self, 'adventurers_cache', [])
+        if not adventurers:
+            self.app.push_screen(CharacterCreationModal(),
+                                 self.submit_new_character)
+        else:
+            self.app.notify(
+                "Solo puedes reclutar un nuevo Avatar si el Gremio está vacío.", severity="warning")
+
+    # --- TABERNA ---
+    @work(thread=True)
+    def refresh_tavern_api(self):
+        """Pide al servidor que genere 3 reclutas nuevos."""
+        try:
+            resp = httpx.get(f"{API_POSADA_BASE}tavern/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.render_tavern, resp.json().get("recruits", []))
+        except Exception:
+            pass
+
+    def render_tavern(self, recruits):
+        self.tavern_cache = recruits
+        table = self.query_one("#tavern_table", DataTable)
+        table.clear()
+        for idx, r in enumerate(recruits):
+            s = r["stats"]
+            stats_str = f"F:{s['str']} D:{s['dex']} C:{s['con']} I:{s['int']} S:{s['wis']} Ca:{s['cha']} Lu:{s['luk']}"
+            table.add_row(r["name"], r["adv_class_display"],
+                          r["race_display"], stats_str, key=str(idx))
+
+    def action_refresh_tavern(self) -> None:
+        if self.query_one(TabbedContent).active == "tab_tavern":
+            self.query_one("#event_log", Log).write_line(
+                "🍺 Has pagado unas rondas de cerveza. Nuevos reclutas se acercan a la mesa.")
+            self.refresh_tavern_api()
+
+    def action_recruit(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_tavern":
+            return
+        table = self.query_one("#tavern_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key
+            recruit_data = self.tavern_cache[int(row_key.value)]
+            self.submit_new_character(recruit_data)
+        except Exception:
+            self.app.notify(
+                "Selecciona a un aventurero de la Taberna primero.", severity="warning")
+
+    # Mapea los botones físicos también en on_button_pressed
+    # (Añade estos dos elif al final de tu on_button_pressed)

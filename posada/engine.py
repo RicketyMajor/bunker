@@ -200,39 +200,6 @@ def _auto_equip(adv, item, event_log, pull_type):
             f"Gacha ({pull_type}): {adv.name} sacó [{item.name}] pero ya tenía algo mejor. Lo vendió por chatarra.")
 
 
-def market_phase(adventurers_qs, event_log):
-    """
-    Simula las decisiones de los aventureros en sus ratos libres.
-    Tiran del Gacha de la tienda dependiendo de sus fondos.
-    """
-    _seed_items_if_empty()
-    all_items = list(Item.objects.all())
-
-    for adv in adventurers_qs:
-        if adv.is_recovering:
-            continue
-
-        # Tirada Premium (Cuesta 1 Penique de Plata) -> Busca ítems Raros o mejores
-        if adv.silver_penny >= 1:
-            adv.silver_penny -= 1
-            pool = [i for i in all_items if i.rarity in ['RAR', 'EPC', 'LEG']]
-            if not pool:
-                pool = all_items  # Fallback por si no hay épicos
-            item = random.choice(pool)
-            _auto_equip(adv, item, event_log, "Tirada Premium")
-
-        # Tirada Común (Cuesta 10 Peniques de Cobre) -> Busca ítems Comunes/Poco Comunes
-        elif adv.copper_penny >= 10:
-            adv.copper_penny -= 10
-            pool = [i for i in all_items if i.rarity in ['COM', 'UNC']]
-            if not pool:
-                pool = all_items
-            item = random.choice(pool)
-            _auto_equip(adv, item, event_log, "Tirada Común")
-
-        adv.save()
-
-
 def process_session_completion(session_id, survived_seconds=None):
     try:
         session = DeepWorkSession.objects.get(id=session_id)
@@ -306,6 +273,9 @@ def process_session_completion(session_id, survived_seconds=None):
             event_log.append(
                 f"{adv.name} ganó {adv_xp} XP (Bonus de Accesorio).")
 
+        # Verifica si sube de nivel tras ganar XP ---
+        check_level_up(adv, event_log)
+
     guild.save()
     session.event_log = event_log
     session.completed = True
@@ -319,79 +289,142 @@ def process_session_completion(session_id, survived_seconds=None):
         "log": event_log
     }
 
+# --- LÓGICA DE ESTADÍSTICAS Y NIVEL ---
+
+
+def distribute_random_stats(adv, points_to_distribute):
+    """Reparte una cantidad de puntos aleatoriamente entre los 7 atributos base."""
+    stats = ['base_str', 'base_dex', 'base_con',
+             'base_int', 'base_wis', 'base_cha', 'base_luk']
+    for _ in range(points_to_distribute):
+        stat = random.choice(stats)
+        current_val = getattr(adv, stat)
+        setattr(adv, stat, current_val + 1)
+    adv.save()
+
+
+def check_level_up(adv, event_log):
+    """Comprueba si el aventurero tiene suficiente XP para subir de nivel."""
+    xp_needed = adv.level * 100  # Escala simple: Nv 1->2 pide 100XP, Nv 2->3 pide 200XP
+
+    if adv.experience >= xp_needed:
+        adv.level += 1
+        adv.experience -= xp_needed
+        adv.max_hp += 2
+        adv.current_hp = adv.max_hp  # Cura completa al subir de nivel
+
+        distribute_random_stats(adv, 3)  # +3 puntos aleatorios
+
+        event_log.append(
+            f"¡Sube de Nivel! {adv.name} alcanza el Nivel {adv.level} (+2 HP, +3 Stats).")
+
+        # Llamada recursiva por si ganó muchísima XP de golpe
+        check_level_up(adv, event_log)
+
+# --- LÓGICA BANCARIA Y MERCADO ---
+
+
+def universal_consolidate(entity):
+    """Aplica la consolidación a cualquier entidad (Aventurero o Gremio)."""
+    log = []
+    # --- Senda de la Mancomunidad ---
+    if entity.ardite >= 11:
+        n = entity.ardite // 11
+        entity.ardite %= 11
+        entity.drabin += n
+        log.append(f"Fundidos ardites en {n} Drabín.")
+    if entity.drabin >= 10:
+        n = entity.drabin // 10
+        entity.drabin %= 10
+        entity.iota += n
+    if entity.iota >= 10:
+        n = entity.iota // 10
+        entity.iota %= 10
+        entity.talento += n
+
+    # --- Senda Imperial ---
+    if entity.iron_half_penny >= 2:
+        n = entity.iron_half_penny // 2
+        entity.iron_half_penny %= 2
+        entity.iron_penny += n
+    if entity.iron_penny >= 5:
+        n = entity.iron_penny // 5
+        entity.iron_penny %= 5
+        entity.copper_penny += n
+    if entity.copper_penny >= 10:
+        n = entity.copper_penny // 10
+        entity.copper_penny %= 10
+        entity.silver_penny += n
+
+    # --- Puentes de Alto Valor ---
+    if entity.sueldo >= 32:
+        n = entity.sueldo // 32
+        entity.sueldo %= 32
+        entity.talento += n
+    if entity.talento >= 10:
+        n = entity.talento // 10
+        entity.talento %= 10
+        entity.marco += n
+
+    entity.save()
+    return log
+
+
+def pay_with_change(adv, cost_in_copper):
+    """Intenta pagar un coste dando cambio si es necesario."""
+    total_value_in_half_pennies = (
+        adv.copper_penny * 10) + (adv.iron_penny * 2) + adv.iron_half_penny
+    cost_in_half_pennies = cost_in_copper * 2
+
+    if total_value_in_half_pennies < cost_in_half_pennies:
+        return False
+
+    remaining = total_value_in_half_pennies - cost_in_half_pennies
+
+    adv.copper_penny = remaining // 10
+    remaining %= 10
+    adv.iron_penny = remaining // 2
+    adv.iron_half_penny = remaining % 2
+    adv.save()
+    return True
+
+
+def market_phase(adventurers_qs, event_log):
+    """Simula las compras automáticas de los aventureros."""
+    _seed_items_if_empty()
+    all_items = list(Item.objects.all())
+
+    for adv in adventurers_qs:
+        universal_consolidate(adv)  # Consolidan su propia billetera primero
+
+        if adv.is_recovering:
+            continue
+
+        if adv.silver_penny >= 1:
+            adv.silver_penny -= 1
+            pool = [i for i in all_items if i.rarity in ['RAR', 'EPC', 'LEG']]
+            if not pool:
+                pool = all_items
+            item = random.choice(pool)
+            _auto_equip(adv, item, event_log, "Premium")
+
+        elif adv.copper_penny >= 10:
+            item = random.choice(
+                [i for i in all_items if i.cost_in_copper <= 10])
+            # Compran solo si pueden pagar y recibir vuelto exacto
+            if pay_with_change(adv, item.cost_in_copper):
+                _auto_equip(adv, item, event_log, "Común")
+
 
 def consolidate_wealth(guild_id):
-    """
-    Ejecuta las conversiones de la Mancomunidad de El Nombre del Viento.
-    Procesa las monedas de menor valor y las empaqueta en divisas mayores.
-    """
+    """Wrapper para la API: Consolidar la bóveda del Gremio."""
     try:
         guild = GuildProfile.objects.get(id=guild_id)
+        log_msgs = universal_consolidate(guild)
+        return {
+            "status": "success",
+            "message": "Economía consolidada",
+            "log": log_msgs if log_msgs else ["La bóveda ya está optimizada."]
+        }
     except GuildProfile.DoesNotExist:
         return {"status": "error", "message": "Gremio no encontrado"}
-
-    event_log = []
-
-    # 11 Ardites = 1 Drabín
-    if guild.ardite >= 11:
-        new_drabines = guild.ardite // 11
-        guild.ardite = guild.ardite % 11
-        guild.drabin += new_drabines
-        event_log.append(f"Se fundieron ardites en {new_drabines} Drabín(es).")
-
-    # 10 Drabines = 1 Iota
-    if guild.drabin >= 10:
-        new_iotas = guild.drabin // 10
-        guild.drabin = guild.drabin % 10
-        guild.iota += new_iotas
-        event_log.append(
-            f"Se intercambiaron drabines por {new_iotas} Iota(s).")
-
-    # 10 Iotas = 1 Talento
-    if guild.iota >= 10:
-        new_talentos = guild.iota // 10
-        guild.iota = guild.iota % 10
-        guild.talento += new_talentos
-        event_log.append(
-            f"Se consolidaron iotas en {new_talentos} Talento(s).")
-
-    # 2 Medios peniques = 1 Penique de hierro
-    if guild.iron_half_penny >= 2:
-        new_iron = guild.iron_half_penny // 2
-        guild.iron_half_penny = guild.iron_half_penny % 2
-        guild.iron_penny += new_iron
-
-    # 5 Peniques de hierro = 1 Penique de cobre
-    if guild.iron_penny >= 5:
-        new_copper = guild.iron_penny // 5
-        guild.iron_penny = guild.iron_penny % 5
-        guild.copper_penny += new_copper
-
-    # 10 Peniques de cobre = 1 Penique de plata
-    if guild.copper_penny >= 10:
-        new_silver = guild.copper_penny // 10
-        guild.copper_penny = guild.copper_penny % 10
-        guild.silver_penny += new_silver
-
-    # 32 Sueldos = 1 Talento
-    if guild.sueldo >= 32:
-        new_talentos_from_sueldo = guild.sueldo // 32
-        guild.sueldo = guild.sueldo % 32
-        guild.talento += new_talentos_from_sueldo
-        event_log.append(
-            f"Los sueldos se han convertido en {new_talentos_from_sueldo} Talento(s).")
-
-    # 10 Talentos = 1 Marco
-    if guild.talento >= 10:
-        new_marcos = guild.talento // 10
-        guild.talento = guild.talento % 10
-        guild.marco += new_marcos
-        event_log.append(f"¡Has acuñado {new_marcos} Marco(s) de Oro!")
-
-    guild.save()
-
-    return {
-        "status": "success",
-        "message": "Economía consolidada",
-        "log": event_log
-    }
