@@ -33,8 +33,8 @@ class Command(BaseCommand):
                 "item_type": "HED",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
-                "cost_ardite": 2,
-                "cost_iron_penny": 5,
+                "cost_copper_penny": 1,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
@@ -44,8 +44,8 @@ class Command(BaseCommand):
                 "item_type": "TRS",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
-                "cost_ardite": 3,
-                "cost_iron_penny": 5,
+                "cost_copper_penny": 2,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
@@ -55,8 +55,8 @@ class Command(BaseCommand):
                 "item_type": "LGS",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
-                "cost_ardite": 3,
-                "cost_iron_penny": 5,
+                "cost_copper_penny": 2,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
@@ -66,8 +66,8 @@ class Command(BaseCommand):
                 "item_type": "FET",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
-                "cost_ardite": 2,
-                "cost_iron_penny": 5,
+                "cost_copper_penny": 1,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
@@ -77,109 +77,185 @@ class Command(BaseCommand):
                 "item_type": "HND",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
-                "cost_ardite": 2,
-                "cost_iron_penny": 5,
+                "cost_copper_penny": 1,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
-            # CONJUNTO DE ARMADURA DE CUERO ACOLCHADO (COMÚN)
+            # CONJUNTO DE ARMADURA ACOLCHADA (COMÚN)
 
             {
-                "name": "Gorro de Cuero Acolchado",
-                "description": "Un gorro hecho de cuero acolchado. Es cómodo y protegido.",
+                "name": "Gorro Acolchado",
+                "description": "Un gorro en capas acolchadas de tela y guata. Es cómodo y protegido.",
                 "item_type": "HED",
                 "rarity": "COM",
                 "allowed_classes": ["ROG", "RGR", "BRD", "MNK"],
-                "cost_ardite": 2,
-                "cost_iron_penny": 8,
+                "cost_copper_penny": 2,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
             {
-                "name": "Atuendo de Cuero Acolchado",
-                "description": "Un atuendo hecho de cuero acolchado. Es cómodo y protegido.",
+                "name": "Atuendo Acolchado",
+                "description": "Un atuendo en capas acolchadas de tela y guata. Es cómodo y protegido.",
                 "item_type": "TRS",
                 "rarity": "COM",
                 "allowed_classes": ["ROG", "RGR", "BRD", "MNK"],
-                "cost_ardite": 3,
-                "cost_iron_penny": 8,
+                "cost_copper_penny": 3,
+                "cost_ardite": 4,
                 "bonus_armor": 1,
             },
 
             {
-                "name": "Pantalones de Cuero Acolchado",
-                "description": "Unos pantalones hechos de cuero acolchado. Son cómodos y protegidos.",
+                "name": "Pantalones Acolchados",
+                "description": "Unos pantalones en capas acolchadas de tela y guata. Son cómodos y protegidos.",
                 "item_type": "LGS",
                 "rarity": "COM",
                 "allowed_classes": ["ROG", "RGR", "BRD", "MNK"],
-                "cost_ardite": 3,
-                "cost_iron_penny": 8,
+                "cost_copper_penny": 3,
+                "cost_ardite": 4,
                 "bonus_armor": 1,
             },
 
             {
-                "name": "Botas de Cuero Acolchado",
-                "description": "Unas botas hechas de cuero acolchado. Son cómodas y protegidas.",
+                "name": "Botas Acolchadas",
+                "description": "Unas botas en capas acolchadas de tela y guata. Son cómodas y protegidas.",
                 "item_type": "FET",
                 "rarity": "COM",
                 "allowed_classes": ["ROG", "RGR", "BRD", "MNK"],
-                "cost_ardite": 2,
-                "cost_iron_penny": 8,
+                "cost_copper_penny": 2,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
             {
-                "name": "Guantes de Cuero Acolchado",
-                "description": "Unos guantes hechos de cuero acolchado. Son cómodos y protegidos.",
+                "name": "Guantes Acolchados",
+                "description": "Unos guantes en capas acolchadas de tela y guata. Son cómodos y protegidos.",
                 "item_type": "HND",
                 "rarity": "COM",
                 "allowed_classes": ["ROG", "RGR", "BRD", "MNK"],
-                "cost_ardite": 2,
-                "cost_iron_penny": 8,
+                "cost_copper_penny": 2,
+                "cost_ardite": 5,
                 "bonus_armor": 1,
             },
 
+            # CONJUNTO DE ARMADURA DE CUERO (COMÚN)
 
-
-
-
-
-            # 🛡️ EJEMPLO 2: Armadura de Torso (Épica)
             {
-                "name": "Cota de Escamas de Dragón",
-                "description": "Forjada con escamas ardientes. Casi impenetrable.",
+                "name": "Yelmo de Cuero",
+                "description": "Un yelmo hecho con materiales más suaves y flexibles.",
+                "item_type": "HED",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 1,
+                "cost_copper_penny": 5,
+                "bonus_armor": 2,
+            },
+
+            {
+                "name": "Pechera de Cuero",
+                "description": "Una pechera hecha con cuero que ha sido endurecido al ser hervido en aceite, a diferencia de las otras piezas.",
                 "item_type": "TRS",
-                "rarity": "EPC",
-                "allowed_classes": ["WIZ", "SOR", "DRD"],
-                "cost_talento": 1,
-                "cost_iota": 5,  # Muy cara: 1 Talento y 5 Iotas
-                "bonus_armor": 12,
-                "bonus_con": 4,
-                "bonus_cha": 2,  # Da prestigio llevarla
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 2,
+                "cost_copper_penny": 1,
+                "bonus_armor": 2,
             },
 
-            # 💍 EJEMPLO 3: Accesorio - Anillo (Legendario)
             {
-                "name": "Anillo del Erudito Omnisciente",
-                "description": "Otorga una claridad mental absoluta para el Deep Work.",
-                "item_type": "RNG",
-                "rarity": "LEG",
-                "allowed_classes": ["WIZ", "SOR", "DRD"],
-                "cost_marco": 2,  # Costo altísimo: 2 Marcos de Oro
-                "bonus_int": 6,
-                "bonus_wis": 5,
-                "bonus_luk": 2,
+                "name": "Pantalones de Cuero",
+                "description": "Unos pantalones hechos con materiales más suaves y flexibles.",
+                "item_type": "LGS",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 2,
+                "cost_copper_penny": 1,
+                "bonus_armor": 2,
             },
 
-            # 🏺 EJEMPLO 4: Objeto Misceláneo (Raro)
             {
-                "name": "Cáliz de Cristal Antiguo",
-                "description": "No sirve para pelear, pero los coleccionistas pagan muy bien por él.",
-                "item_type": "MSC",
-                "rarity": "RAR",
-                "allowed_classes": [],
-                "cost_sueldo": 15,  # Objeto de lujo
-                # Los objetos misceláneos generalmente no dan atributos de combate
+                "name": "Botas de Cuero",
+                "description": "Unas botas hechas con materiales más suaves y flexibles.",
+                "item_type": "FET",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 1,
+                "cost_copper_penny": 5,
+                "bonus_armor": 2,
+            },
+
+            {
+                "name": "Guantes de Cuero",
+                "description": "Unos guantes hechos con materiales más suaves y flexibles.",
+                "item_type": "HND",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 1,
+                "cost_copper_penny": 5,
+                "bonus_armor": 2,
+            },
+
+            # CONJUNTO DE ARMADURA DE PIELES (COMÚN)
+
+            {
+                "name": "Yelmo de Piel",
+                "description": "Un yelmo hecho con gruesas pieles y pelajes. Es además de resistente, muy cálido, ideal para climas fríos.",
+                "item_type": "HED",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 3,
+                "cost_copper_penny": 6,
+                "bonus_armor": 3,
+                "bonus_con": 1,
+            },
+
+            {
+                "name": "Pechera de Piel",
+                "description": "Una pechera hecha con gruesas pieles y pelajes. Es además de resistente, muy cálida, ideal para climas fríos.",
+                "item_type": "TRS",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 4,
+                "cost_copper_penny": 3,
+                "bonus_armor": 3,
+                "bonus_con": 1,
+            },
+
+            {
+                "name": "Pantalones de Piel",
+                "description": "Unos pantalones hechos con gruesas pieles y pelajes. Son además de resistentes, muy cálidos, ideales para climas fríos.",
+                "item_type": "LGS",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 4,
+                "cost_copper_penny": 3,
+                "bonus_armor": 3,
+                "bonus_con": 1,
+            },
+
+            {
+                "name": "Botas de Piel",
+                "description": "Unas botas hechas con gruesas pieles y pelajes. Son además de resistentes, muy cálidas, ideales para climas fríos.",
+                "item_type": "FET",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 3,
+                "cost_copper_penny": 6,
+                "bonus_armor": 3,
+                "bonus_con": 1,
+            },
+
+            {
+                "name": "Guantes de Piel",
+                "description": "Unos guantes hechos con gruesas pieles y pelajes. Son además de resistentes, muy cálidos, ideales para climas fríos.",
+                "item_type": "HND",
+                "rarity": "COM",
+                "allowed_classes": ["ROG", "RGR", "BRD", "MNK", "BBN", "ART"],
+                "cost_drabin": 3,
+                "cost_copper_penny": 6,
+                "bonus_armor": 3,
+                "bonus_con": 1,
             },
         ]
 
