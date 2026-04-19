@@ -405,7 +405,7 @@ class PosadaMainScreen(Screen):
     """
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Header(show_clock=True)
         with Vertical(id="posada_root"):
             with TabbedContent(initial="tab_timer"):
 
