@@ -70,6 +70,7 @@ class LibraryMainScreen(Screen):
                 break
 
     def on_mount(self) -> None:
+        self.current_dir = "root"
         t_books = self.query_one("#books_table", DataTable)
         t_books.cursor_type = "row"
         t_books.zebra_stripes = True
@@ -111,9 +112,8 @@ class LibraryMainScreen(Screen):
             dirs = httpx.get(API_DIRECTORIES, timeout=5.0).json()
             if isinstance(books, list):
                 self.all_books = books
-                orphan = [b for b in books if b.get('directory') is None]
-                self.app.call_from_thread(self.populate_books, orphan)
-                self.app.call_from_thread(self.populate_tree, dirs)
+                self.app.call_from_thread(self.update_ui_books, dirs)
+
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error en Inventario: {e}", severity="error")
@@ -155,6 +155,17 @@ class LibraryMainScreen(Screen):
                     self.populate_tracker, tracker, annual)
         except Exception:
             pass
+
+    def update_ui_books(self, dirs: list) -> None:
+        self.populate_tree(dirs)
+        # Filtra respetando la carpeta en la que estaba el usuario
+        if getattr(self, 'current_dir', 'root') == "root":
+            filtered = [b for b in self.all_books if b.get(
+                'directory') is None]
+        else:
+            filtered = [b for b in self.all_books if str(
+                b.get('directory')) == self.current_dir]
+        self.populate_books(filtered)
 
     def populate_wishlist(self, items: list) -> None:
         table = self.query_one("#wishlist_table", DataTable)
@@ -388,16 +399,17 @@ class LibraryMainScreen(Screen):
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         if event.node.data is None:
             return
-
         data_val = str(event.node.data)
-        # Si el usuario hace clic en un archivo, ignora el evento de filtro
         if data_val.startswith("book_"):
             return
 
+        # GUARDA EL ESTADO DEL DIRECTORIO ACTUAL
         if data_val == "root":
+            self.current_dir = "root"
             filtered_books = [
                 b for b in self.all_books if b.get('directory') is None]
         else:
+            self.current_dir = data_val
             filtered_books = [b for b in self.all_books if str(
                 b.get('directory')) == data_val]
 

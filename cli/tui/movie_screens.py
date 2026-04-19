@@ -149,9 +149,10 @@ class MovieMainScreen(Screen):
     CSS = """
     Screen { background: $surface-darken-1; }
     DataTable { height: 1fr; margin: 1 2; }
+    #movie_tracker_content { height: auto; margin: 1 2 0 2; padding: 1; border: solid $warning; background: $surface; }
     #sidebar {
         dock: left; 
-        width: 45; /* ENSANCHADO */
+        width: 45; 
         max-width: 60%;
         height: 100%;
         background: $surface-darken-2; 
@@ -164,7 +165,7 @@ class MovieMainScreen(Screen):
     """
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Header(show_clock=True)
         yield Tree("📁 Raíz del Videoclub", id="sidebar")  # El Árbol Lateral
         with TabbedContent(initial="tab_cartelera", id="movie_tabs"):
             yield MovieInventoryTab("▤ Inventario", id="tab_cartelera")
@@ -175,6 +176,7 @@ class MovieMainScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.current_dir = "root"
         t_movies = self.query_one("#movies_table", DataTable)
         t_movies.cursor_type = "row"
         t_movies.zebra_stripes = True
@@ -219,12 +221,8 @@ class MovieMainScreen(Screen):
             if movies_resp.status_code == 200:
                 self.all_movies = movies_resp.json()
                 dirs = dirs_resp.json() if dirs_resp.status_code == 200 else []
+                self.app.call_from_thread(self.update_ui_movies, dirs)
 
-                # Filtra para mostrar solo la raíz por defecto
-                orphan = [m for m in self.all_movies if m.get(
-                    'directory') is None]
-                self.app.call_from_thread(self.populate_movies, orphan)
-                self.app.call_from_thread(self.populate_tree, dirs)
         except Exception:
             pass
 
@@ -254,6 +252,16 @@ class MovieMainScreen(Screen):
                 self.app.call_from_thread(self.populate_wishlist, wishlist)
         except Exception:
             pass
+
+    def update_ui_movies(self, dirs: list) -> None:
+        self.populate_tree(dirs)
+        if getattr(self, 'current_dir', 'root') == "root":
+            filtered = [m for m in self.all_movies if m.get(
+                'directory') is None]
+        else:
+            filtered = [m for m in self.all_movies if str(
+                m.get('directory')) == self.current_dir]
+        self.populate_movies(filtered)
 
     def populate_movies(self, movies: list) -> None:
         table_inv = self.query_one("#movies_table", DataTable)
@@ -592,9 +600,11 @@ class MovieMainScreen(Screen):
             return
 
         if data_val == "root":
+            self.current_dir = "root"
             filtered = [m for m in self.all_movies if m.get(
                 'directory') is None]
         else:
+            self.current_dir = data_val
             filtered = [m for m in self.all_movies if str(
                 m.get('directory')) == data_val]
 
@@ -701,20 +711,19 @@ class MovieMainScreen(Screen):
     @work(thread=True)
     def process_finish_movie(self, payload: dict) -> None:
         try:
-            # Registra en el Muro de la Fama
             resp = httpx.post(API_MOVIE_TRACKER_FINISH,
                               json=payload, timeout=5.0)
             if resp.status_code == 201:
-                # Auto-marcar como visto en el Inventario si existe
-                lib_resp = httpx.get(API_MOVIES, params={
-                                     "title": payload['title']}, timeout=5.0)
-                if lib_resp.status_code == 200 and lib_resp.json():
-                    movie_id = lib_resp.json()[0]['id']
-                    httpx.patch(f"{API_MOVIES}{movie_id}/",
-                                json={"is_watched": True}, timeout=5.0)
+                # BÚSQUEDA EN MEMORIA RAM
+                movie_to_mark = next(
+                    (m for m in self.all_movies if m['title'].lower() == payload['title'].lower()), None)
+
+                if movie_to_mark:
+                    httpx.patch(
+                        f"{API_MOVIES}{movie_to_mark['id']}/", json={"is_watched": True}, timeout=5.0)
 
                 self.app.call_from_thread(
-                    self.app.notify, "¡Cinta registrada en el Muro de la Fama!", title="Éxito")
+                    self.app.notify, "¡Cinta registrada!", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
         except Exception as e:
             self.app.call_from_thread(

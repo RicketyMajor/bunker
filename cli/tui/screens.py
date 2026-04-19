@@ -153,7 +153,7 @@ class BunkerDashboardScreen(Screen):
     """
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="dashboard_root"):
+        with VerticalScroll(id="dashboard_root"):
             yield Label("☢️  CENTRO DE MANDO GLOBAL  ☢️", classes="dash_title")
 
             with Grid(id="dash_grid"):
