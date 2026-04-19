@@ -3,7 +3,7 @@ import io
 from textual.app import ComposeResult
 from textual.events import ScreenResume
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedContent, TabPane, Tree
+from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedContent, TabPane, Tree, Input
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
@@ -138,6 +138,7 @@ class MovieMainScreen(Screen):
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
         ("M", "action_move_movie", "Mover a Carpeta"),
+        ("/", "focus_search", "Buscador Global"),
         Binding("1", "switch_tab('tab_cartelera')", "1-4 Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
         Binding("3", "switch_tab('tab_prestamos')", "Préstamos", show=False),
@@ -162,6 +163,17 @@ class MovieMainScreen(Screen):
     }
     #sidebar.-visible { display: block; }
     Tree { overflow-x: auto; } 
+
+    #search_bar {
+        display: none;
+        dock: bottom;
+        margin-bottom: 1;
+        border-top: solid $warning;
+        background: $surface-darken-1;
+    }
+    #search_bar.-visible {
+        display: block;
+    }
     """
 
     def compose(self) -> ComposeResult:
@@ -173,6 +185,7 @@ class MovieMainScreen(Screen):
             yield MovieLoansTab("⇋ Préstamos", id="tab_prestamos")
             yield MovieTrackerTab("∑ Hábitos", id="tab_tracker")
             yield MovieWishlistTab("★ Tablón", id="tab_wishlist")
+        yield Input(id="search_bar", placeholder="Búsqueda global (Título o Director)...")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -209,7 +222,43 @@ class MovieMainScreen(Screen):
         self.sub_title = "Módulo de Videoclub"
         self.load_movies()
 
+    def action_focus_search(self) -> None:
+        search_bar = self.query_one("#search_bar", Input)
+        if search_bar.has_class("-visible"):
+            search_bar.remove_class("-visible")
+            search_bar.value = ""
+            self.query_one("#movies_table", DataTable).focus()
+        else:
+            search_bar.add_class("-visible")
+            search_bar.focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Motor Fuzzy Reactivo para películas."""
+        if event.control.id == "search_bar":
+            query = event.value.lower()
+
+            if not query:
+                self.update_ui_movies(getattr(self, 'all_dirs', []))
+                return
+
+            # Búsqueda Global
+            filtered = [
+                m for m in getattr(self, 'all_movies', [])
+                if query in m.get('title', '').lower() or query in m.get('director', 'desconocido').lower()
+            ]
+            self.populate_movies(filtered)
+
+            tabs = self.query_one("#movie_tabs", TabbedContent)
+            if tabs.active != "tab_cartelera":
+                tabs.active = "tab_cartelera"
+
     def action_go_back(self) -> None:
+        search_bar = self.query_one("#search_bar", Input)
+        if search_bar.has_class("-visible"):
+            search_bar.remove_class("-visible")
+            search_bar.value = ""
+            self.query_one("#movies_table", DataTable).focus()
+            return
         self.app.pop_screen()
 
     @work(thread=True)

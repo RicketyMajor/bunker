@@ -3,7 +3,7 @@ import datetime
 import webbrowser
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, DataTable, Markdown, TabbedContent, Tree
+from textual.widgets import Header, Footer, DataTable, Markdown, TabbedContent, Tree, Input
 from textual.binding import Binding
 from textual.events import ScreenResume
 from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
@@ -36,6 +36,17 @@ class LibraryMainScreen(Screen):
     Button { margin: 0 1; }
     #tracker_content { height: auto; margin: 1 2 0 2; padding: 1; border: solid $success; background: $surface; }
     #annual_table { height: 1fr; margin: 0 2 1 2; }
+
+    #search_bar {
+        display: none;
+        dock: bottom;
+        margin-bottom: 1;
+        border-top: solid $success;
+        background: $surface-darken-1;
+    }
+    #search_bar.-visible {
+        display: block;
+    }
     """
 
     BINDINGS = [
@@ -43,6 +54,7 @@ class LibraryMainScreen(Screen):
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
         ("ctrl+t", "toggle_dark", "Tema"),
+        ("/", "focus_search", "Buscador Global"),
         Binding("1", "switch_tab('tab_library')",
                 "1-5 Cambiar Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
@@ -60,6 +72,7 @@ class LibraryMainScreen(Screen):
             yield LoansTab("⇋ Préstamos", id="tab_loans")
             yield TrackerTab("∑ Hábitos", id="tab_tracker")
             yield WishlistTab("★ Tablón", id="tab_wishlist")
+        yield Input(id="search_bar", placeholder="Búsqueda global (Título o Autor)...")
         yield Footer()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
@@ -102,7 +115,46 @@ class LibraryMainScreen(Screen):
         self.sub_title = "Módulo de Biblioteca"
         self.load_all_data()
 
+    def action_focus_search(self) -> None:
+        search_bar = self.query_one("#search_bar", Input)
+        if search_bar.has_class("-visible"):
+            search_bar.remove_class("-visible")
+            search_bar.value = ""
+            self.query_one("#books_table", DataTable).focus()
+        else:
+            search_bar.add_class("-visible")
+            search_bar.focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Filtra en RAM mientras se escribe."""
+        if event.control.id == "search_bar":
+            query = event.value.lower()
+
+            # Si borra el texto, restaura la vista normal (respetando la carpeta actual)
+            if not query:
+                self.update_ui_books(getattr(self, 'all_dirs', []))
+                return
+
+            # Búsqueda Global... ignora las carpetas
+            filtered = [
+                b for b in getattr(self, 'all_books', [])
+                if query in b.get('title', '').lower() or query in b.get('author_name', 'desconocido').lower()
+            ]
+            self.populate_books(filtered)
+
+            # Fuerza la vista al Inventario si se estaba en otra pestaña
+            tabs = self.query_one("#main_tabs", TabbedContent)
+            if tabs.active != "tab_library":
+                tabs.active = "tab_library"
+
     def action_go_back(self) -> None:
+        """Cierra el buscador si está abierto, sino sale de la app."""
+        search_bar = self.query_one("#search_bar", Input)
+        if search_bar.has_class("-visible"):
+            search_bar.remove_class("-visible")
+            search_bar.value = ""
+            self.query_one("#books_table", DataTable).focus()
+            return
         self.app.pop_screen()
 
     @work(thread=True)
