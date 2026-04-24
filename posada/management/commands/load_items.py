@@ -237,6 +237,59 @@ class Command(BaseCommand):
                 "bonus_armor": 3,
                 "bonus_con": 1,
             },
+
+            # CONJUNTO DE ARMADURA DE MALLA DE COBRE (COMÚN)
+
+            {
+                "name": "Cofia de Malla de Cobre",
+                "description": "Una cofia hecha de mallas de cobre. Es además de resistente, una pieza flexible.",
+                "item_type": "HED",
+                "rarity": "COM",
+                "allowed_classes": ["FTR", "PAL"],
+                "cost_marco": 1,
+                "bonus_armor": 4,
+            },
+
+            {
+                "name": "Peto de Malla de Cobre",
+                "description": "Un peto hecho de mallas de cobre. Brinda una protección sólida para el torso.",
+                "item_type": "TRS",
+                "rarity": "COM",
+                "allowed_classes": ["FTR", "PAL"],
+                "cost_marco": 1,
+                "bonus_armor": 4,
+            },
+
+            {
+                "name": "Pantalones de Malla de Cobre",
+                "description": "Unos pantalones hechos de mallas de cobre. Son además de resistentes, flexibles.",
+                "item_type": "LGS",
+                "rarity": "COM",
+                "allowed_classes": ["FTR", "PAL"],
+                "cost_marco": 1,
+                "bonus_armor": 4,
+            },
+
+            {
+                "name": "Botas de Malla de Cobre",
+                "description": "Unas botas hechas de mallas de cobre. Son además de resistentes, flexibles.",
+                "item_type": "FET",
+                "rarity": "COM",
+                "allowed_classes": ["FTR", "PAL"],
+                "cost_marco": 1,
+                "bonus_armor": 4,
+            },
+
+            {
+                "name": "Guantes de Malla de Cobre",
+                "description": "Unos guantes hechos de mallas de cobre. Son además de resistentes, flexibles.",
+                "item_type": "HND",
+                "rarity": "COM",
+                "allowed_classes": ["FTR", "PAL"],
+                "cost_marco": 1,
+                "bonus_armor": 4,
+            },
+
         ]
 
         self.stdout.write("Forjando los ítems en la base de datos...")
