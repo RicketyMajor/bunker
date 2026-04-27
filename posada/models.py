@@ -119,8 +119,12 @@ class Item(CostMixin):
         max_length=3, choices=ItemRarity.choices, default=ItemRarity.COMMON)
 
     # Modificadores de Combate
+    damage_dice_count = models.PositiveIntegerField(
+        default=0, help_text="Cantidad de dados (Ej: 1 para 1d6)")
+    damage_dice_sides = models.PositiveIntegerField(
+        default=0, help_text="Caras del dado (Ej: 6 para 1d6)")
     bonus_damage = models.PositiveIntegerField(
-        default=0, help_text="Suma al Daño (Armas)")
+        default=0, help_text="Suma al Daño Plano (Ej: Anillos o armas mágicas)")
     bonus_armor = models.PositiveIntegerField(
         default=0, help_text="Suma a la Armadura (Ropa/Escudos)")
 
@@ -253,8 +257,9 @@ class Adventurer(WealthMixin):
 
     def get_stat_modifiers(self):
         """Calcula los bonos genéticos (Raza/Clase) y del equipamiento."""
-        mods = {'str': 0, 'dex': 0, 'con': 0, 'int': 0, 'wis': 0,
-                'cha': 0, 'luk': 0, 'armor': 0, 'damage': 0}
+        # Añadimos los dados por defecto (Desarmado: 1d4)
+        mods = {'str': 0, 'dex': 0, 'con': 0, 'int': 0, 'wis': 0, 'cha': 0, 'luk': 0,
+                'armor': 0, 'damage': 0, 'weapon_dice_count': 1, 'weapon_dice_sides': 4}
 
         # Modificadores de Raza
         race_mods = {
@@ -294,6 +299,11 @@ class Adventurer(WealthMixin):
             mods['luk'] += item.bonus_luk
             mods['armor'] += item.bonus_armor
             mods['damage'] += item.bonus_damage
+
+        # Lee el dado del arma principal (si tiene una)
+        if self.equip_main_hand and self.equip_main_hand.damage_dice_count > 0:
+            mods['weapon_dice_count'] = self.equip_main_hand.damage_dice_count
+            mods['weapon_dice_sides'] = self.equip_main_hand.damage_dice_sides
 
         if self.fatigue_stacks > 0:
             for stat in ['str', 'dex', 'con', 'int', 'wis', 'cha', 'luk']:
@@ -393,11 +403,13 @@ class Monster(models.Model):
     rarity = models.CharField(
         max_length=3, choices=ItemRarity.choices, default=ItemRarity.COMMON)
 
-    # Valores base que tú definirás en tu Excel
     base_hp = models.PositiveIntegerField(default=10)
-    base_damage = models.PositiveIntegerField(default=2)
 
-    # Recompensas (Multiplicadores de botín al morir)
+    # Daño basado en dados (Ej: 1d6 + 2)
+    damage_dice_count = models.PositiveIntegerField(default=1)
+    damage_dice_sides = models.PositiveIntegerField(default=4)
+    bonus_damage = models.PositiveIntegerField(default=0)
+
     loot_multiplier = models.FloatField(default=1.0)
     xp_reward = models.PositiveIntegerField(default=50)
 
