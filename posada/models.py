@@ -377,3 +377,29 @@ class DailyStatistic(models.Model):
 
     def __str__(self):
         return f"Stats {self.date}: {self.deep_work_minutes} min DW"
+
+
+class MonsterCategory(models.TextChoices):
+    SMALL = 'SML', 'Pequeño (15 pts)'
+    MEDIUM = 'MED', 'Mediano (25 pts)'
+    LARGE = 'LRG', 'Grande (45 pts)'
+    EPIC = 'EPC', 'Épico (65 pts)'
+
+
+class Monster(models.Model):
+    """Template para los enemigos. Tú rellenas los básicos, el motor reparte los stats."""
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=3, choices=MonsterCategory.choices)
+    rarity = models.CharField(
+        max_length=3, choices=ItemRarity.choices, default=ItemRarity.COMMON)
+
+    # Valores base que tú definirás en tu Excel
+    base_hp = models.PositiveIntegerField(default=10)
+    base_damage = models.PositiveIntegerField(default=2)
+
+    # Recompensas (Multiplicadores de botín al morir)
+    loot_multiplier = models.FloatField(default=1.0)
+    xp_reward = models.PositiveIntegerField(default=50)
+
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.name}"
