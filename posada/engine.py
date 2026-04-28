@@ -302,39 +302,58 @@ def get_item_score(item):
 
 
 def _auto_equip(adv, item, event_log, pull_type):
-    """Evalúa si el objeto es mejor, pero primero verifica si puede usarlo."""
-
-    # --- VERIFICAR COMPETENCIA ---
+    """Evalúa si el objeto es mejor y guarda lo sobrante en la mochila."""
     if not is_class_allowed(adv, item):
-        # El aventurero puede encontrarlo en la aventura, pero no equiparlo.
-        # Se envía directamente a su mochila (InventorySlot).
         InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
         event_log.append(
-            f"{adv.name} encontró [{item.name}], pero su clase no le permite usarlo. Lo guardó en su mochila.")
+            f"{adv.name} guardó [{item.name}] (Su clase no puede usarlo).")
         return
 
-    # Lógica de Consumibles de Curación
+    # Consumibles y Misceláneos
     if item.item_type == 'CNS':
         if adv.current_hp < adv.max_hp:
-            # La poción cura 10
             adv.current_hp = min(adv.max_hp, adv.current_hp + 10)
             event_log.append(
-                f"Gacha ({pull_type}): {adv.name} compró [{item.name}] y se curó a {adv.current_hp}/{adv.max_hp} HP.")
+                f"{adv.name} bebió [{item.name}] y recuperó HP.")
         else:
-            event_log.append(
-                f"Gacha ({pull_type}): {adv.name} tiró su dinero en una poción que no necesitaba.")
+            InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
+        return
+    elif item.item_type == 'MSC':
+        InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
+        event_log.append(
+            f"{adv.name} guardó el objeto de lujo [{item.name}].")
         return
 
-    # Lógica de Equipamiento
     score_new = get_item_score(item)
-    replaced = False
-    old_item_name = None
 
-    # Mapeo de tipos de objeto a los campos del modelo Adventurer
+    # los 2 Anillos
+    if item.item_type == 'RNG':
+        s1 = get_item_score(adv.equip_ring_1) if adv.equip_ring_1 else -1
+        s2 = get_item_score(adv.equip_ring_2) if adv.equip_ring_2 else -1
+
+        if score_new > min(s1, s2):
+            if s1 <= s2:
+                old_item = adv.equip_ring_1
+                adv.equip_ring_1 = item
+            else:
+                old_item = adv.equip_ring_2
+                adv.equip_ring_2 = item
+
+            if old_item:
+                InventorySlot.objects.create(
+                    adventurer=adv, item=old_item, quantity=1)
+            event_log.append(f"💍 {adv.name} se equipó [{item.name}].")
+            adv.save()
+        else:
+            InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
+        return
+
+    # el resto del equipo
     slot_map = {
         'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
         'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
-        'HND': 'equip_hands', 'FET': 'equip_feet', 'ACC': 'equip_accessory'
+        'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
+        'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
     }
 
     slot_name = slot_map.get(item.item_type)
@@ -342,37 +361,28 @@ def _auto_equip(adv, item, event_log, pull_type):
         return
 
     current_item = getattr(adv, slot_name)
-    score_current = get_item_score(current_item)
+    score_current = get_item_score(current_item) if current_item else -1
+
+    # Bloqueo de Escudo si usa Mandoble
+    if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
+        InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
+        return
 
     if score_new > score_current:
-        old_item_name = current_item.name if current_item else None
+        if current_item:
+            InventorySlot.objects.create(
+                adventurer=adv, item=current_item, quantity=1)
         setattr(adv, slot_name, item)
-        replaced = True
 
-        # Lógica de exclusión de Armas a Dos Manos y Escudos
-    if item.item_type == 'OFF':
-        # Si intenta equipar escudo pero tiene un arma de dos manos, no se realiza la compra/equipamiento
-        if getattr(adv, 'equip_main_hand', None) and getattr(adv, 'equip_main_hand').item_type == 'W2H':
-            event_log.append(
-                f"Gacha ({pull_type}): {adv.name} intentó usar [{item.name}] pero usa un Mandoble. Lo vendió.")
-            return
-
-    if score_new > score_current:
-        old_item_name = current_item.name if current_item else None
-        setattr(adv, slot_name, item)
-        replaced = True
-
-        # Si se pone un arma a dos manos, el escudo cae al suelo
-        if item.item_type == 'W2H':
+        if item.item_type == 'W2H' and adv.equip_off_hand:
+            InventorySlot.objects.create(
+                adventurer=adv, item=adv.equip_off_hand, quantity=1)
             adv.equip_off_hand = None
 
-    if replaced:
-        msg = f"y descartó su viejo {old_item_name}" if old_item_name else "por primera vez"
-        event_log.append(
-            f"Gacha ({pull_type}): {adv.name} equipó [{item.name}] {msg}.")
+        event_log.append(f"{adv.name} se equipó [{item.name}].")
+        adv.save()
     else:
-        event_log.append(
-            f"Gacha ({pull_type}): {adv.name} sacó [{item.name}] pero es chatarra en comparación a su equipo.")
+        InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
 
 
 def evaluate_daily_penalties():
@@ -625,22 +635,51 @@ def universal_consolidate(entity):
     return log
 
 
-def pay_with_change(adv, cost_in_copper):
-    """Intenta pagar un coste dando cambio si es necesario."""
-    total_value_in_half_pennies = (
-        adv.copper_penny * 10) + (adv.iron_penny * 2) + adv.iron_half_penny
-    cost_in_half_pennies = cost_in_copper * 2
+def get_imperial_value(entity):
+    """Convierte toda la riqueza Imperial a Medios Peniques."""
+    return (entity.silver_penny * 100) + (entity.copper_penny * 10) + (entity.iron_penny * 2) + entity.iron_half_penny
 
-    if total_value_in_half_pennies < cost_in_half_pennies:
+
+def get_commonwealth_value(entity):
+    """Convierte toda la riqueza de la Mancomunidad a fracciones de Ardite (Base 32)."""
+    val = 0
+    val += entity.marco * 352000
+    val += entity.real * 88000
+    val += entity.talento * 35200
+    val += entity.sueldo * 1100
+    val += entity.iota * 3520
+    val += entity.drabin * 352
+    val += entity.ardite * 32
+    return val
+
+
+def can_afford(adv, item):
+    """Comprueba si el aventurero puede pagar el ítem."""
+    if get_imperial_value(adv) < get_imperial_value(item):
+        return False
+    if get_commonwealth_value(adv) < get_commonwealth_value(item):
+        return False
+    return True
+
+
+def pay_with_change(adv, item):
+    """Paga el coste exacto rompiendo monedas grandes y calculando el vuelto."""
+    if not can_afford(adv, item):
         return False
 
-    remaining = total_value_in_half_pennies - cost_in_half_pennies
+    # Pago Imperial
+    rem_imp = get_imperial_value(adv) - get_imperial_value(item)
+    adv.silver_penny = adv.copper_penny = adv.iron_penny = 0
+    adv.iron_half_penny = rem_imp  # Dejamos todo en sencillo
 
-    adv.copper_penny = remaining // 10
-    remaining %= 10
-    adv.iron_penny = remaining // 2
-    adv.iron_half_penny = remaining % 2
+    # Pago de la Mancomunidad
+    rem_cw = get_commonwealth_value(adv) - get_commonwealth_value(item)
+    adv.marco = adv.real = adv.talento = adv.sueldo = adv.iota = adv.drabin = 0
+    adv.ardite = rem_cw // 32  # Dejam todo en ardites
+
     adv.save()
+    # El motor re-ensambla las monedas automáticamente
+    universal_consolidate(adv)
     return True
 
 
@@ -654,42 +693,76 @@ def is_class_allowed(adv, item):
 
 
 def market_phase(adventurers_qs, event_log):
-    """Simula las compras automáticas de los aventureros."""
+    """Simula las compras inteligentes del mercado."""
     _seed_items_if_empty()
     all_items = list(Item.objects.all())
 
     for adv in adventurers_qs:
-        universal_consolidate(adv)  # Consolidan su propia billetera primero
-
+        universal_consolidate(adv)
         if adv.is_recovering:
             continue
 
-        # 1. Filtramos los items que ESTE aventurero específico SÍ puede usar
-        items_validos = [i for i in all_items if is_class_allowed(adv, i)]
+        valid_items = [i for i in all_items if is_class_allowed(adv, i)]
+        affordable_items = [i for i in valid_items if can_afford(adv, i)]
 
-        # Si no hay items válidos en la base de datos para él, no compra nada
-        if not items_validos:
+        if not affordable_items:
             continue
 
-        # 2. Compra Premium (Usando SOLO los items_validos)
-        if adv.silver_penny >= 1:
-            adv.silver_penny -= 1
-            pool = [i for i in items_validos if i.rarity in ['RAR', 'EPC', 'LEG']]
-            if not pool:
-                pool = items_validos
-            item = random.choice(pool)
-            _auto_equip(adv, item, event_log, "Premium")
+        purchased_item = None
 
-        # 3. Compra Común (Actualizado a cost_copper_penny por el nuevo CostMixin)
-        elif adv.copper_penny >= 10:
-            comunes_comprables = [
-                i for i in items_validos if i.cost_copper_penny <= 10]
+        # primera prioridad: supervivencia
+        if adv.current_hp < (adv.max_hp * 0.4):
+            potions = [i for i in affordable_items if i.item_type == 'CNS']
+            if potions:
+                purchased_item = max(potions, key=lambda x: get_item_score(x))
 
-            if comunes_comprables:
-                item = random.choice(comunes_comprables)
-                # Compran solo si pueden pagar y recibir vuelto exacto
-                if pay_with_change(adv, item.cost_copper_penny):
-                    _auto_equip(adv, item, event_log, "Común")
+        # segunda prioridad: busca el mayor salto de estadísticas
+        if not purchased_item:
+            best_upgrade = None
+            best_score_diff = 0
+
+            for item in affordable_items:
+                if item.item_type in ['CNS', 'MSC']:
+                    continue
+
+                score_new = get_item_score(item)
+                curr_score = -1
+
+                if item.item_type == 'RNG':
+                    s1 = get_item_score(
+                        adv.equip_ring_1) if adv.equip_ring_1 else -1
+                    s2 = get_item_score(
+                        adv.equip_ring_2) if adv.equip_ring_2 else -1
+                    curr_score = min(s1, s2)
+                else:
+                    slot_map = {
+                        'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
+                        'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
+                        'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
+                        'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
+                    }
+                    slot_name = slot_map.get(item.item_type)
+                    if slot_name:
+                        curr_item = getattr(adv, slot_name)
+                        curr_score = get_item_score(
+                            curr_item) if curr_item else -1
+
+                        if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
+                            continue
+
+                if score_new > curr_score:
+                    diff = score_new - curr_score
+                    if diff > best_score_diff:
+                        best_score_diff = diff
+                        best_upgrade = item
+
+            if best_upgrade:
+                purchased_item = best_upgrade
+
+        # Ejecutar transacción
+        if purchased_item:
+            if pay_with_change(adv, purchased_item):
+                _auto_equip(adv, purchased_item, event_log, "Mercado")
 
 
 def consolidate_wealth(guild_id):
