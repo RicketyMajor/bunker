@@ -52,4 +52,4 @@ def conversor_temerant(po: int = 0, pp: int = 0, pc: int = 0):
 
 if __name__ == "__main__":
     # Cambiar los valores de po, pp y pc para probar diferentes conversiones
-    conversor_temerant(po=3, pp=0, pc=0)
+    conversor_temerant(po=15, pp=0, pc=0)
