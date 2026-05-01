@@ -412,7 +412,7 @@ class Command(BaseCommand):
                 "description": "Una daga hecha de hierro, ligera para el combate cuerpo a cuerpo.",
                 "item_type": "W1H",
                 "rarity": "COM",
-                "allowed_classes": ["RGR", "BBN", "ART", "DRD", "FTR", "PAL", "WIZ", "SOR", "WLK", "ROG", "BRD", "MNK"],
+                "allowed_classes": ["RGR", "BBN", "ART", "DRD", "FTR", "PAL", "WIZ", "SOR", "WLK", "ROG", "BRD"],
                 "cost_talento": 1,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 4,
@@ -500,10 +500,55 @@ class Command(BaseCommand):
                 "item_type": "W2H",
                 "rarity": "COM",
                 "allowed_classes": ["MNK"],
-                "cost_marco": 1,
+                "cost_real": 2,
+                "cost_talento": 2,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 6,
                 "bonus_damage": 1,
+            },
+
+            # MANOPLAS DE HIERRO (COMÚN)
+
+            {
+                "name": "Manoplas de Hierro",
+                "description": "Unas manoplas hechas de hierro, usadas por aquellos aque saben defenderse con los puños.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["MNK"],
+                "cost_talento": 1,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 4,
+                "bonus_damage": 0,
+            },
+
+            # MANGUAL (COMÚN)
+
+            {
+                "name": "Mangual",
+                "description": "Un mango de madera unido a varias bolas de hierro con púas mediante cadenas.",
+                "item_type": "W1H",
+                "rarity": "COM",
+                "allowed_classes": ["CLR", "BBN", "FTR", "PAL"],
+                "cost_real": 3,
+                "cost_iota": 5,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 8,
+                "bonus_damage": 0,
+            },
+
+            # MARTILLO LIGERO DE HIERRO (COMÚN)
+
+            {
+                "name": "Martillo Ligero de Hierro",
+                "description": "Un martillo hecho de hierro, ligero y contundente.",
+                "item_type": "W1H",
+                "rarity": "COM",
+                "allowed_classes": ["CLR", "BBN", "FTR", "PAL"],
+                "cost_talento": 1,
+                "cost_iota": 5,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 4,
+                "bonus_damage": 0,
             },
 
 
