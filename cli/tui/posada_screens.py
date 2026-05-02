@@ -235,28 +235,28 @@ class AdventurerDetailsModal(ModalScreen[None]):
                 # --- SECCIÓN DE ATRIBUTOS ---
                 yield Label("Atributos:", classes="section_title")
                 with Grid(classes="stats_grid"):
-                    yield Label(f"💪 Fuerza: {a.get('str')}")
-                    yield Label(f"🧠 Inteligencia: {a.get('int')}")
-                    yield Label(f"🏃 Destreza: {a.get('dex')}")
-                    yield Label(f"🦉 Sabiduría: {a.get('wis')}")
-                    yield Label(f"🛡️ Constitución: {a.get('con')}")
-                    yield Label(f"🗣️ Carisma: {a.get('cha')}")
-                    yield Label(f"🍀 Suerte: {a.get('luk')}")
+                    yield Label(f"Fuerza: {a.get('str')}")
+                    yield Label(f"Inteligencia: {a.get('int')}")
+                    yield Label(f"Destreza: {a.get('dex')}")
+                    yield Label(f"Sabiduría: {a.get('wis')}")
+                    yield Label(f"Constitución: {a.get('con')}")
+                    yield Label(f"Carisma: {a.get('cha')}")
+                    yield Label(f"Suerte: {a.get('luk')}")
                 # --- SECCIÓN DE EQUIPO ---
                 yield Label("Equipo:", classes="section_title")
                 with Grid(classes="inv_grid"):
-                    yield Label(f"🗡️ M. Principal: {a.get('equip_main_hand')}")
-                    yield Label(f"🛡️ M. Secundaria: {a.get('equip_off_hand')}")
-                    yield Label(f"🪖 Cabeza: {a.get('equip_head')}")
-                    yield Label(f"👕 Torso: {a.get('equip_torso')}")
-                    yield Label(f"🧤 Manos: {a.get('equip_hands')}")
-                    yield Label(f"👖 Piernas: {a.get('equip_legs')}")
-                    yield Label(f"👟 Pies: {a.get('equip_feet')}")
-                    yield Label(f"📿 Collar: {a.get('equip_necklace')}")
-                    yield Label(f"💍 Anillo 1: {a.get('equip_ring_1')}")
-                    yield Label(f"💍 Anillo 2: {a.get('equip_ring_2')}")
-                    yield Label(f"腕 Brazalete: {a.get('equip_bracelet')}")
-                    yield Label(f"👂 Aretes: {a.get('equip_earring')}")
+                    yield Label(f"Mano Principal: {a.get('equip_main_hand')}")
+                    yield Label(f"Mano Secundaria: {a.get('equip_off_hand')}")
+                    yield Label(f"Cabeza: {a.get('equip_head')}")
+                    yield Label(f"Torso: {a.get('equip_torso')}")
+                    yield Label(f"Manos: {a.get('equip_hands')}")
+                    yield Label(f"Piernas: {a.get('equip_legs')}")
+                    yield Label(f"Pies: {a.get('equip_feet')}")
+                    yield Label(f"Collar: {a.get('equip_necklace')}")
+                    yield Label(f"Anillo 1: {a.get('equip_ring_1')}")
+                    yield Label(f"Anillo 2: {a.get('equip_ring_2')}")
+                    yield Label(f"Brazalete: {a.get('equip_bracelet')}")
+                    yield Label(f"Aretes: {a.get('equip_earring')}")
                     yield Label("")
 
                 # --- SECCIÓN DE COMBATE ---
@@ -268,17 +268,17 @@ class AdventurerDetailsModal(ModalScreen[None]):
                 yield Label("Tesoro Personal:", classes="section_title")
                 w = a.get('wealth', {})
                 with Grid(classes="wealth_grid"):
-                    yield Label(f"👑 Marco: {w.get('marco', 0)}")
-                    yield Label(f"🔷 Real: {w.get('real', 0)}")
-                    yield Label(f"🔱 Talento: {w.get('talento', 0)}")
-                    yield Label(f"⚜️ Sueldo: {w.get('sueldo', 0)}")
-                    yield Label(f"⚪ P. Plata: {w.get('silver_penny', 0)}")
-                    yield Label(f"🔹 Iota: {w.get('iota', 0)}")
-                    yield Label(f"🟠 P. Cobre: {w.get('copper_penny', 0)}")
-                    yield Label(f"🪙 Drabín: {w.get('drabin', 0)}")
-                    yield Label(f"⚪ Ardite: {w.get('ardite', 0)}")
-                    yield Label(f"🔘 P. Hierro: {w.get('iron_penny', 0)}")
-                    yield Label(f"🟤 1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
+                    yield Label(f"Marco: {w.get('marco', 0)}")
+                    yield Label(f"Real: {w.get('real', 0)}")
+                    yield Label(f"Talento: {w.get('talento', 0)}")
+                    yield Label(f"Sueldo: {w.get('sueldo', 0)}")
+                    yield Label(f"P. Plata: {w.get('silver_penny', 0)}")
+                    yield Label(f"Iota: {w.get('iota', 0)}")
+                    yield Label(f"P. Cobre: {w.get('copper_penny', 0)}")
+                    yield Label(f"Drabín: {w.get('drabin', 0)}")
+                    yield Label(f"Ardite: {w.get('ardite', 0)}")
+                    yield Label(f"P. Hierro: {w.get('iron_penny', 0)}")
+                    yield Label(f"1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
 
             yield Button("Abrir Mochila", variant="success", id="btn_open_backpack")
             yield Button("Cerrar Ficha", variant="primary", id="btn_close_details")
@@ -653,9 +653,9 @@ class PosadaMainScreen(Screen):
 
         inv = guild.get("inventory", {})
         vault_text = (
-            f"👑 Marcos: {inv.get('marco', 0)} | 🔷 Reales: {inv.get('real', 0)} | 🔱 Talentos: {inv.get('talento', 0)} | ⚜️ Sueldos: {inv.get('sueldo', 0)}\n"
-            f"⚪ P. Plata: {inv.get('silver_penny', 0)} | 🔹 Iotas: {inv.get('iota', 0)} | 🟠 P. Cobre: {inv.get('copper_penny', 0)} | 🪙 Drabines: {inv.get('drabin', 0)}\n"
-            f"⚪ Ardites: {inv.get('ardite', 0)} | 🔘 P. Hierro: {inv.get('iron_penny', 0)} | 🟤 1/2 P. Hierro: {inv.get('iron_half_penny', 0)}"
+            f"Marcos: {inv.get('marco', 0)} | Reales: {inv.get('real', 0)} | Talentos: {inv.get('talento', 0)} | Sueldos: {inv.get('sueldo', 0)}\n"
+            f"P. Plata: {inv.get('silver_penny', 0)} | Iotas: {inv.get('iota', 0)} | P. Cobre: {inv.get('copper_penny', 0)} | Drabines: {inv.get('drabin', 0)}\n"
+            f"Ardites: {inv.get('ardite', 0)} | P. Hierro: {inv.get('iron_penny', 0)} | 1/2 P. Hierro: {inv.get('iron_half_penny', 0)}"
         )
         self.query_one("#lbl_guild_vault", Label).update(vault_text)
 

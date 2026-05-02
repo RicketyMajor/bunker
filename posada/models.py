@@ -358,24 +358,39 @@ class DeepWorkSession(models.Model):
 
 
 class HabitDifficulty(models.TextChoices):
-    S = 'S', 'Rango S (Épico - Mucha XP)'
+    S = 'S', 'Rango S (Épico)'
     A = 'A', 'Rango A (Difícil)'
     B = 'B', 'Rango B (Medio)'
-    C = 'C', 'Rango C (Fácil - Poca XP)'
+    C = 'C', 'Rango C (Fácil)'
 
 
 class DailyHabit(models.Model):
-    """Hábitos de la vida real que el usuario debe marcar diariamente."""
+    """Hábitos de la vida real que el usuario debe marcar."""
     name = models.CharField(max_length=100)
     difficulty = models.CharField(
         max_length=1, choices=HabitDifficulty.choices, default=HabitDifficulty.C)
 
-    # Compara esto con la fecha de hoy.
+    # --- Frecuencia Personalizable ---
+    # Guarda un string con los números de los días válidos. Ej: "0,1,2,3,4" para Lunes a Viernes.
+    # Lunes=0, Martes=1, Miércoles=2, Jueves=3, Viernes=4, Sábado=5, Domingo=6
+    valid_days = models.CharField(max_length=20, default="0,1,2,3,4,5,6",
+                                  help_text="Días de la semana en los que aplica (0=Lun, 6=Dom)")
+
+    # Compara esto con la fecha de hoy para saber si ya se hizo o si hay deuda
     last_completed_date = models.DateField(null=True, blank=True)
     created_at = models.DateField(auto_now_add=True)
 
+    # --- Rachas y Undo ---
+    current_streak = models.PositiveIntegerField(
+        default=0, help_text="Días consecutivos cumpliendo el hábito")
+
+    # Guarda los valores de la última recompensa para poder restar exacto si el usuario presiona "Deshacer"
+    last_xp_reward = models.PositiveIntegerField(default=0)
+    last_coin_type = models.CharField(max_length=20, blank=True, null=True)
+    last_coin_amount = models.PositiveIntegerField(default=0)
+
     def __str__(self):
-        return f"[{self.difficulty}] {self.name}"
+        return f"[{self.difficulty}] {self.name} (Racha: {self.current_streak})"
 
 
 class DailyStatistic(models.Model):
@@ -419,3 +434,52 @@ class Monster(models.Model):
 
     def __str__(self):
         return f"[{self.get_category_display()}] {self.name}"
+
+
+class ChartPolarity(models.TextChoices):
+    POSITIVE = 'POS', 'Positivo (Más alto es mejor)'
+    NEGATIVE = 'NEG', 'Negativo (Más bajo es mejor)'
+
+
+class CustomChart(models.Model):
+    """Define la estructura y las reglas de un gráfico personalizable."""
+    title = models.CharField(
+        max_length=100, help_text="Ej: 'Horas de Deep Work' o 'Tiempo en Pantalla'")
+    y_axis_label = models.CharField(
+        max_length=50, default="Horas", help_text="Unidad del Eje Y")
+    x_axis_label = models.CharField(
+        max_length=50, default="Día del Mes", help_text="Unidad del Eje X")
+
+    polarity = models.CharField(
+        max_length=3, choices=ChartPolarity.choices, default=ChartPolarity.POSITIVE)
+    goal_x_value = models.PositiveIntegerField(
+        default=30, help_text="Valor de X donde se cierra el ciclo y se da la recompensa (Ej: Día 30)")
+
+    # Estado del gráfico
+    is_active = models.BooleanField(
+        default=True, help_text="Si es False, el gráfico fue reclamado/reiniciado.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Gráfico: {self.title} (Meta X: {self.goal_x_value})"
+
+
+class ChartDataPoint(models.Model):
+    """Una coordenada individual (X, Y) dentro de un gráfico específico."""
+    chart = models.ForeignKey(
+        CustomChart, on_delete=models.CASCADE, related_name='data_points')
+
+    # Coordenadas
+    x_value = models.FloatField(help_text="Ej: Día 1, Día 2...")
+    y_value = models.FloatField(
+        help_text="Ej: 4.5 (representando 4 horas y 30 mins)")
+
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Asegura que no haya dos puntos en la misma "X" (por ejemplo, dos registros para el Día 4)
+        unique_together = ('chart', 'x_value')
+        ordering = ['x_value']
+
+    def __str__(self):
+        return f"{self.chart.title}: X={self.x_value}, Y={self.y_value}"
