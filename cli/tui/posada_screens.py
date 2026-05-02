@@ -403,36 +403,126 @@ class InventoryModal(ModalScreen[None]):
 
 
 class NewHabitModal(ModalScreen[dict]):
-    """Ventana para añadir un nuevo hábito al tablón."""
-
     CSS = """
     #habit_dialog { width: 50; height: auto; padding: 1 2; border: solid $success; background: $surface; }
     .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
-    #btn_save_habit { width: 100%; margin-top: 1; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
     """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="habit_dialog"):
             yield Label("Nuevo Hábito Diario", classes="modal_title")
-            yield Input(placeholder="Ej: Ir al gimnasio, Leer 20 págs...", id="habit_name")
+            yield Input(placeholder="Ej: Ir al gimnasio...", id="habit_name")
+            yield Label("Días válidos (0=Lun, 6=Dom. Ej: 0,1,2,3,4):")
+            yield Input(value="0,1,2,3,4,5,6", id="habit_days")
             yield Label("Dificultad y Recompensa:")
-            yield Select((
-                ("Rango S (Mucha XP y Oro)", "S"),
-                ("Rango A (Difícil)", "A"),
-                ("Rango B (Medio)", "B"),
-                ("Rango C (Fácil - Poco XP)", "C")
-            ), id="habit_diff", value="C")
-            yield Button("Añadir al Tablón", variant="success", id="btn_save_habit")
+            yield Select((("Rango S (Épico)", "S"), ("Rango A (Difícil)", "A"), ("Rango B (Medio)", "B"), ("Rango C (Fácil)", "C")), id="habit_diff", value="C")
+            with Horizontal(classes="btn_row"):
+                yield Button("Añadir", variant="success", id="btn_save_habit")
+                yield Button("Cancelar", variant="error", id="btn_cancel_habit")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn_save_habit":
+        if event.button.id == "btn_cancel_habit":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_habit":
             name = self.query_one("#habit_name", Input).value
             diff = self.query_one("#habit_diff", Select).value
+            days = self.query_one("#habit_days", Input).value
             if name:
-                self.dismiss({"name": name, "difficulty": diff})
+                self.dismiss(
+                    {"name": name, "difficulty": diff, "valid_days": days})
             else:
                 self.app.notify(
                     "El hábito necesita un nombre.", severity="error")
+
+# --- MODAL DE NUEVO GRÁFICO ---
+
+
+class NewChartModal(ModalScreen[dict]):
+    """Ventana para crear un nuevo lienzo de seguimiento (Tracker)."""
+
+    CSS = """
+    #new_chart_dialog { width: 50; height: auto; padding: 1 2; border: solid $accent; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="new_chart_dialog"):
+            yield Label("Crear Nuevo Tracker", classes="modal_title")
+            yield Input(placeholder="Título (Ej: Horas de Sueño)", id="chart_title")
+            yield Input(placeholder="Eje Y (Ej: Horas)", id="chart_y_label", value="Horas")
+            yield Input(placeholder="Eje X (Ej: Día del Mes)", id="chart_x_label", value="Día")
+            yield Input(placeholder="Meta Eje X (Ej: 30 para un mes)", id="chart_goal_x", value="30")
+
+            yield Label("Polaridad del Gráfico:")
+            yield Select(
+                (("Positivo (Subir es bueno, ej: Ejercicio)", "POS"),
+                 ("Negativo (Bajar es bueno, ej: Redes Sociales)", "NEG")),
+                id="chart_polarity", value="POS"
+            )
+
+            with Horizontal(classes="btn_row"):
+                yield Button("Crear Gráfico", variant="success", id="btn_save_chart")
+                yield Button("Cancelar", variant="error", id="btn_cancel_chart")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_chart":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_chart":
+            title = self.query_one("#chart_title", Input).value
+            y_lbl = self.query_one("#chart_y_label", Input).value
+            x_lbl = self.query_one("#chart_x_label", Input).value
+            goal = self.query_one("#chart_goal_x", Input).value
+            pol = self.query_one("#chart_polarity", Select).value
+
+            if title and goal.isdigit():
+                self.dismiss({
+                    "title": title, "y_label": y_lbl, "x_label": x_lbl,
+                    "goal_x": int(goal), "polarity": pol
+                })
+            else:
+                self.app.notify(
+                    "Faltan datos o la meta no es un número.", severity="error")
+
+# --- MODAL DE AÑADIR DATO AL GRÁFICO ---
+
+
+class AddChartDataModal(ModalScreen[dict]):
+    """Ventana para ingresar coordenadas manuales al gráfico actual."""
+
+    CSS = """
+    #add_data_dialog { width: 40; height: auto; padding: 1 2; border: solid $success; background: $surface; }
+    .modal_title { text-style: bold; color: $success; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="add_data_dialog"):
+            yield Label("Añadir Coordenada (X, Y)", classes="modal_title")
+            yield Input(placeholder="Valor Eje X (Ej: 14)", id="input_x")
+            yield Input(placeholder="Valor Eje Y (Ej: 2.5)", id="input_y")
+            with Horizontal(classes="btn_row"):
+                yield Button("Guardar", variant="success", id="btn_save_data")
+                yield Button("Cancelar", variant="error", id="btn_cancel_data")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_data":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_data":
+            x_val = self.query_one("#input_x", Input).value
+            y_val = self.query_one("#input_y", Input).value
+            try:
+                # Plotext requiere números para graficar correctamente
+                self.dismiss({"x": float(x_val), "y": float(y_val)})
+            except ValueError:
+                self.app.notify(
+                    "Ambos valores deben ser numéricos (Ej: 2.5).", severity="error")
+
+
 # --- PESTAÑAS ---
 
 
@@ -456,8 +546,14 @@ class TavernTab(TabPane):
 
 class MissionsTab(TabPane):
     can_focus = True
-    BINDINGS = [("m", "complete_habit", "Marcar Hecho"),
-                ("+", "add_habit", "Añadir Hábito")]
+    BINDINGS = [
+        ("m", "complete_habit", "Marcar Hecho"),
+        ("+", "add_habit", "Añadir Hábito"),
+        ("<", "prev_chart", "Gráfico Anterior"),
+        (">", "next_chart", "Siguiente Gráfico"),
+        ("a", "add_chart_data", "Añadir Dato al Gráfico"),
+        ("n", "new_chart", "Crear Nuevo Gráfico")
+    ]
 
 # --- PANTALLA PRINCIPAL ---
 
@@ -489,6 +585,16 @@ class PosadaMainScreen(Screen):
         Binding("f", "refresh_tavern", "Invitar", show=False),
         Binding("m", "complete_habit", "Marcar Hecho", show=False),
         Binding("+", "add_habit", "Añadir Hábito", show=False),
+        Binding("<", "prev_chart", "Gráfico Anterior", show=False),
+        Binding(">", "next_chart", "Siguiente Gráfico", show=False),
+        Binding("a", "add_chart_data", "Añadir Dato", show=False),
+        Binding("g", "new_chart", "Crear Gráfico", show=False),
+        Binding("D", "delete_chart", "Borrar Gráfico", show=False),
+        Binding("x", "delete_habit", "Borrar Hábito", show=False),
+        Binding("u", "undo_habit", "Deshacer Hábito", show=False),
+        Binding("R", "claim_chart", "Reclamar Gráfico",
+                show=False),
+
     ]
 
     CSS = """
@@ -583,8 +689,7 @@ class PosadaMainScreen(Screen):
 
                         # Gráfico Analítico
                         with Vertical(id="stats_col", classes="half_width"):
-                            yield Label("Productividad Histórica (Deep Work)", classes="section_title")
-                            # Aquí inyectamos el lienzo del gráfico
+                            yield Label("Cargando gráficos...", id="chart_title_label", classes="section_title")
                             yield PlotextPlot(id="productivity_plot")
         yield Label("", id="tab_controls")
         yield Footer()
@@ -856,7 +961,7 @@ class PosadaMainScreen(Screen):
                 "La Taberna -> [r] Reclutar Seleccionado  |  [f] Pagar Rondas de Cerveza (Refrescar)")
         elif pane_id == "tab_missions":
             lbl.update(
-                "Misiones -> [m] Marcar Hábito Hecho  |  [+] Añadir Nuevo Hábito al Tablón")
+                "Misiones -> [m] Marcar | [u] Deshacer | [x] Borrar | [<][>] Carrusel | [a] Coordenada | [R] Reclamar")
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Permite navegar súper rápido entre pestañas presionando 1, 2, 3 o 4."""
@@ -1082,25 +1187,177 @@ class PosadaMainScreen(Screen):
     # --- TABLÓN DE MISIONES Y GRÁFICOS ---
     @work(thread=True)
     def fetch_missions_data(self):
-        """Obtiene la lista de hábitos y la data del gráfico."""
+        """Obtiene hábitos y TODOS los gráficos."""
         try:
-            # 1. Obtener Hábitos
+            # Hábitos
             r_habits = httpx.get(f"{API_POSADA_BASE}habits/", timeout=5.0)
             if r_habits.status_code == 200:
                 data = r_habits.json()
                 self.app.call_from_thread(
                     self.render_habits, data.get("habits", []))
-                # Mostrar notificaciones si hubo penalizaciones
                 for penalty in data.get("penalties_applied", []):
                     self.app.call_from_thread(
                         self.app.notify, penalty, severity="warning")
 
-            # Obtener Gráficos
-            r_stats = httpx.get(f"{API_POSADA_BASE}stats/graph/", timeout=5.0)
-            if r_stats.status_code == 200:
-                self.app.call_from_thread(self.render_plot, r_stats.json())
+            # Gráficos
+            r_charts = httpx.get(f"{API_POSADA_BASE}charts/", timeout=5.0)
+            if r_charts.status_code == 200:
+                charts_data = r_charts.json().get("charts", [])
+                self.app.call_from_thread(
+                    self.update_charts_cache, charts_data)
         except Exception:
             pass
+
+    def update_charts_cache(self, charts_data):
+        self.charts_cache = charts_data
+        if not hasattr(self, 'current_chart_index'):
+            self.current_chart_index = 0
+        self.render_plot()
+
+    def render_plot(self):
+        """Dibuja el gráfico activo usando Plotext."""
+        if not hasattr(self, 'charts_cache') or not self.charts_cache:
+            return
+
+        # Seguridad de índice
+        if self.current_chart_index >= len(self.charts_cache):
+            self.current_chart_index = 0
+
+        chart_data = self.charts_cache[self.current_chart_index]
+
+        # Actualizar Título del Carrusel
+        total = len(self.charts_cache)
+        curr = self.current_chart_index + 1
+        lbl = self.query_one("#chart_title_label", Label)
+        lbl.update(f"◀ [{curr}/{total}] {chart_data['title']} ▶")
+
+        plot_widget = self.query_one("#productivity_plot", PlotextPlot)
+        plt = plot_widget.plt
+        plt.clear_figure()
+
+        x = chart_data.get("x_data", [])
+        y = chart_data.get("y_data", [])
+
+        plt.theme("dark")
+        if x and y:
+            # Usa plot para líneas continuas en vez de bar
+            plt.plot(x, y, marker="braille", color="cyan")
+        else:
+            plt.title("Presiona 'a' para añadir el primer dato.")
+
+        # Metadatos del gráfico
+        plt.title(
+            f"Meta: Día {chart_data['goal_x']} | {chart_data['polarity']}")
+        plt.xlabel(chart_data['x_label'])
+        plt.ylabel(chart_data['y_label'])
+
+        plot_widget.refresh()
+
+    def action_prev_chart(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        if hasattr(self, 'charts_cache') and self.charts_cache:
+            self.current_chart_index = (
+                self.current_chart_index - 1) % len(self.charts_cache)
+            self.render_plot()
+
+    def action_next_chart(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        if hasattr(self, 'charts_cache') and self.charts_cache:
+            self.current_chart_index = (
+                self.current_chart_index + 1) % len(self.charts_cache)
+            self.render_plot()
+
+    # --- ACCIONES DE CREACIÓN DE GRÁFICOS Y DATOS ---
+    def action_new_chart(self) -> None:
+        """Abre el modal para crear un gráfico si estás en la pestaña de Misiones."""
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        self.app.push_screen(NewChartModal(), self.submit_new_chart)
+
+    @work(thread=True)
+    def submit_new_chart(self, result: dict | None) -> None:
+        if result is None:
+            return
+        try:
+            resp = httpx.post(
+                f"{API_POSADA_BASE}charts/create/", json=result, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, resp.json().get("message"), severity="success")
+                # Al recargar, envía el carrusel al último gráfico creado
+                self.current_chart_index = -1
+                self.app.call_from_thread(self.fetch_missions_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al crear el gráfico.", severity="error")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "El Gremio no responde.", severity="error")
+
+    def action_add_chart_data(self) -> None:
+        """Abre el modal para añadir coordenadas (X,Y) al gráfico actual."""
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        if not hasattr(self, 'charts_cache') or not self.charts_cache:
+            self.app.notify(
+                "No hay gráficos activos. Crea uno primero (n).", severity="warning")
+            return
+        self.app.push_screen(AddChartDataModal(), self.submit_chart_data)
+
+    @work(thread=True)
+    def submit_chart_data(self, result: dict | None) -> None:
+        if result is None:
+            return
+
+        current_chart = self.charts_cache[self.current_chart_index]
+        payload = {
+            "chart_id": current_chart["id"],
+            "x_value": result["x"],
+            "y_value": result["y"]
+        }
+
+        try:
+            resp = httpx.post(
+                f"{API_POSADA_BASE}charts/add_point/", json=payload, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, resp.json().get("message"), severity="success")
+                self.app.call_from_thread(self.fetch_missions_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al guardar la coordenada.", severity="error")
+        except Exception:
+            pass
+
+    def action_delete_chart(self) -> None:
+        """Elimina el gráfico que se está viendo actualmente."""
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        if not hasattr(self, 'charts_cache') or not self.charts_cache:
+            self.app.notify("No hay gráficos para borrar.", severity="warning")
+            return
+
+        current_chart = self.charts_cache[self.current_chart_index]
+        self.request_chart_deletion(current_chart["id"])
+
+    @work(thread=True)
+    def request_chart_deletion(self, chart_id: int) -> None:
+        try:
+            resp = httpx.delete(
+                f"{API_POSADA_BASE}charts/delete/{chart_id}/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, "Gráfico destruido en la Bóveda.", severity="success")
+                self.current_chart_index = 0  # Volvemos al primer gráfico por seguridad
+                self.app.call_from_thread(self.fetch_missions_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "No se pudo borrar el gráfico.", severity="error")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Fallo de conexión.", severity="error")
 
     def render_habits(self, habits):
         self.habits_cache = habits
@@ -1109,26 +1366,6 @@ class PosadaMainScreen(Screen):
         for h in habits:
             status = "Completado" if h["completed_today"] else "Pendiente"
             table.add_row(h["name"], h["difficulty"], status, key=str(h["id"]))
-
-    def render_plot(self, stats_data):
-        """Dibuja el gráfico de barras en la terminal usando Plotext."""
-        plot_widget = self.query_one("#productivity_plot", PlotextPlot)
-        plt = plot_widget.plt
-        plt.clear_figure()
-
-        dates = stats_data.get("dates", [])
-        dw_minutes = stats_data.get("deep_work", [])
-
-        if not dates:
-            plt.title("No hay datos suficientes aún.")
-        else:
-            plt.theme("dark")
-            plt.bar(dates, dw_minutes, marker="braille", color="cyan")
-            plt.title("Minutos de Deep Work por Día")
-            plt.xlabel("Fecha")
-            plt.ylabel("Minutos")
-
-        plot_widget.refresh()
 
     def action_add_habit(self) -> None:
         if self.query_one(TabbedContent).active == "tab_missions":
@@ -1173,5 +1410,54 @@ class PosadaMainScreen(Screen):
             else:
                 self.app.call_from_thread(
                     self.app.notify, resp.json().get("message"), severity="warning")
+        except Exception:
+            pass
+
+    def action_delete_habit(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        table = self.query_one("#missions_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key
+            httpx.delete(f"{API_POSADA_BASE}habits/delete/{row_key.value}/")
+            self.fetch_missions_data()
+        except Exception:
+            pass
+
+    def action_undo_habit(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        table = self.query_one("#missions_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key
+            resp = httpx.post(f"{API_POSADA_BASE}habits/undo/",
+                              json={"habit_id": row_key.value})
+            if resp.status_code == 200:
+                self.app.notify(resp.json().get("message"), severity="warning")
+                self.fetch_missions_data()
+                self.sync_guild_status()
+            else:
+                self.app.notify(resp.json().get("message"), severity="error")
+        except Exception:
+            pass
+
+    def action_claim_chart(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        if not hasattr(self, 'charts_cache') or not self.charts_cache:
+            return
+
+        current_chart = self.charts_cache[self.current_chart_index]
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}charts/claim/",
+                              json={"chart_id": current_chart["id"]}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.notify(resp.json().get("message"), severity="success")
+                self.fetch_missions_data()
+                self.sync_guild_status()
+            else:
+                self.app.notify(resp.json().get("message"), severity="warning")
         except Exception:
             pass

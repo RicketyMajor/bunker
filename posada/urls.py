@@ -19,4 +19,13 @@ urlpatterns = [
     path('api/inventory/<str:target_type>/<int:target_id>/',
          views.get_inventory, name='get_inventory'),
     path('api/inventory/action/', views.inventory_action, name='inventory_action'),
+    path('api/charts/', views.list_charts, name='list_charts'),
+    path('api/charts/add_point/', views.add_chart_point, name='add_chart_point'),
+    path('api/charts/create/', views.create_chart, name='create_chart'),
+    path('api/charts/delete/<int:chart_id>/',
+         views.delete_chart, name='delete_chart'),
+    path('api/habits/delete/<int:habit_id>/',
+         views.delete_habit, name='delete_habit'),
+    path('api/habits/undo/', views.undo_habit, name='undo_habit'),
+    path('api/charts/claim/', views.claim_chart_reward, name='claim_chart_reward'),
 ]

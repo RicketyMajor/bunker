@@ -1,9 +1,9 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity
+from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity
 import random
-from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate
+from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward
 from django.utils import timezone
 from datetime import timedelta
 
@@ -282,18 +282,18 @@ def list_habits(request):
 
 @api_view(['POST'])
 def create_habit(request):
-    """Crea un nuevo hábito desde la TUI."""
     data = request.data
     habit = DailyHabit.objects.create(
         name=data.get('name'),
-        difficulty=data.get('difficulty', 'C')
+        difficulty=data.get('difficulty', 'C'),
+        # Guarda los días
+        valid_days=data.get('valid_days', '0,1,2,3,4,5,6')
     )
-    return Response({"status": "success", "message": f"Hábito '{habit.name}' añadido al tablón."})
+    return Response({"status": "success", "message": f"Hábito '{habit.name}' añadido."})
 
 
 @api_view(['POST'])
 def complete_habit(request):
-    """Marca un hábito como hecho, otorga recompensas y cura fatiga."""
     today = timezone.now().date()
     habit_id = request.data.get('habit_id')
 
@@ -314,6 +314,12 @@ def complete_habit(request):
         }
         r = rewards.get(habit.difficulty)
 
+        # --- Guardar metadatos para el UNDO y racha ---
+        habit.last_xp_reward = r['xp']
+        habit.last_coin_type = r['coin']
+        habit.last_coin_amount = r['amt']
+        habit.current_streak += 1
+
         # Otorga XP al Gremio y verifica si sube de nivel
         old_level = guild.level
         guild.experience += r['xp']
@@ -322,14 +328,12 @@ def complete_habit(request):
         while guild.experience >= 500:
             guild.level += 1
             guild.experience -= 500
-
         guild.save()
 
         lvl_msg = f" ¡Gremio Nv. {guild.level}!" if guild.level > old_level else ""
 
         for adv in adventurers:
             adv.experience += r['xp']
-            # CADA HÁBITO CURA 1 PILA DE FATIGA
             if adv.fatigue_stacks > 0:
                 adv.fatigue_stacks -= 1
             adv.save()
@@ -337,9 +341,10 @@ def complete_habit(request):
         habit.last_completed_date = today
         habit.save()
 
+        lvl_msg = f" ¡Gremio Nv. {guild.level}!" if guild.level > old_level else ""
         return Response({
             "status": "success",
-            "message": f"¡Hábito '{habit.name}' completado! +{r['xp']} XP y {r['amt']} {r['coin']}. Fatiga reducida.{lvl_msg}"
+            "message": f"¡Hábito '{habit.name}' completado! (Racha: {habit.current_streak}). Fatiga reducida.{lvl_msg}"
         })
     except DailyHabit.DoesNotExist:
         return Response({"status": "error", "message": "Hábito no encontrado."}, status=404)
@@ -439,3 +444,140 @@ def inventory_action(request):
 
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+
+
+@api_view(['GET'])
+def list_charts(request):
+    """Devuelve todos los gráficos activos y sus coordenadas ordenadas."""
+    charts = CustomChart.objects.filter(is_active=True).order_by('created_at')
+
+    # Si no existe ningún gráfico, crea uno por defecto para Deep Work
+    if not charts.exists():
+        default_chart = CustomChart.objects.create(
+            title="Horas de Deep Work",
+            y_axis_label="Horas",
+            x_axis_label="Día del Mes",
+            goal_x_value=30
+        )
+        charts = [default_chart]
+
+    data = []
+    for c in charts:
+        points = c.data_points.all().order_by('x_value')
+        data.append({
+            "id": c.id,
+            "title": c.title,
+            "x_label": c.x_axis_label,
+            "y_label": c.y_axis_label,
+            "goal_x": c.goal_x_value,
+            "polarity": c.get_polarity_display(),
+            "x_data": [p.x_value for p in points],
+            "y_data": [p.y_value for p in points],
+        })
+
+    return Response({"charts": data})
+
+
+@api_view(['POST'])
+def add_chart_point(request):
+    """Añade o actualiza una coordenada (X, Y) en un gráfico específico."""
+    chart_id = request.data.get('chart_id')
+    try:
+        x_val = float(request.data.get('x_value'))
+        y_val = float(request.data.get('y_value'))
+
+        chart = CustomChart.objects.get(id=chart_id)
+
+        # update_or_create permite sobreescribir si te equivocaste de valor en un día
+        point, created = ChartDataPoint.objects.update_or_create(
+            chart=chart, x_value=x_val,
+            defaults={'y_value': y_val}
+        )
+        msg = "Punto añadido." if created else "Punto actualizado."
+        return Response({"status": "success", "message": msg})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@api_view(['POST'])
+def create_chart(request):
+    """Permite crear un nuevo lienzo de tracking."""
+    try:
+        chart = CustomChart.objects.create(
+            title=request.data.get('title', 'Nuevo Tracker'),
+            y_axis_label=request.data.get('y_label', 'Valor'),
+            x_axis_label=request.data.get('x_label', 'Día'),
+            goal_x_value=int(request.data.get('goal_x', 30)),
+            polarity=request.data.get('polarity', 'POS')
+        )
+        return Response({"status": "success", "message": f"Gráfico '{chart.title}' creado."})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@api_view(['DELETE'])
+def delete_chart(request, chart_id):
+    """Elimina un gráfico por completo (y todos sus puntos)."""
+    try:
+        chart = CustomChart.objects.get(id=chart_id)
+        # Protege el gráfico base para que el sistema no se quede sin lienzos
+        if chart.id == 1 and CustomChart.objects.count() == 1:
+            return Response({"error": "No puedes borrar tu único gráfico."}, status=400)
+
+        title = chart.title
+        chart.delete()  # borra en cascada los ChartDataPoint asociados
+        return Response({"status": "success", "message": f"Gráfico '{title}' eliminado."})
+    except CustomChart.DoesNotExist:
+        return Response({"error": "Gráfico no encontrado."}, status=404)
+
+
+@api_view(['DELETE'])
+def delete_habit(request, habit_id):
+    try:
+        DailyHabit.objects.get(id=habit_id).delete()
+        return Response({"status": "success", "message": "Hábito eliminado del tablón."})
+    except DailyHabit.DoesNotExist:
+        return Response({"status": "error", "message": "Hábito no encontrado."}, status=404)
+
+
+@api_view(['POST'])
+def undo_habit(request):
+    habit_id = request.data.get('habit_id')
+    today = timezone.now().date()
+    try:
+        habit = DailyHabit.objects.get(id=habit_id)
+        if habit.last_completed_date != today:
+            return Response({"status": "error", "message": "Solo puedes deshacer hábitos completados hoy."}, status=400)
+
+        guild, _ = GuildProfile.objects.get_or_create(id=1)
+        # Revertir Gremio (no baja niveles, solo restamos la XP, truncando a 0 para no romper la DB)
+        guild.experience = max(0, guild.experience - habit.last_xp_reward)
+        if habit.last_coin_type:
+            curr_coin = getattr(guild, habit.last_coin_type)
+            setattr(guild, habit.last_coin_type, max(
+                0, curr_coin - habit.last_coin_amount))
+        guild.save()
+
+        # Revertir Aventureros (La XP no baja de 0 para no buguear el nivel)
+        for adv in Adventurer.objects.all():
+            adv.experience = max(0, adv.experience - habit.last_xp_reward)
+            adv.save()
+
+        habit.current_streak = max(0, habit.current_streak - 1)
+        habit.last_completed_date = today - timedelta(days=1)
+        habit.save()
+
+        return Response({"status": "success", "message": f"Hábito '{habit.name}' revertido con éxito."})
+    except DailyHabit.DoesNotExist:
+        return Response({"status": "error", "message": "Hábito no encontrado."}, status=404)
+
+
+@api_view(['POST'])
+def claim_chart_reward(request):
+    chart_id = request.data.get('chart_id')
+    try:
+        chart = CustomChart.objects.get(id=chart_id)
+        result = calculate_chart_reward(chart)
+        return Response(result)
+    except CustomChart.DoesNotExist:
+        return Response({"status": "error", "message": "Gráfico no encontrado."}, status=404)

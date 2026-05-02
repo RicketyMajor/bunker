@@ -398,10 +398,7 @@ def _auto_equip(adv, item, event_log, pull_type):
 
 
 def evaluate_daily_penalties():
-    """
-    Evaluación Perezosa: Revisa si hay hábitos sin marcar de días anteriores.
-    Aplica fatiga por cada día fallido y devuelve un log de lo sucedido.
-    """
+    """Evaluación Perezosa: Revisa hábitos omitidos respetando los días de descanso."""
     today = timezone.now().date()
     habits = DailyHabit.objects.all()
     adventurers = Adventurer.objects.all()
@@ -410,27 +407,33 @@ def evaluate_daily_penalties():
     penalty_log = []
 
     for habit in habits:
-        # Si nunca se ha completado, usa la fecha de creación como referencia
         ref_date = habit.last_completed_date if habit.last_completed_date else habit.created_at
         delta = (today - ref_date).days
 
-        # Si pasaron más de 1 día (es decir, mínimo ayer no se hizo)
         if delta > 1:
-            missed_days = delta - 1
-            total_fatigue_added += missed_days
+            missed_valid_days = 0
+            # Revisa cada día que pasó desde la última vez
+            for i in range(1, delta):
+                check_date = ref_date + timedelta(days=i)
+                # weekday() devuelve 0 para Lunes, 6 para Domingo
+                if str(check_date.weekday()) in habit.valid_days:
+                    missed_valid_days += 1
 
-            # Avanza la fecha a "ayer" para cobrar la deuda pero no castigar el día de hoy aún
+            if missed_valid_days > 0:
+                total_fatigue_added += missed_valid_days
+                habit.current_streak = 0  # Rompe la racha
+                penalty_log.append(
+                    f"Hábito roto: '{habit.name}' omitido por {missed_valid_days} día(s) válidos.")
+
             habit.last_completed_date = today - timedelta(days=1)
             habit.save()
-            penalty_log.append(
-                f"Hábito roto: '{habit.name}' omitido por {missed_days} día(s).")
 
     if total_fatigue_added > 0:
         for adv in adventurers:
             adv.fatigue_stacks += total_fatigue_added
             adv.save()
         penalty_log.append(
-            f"El Gremio se debilita. Todos reciben {total_fatigue_added} pila(s) de Fatiga (-{total_fatigue_added} a todos los stats).")
+            f"El Gremio recibe {total_fatigue_added} pila(s) de Fatiga.")
 
     return penalty_log
 
@@ -789,3 +792,61 @@ def consolidate_wealth(guild_id):
         }
     except GuildProfile.DoesNotExist:
         return {"status": "error", "message": "Gremio no encontrado"}
+
+
+def calculate_chart_reward(chart):
+    """Calcula el Área bajo la curva para dar recompensas cuando el gráfico llega a su meta."""
+    points = list(chart.data_points.all().order_by('x_value'))
+    if not points:
+        return {"status": "error", "message": "El gráfico está vacío."}
+
+    if points[-1].x_value < chart.goal_x_value:
+        return {"status": "warning", "message": f"Aún no llegas a la meta (Día {chart.goal_x_value})."}
+
+    # Cálculo del área Suma de Riemann trapezoidal
+    area = 0
+    for i in range(1, len(points)):
+        dx = points[i].x_value - points[i-1].x_value
+        dy = (points[i].y_value + points[i-1].y_value) / 2.0
+        area += dx * dy
+
+    # Evaluación del Rango
+    grade = 'C'
+    if chart.polarity == 'POS':
+        if area >= chart.goal_x_value * 2.0:
+            grade = 'S'
+        elif area >= chart.goal_x_value * 1.0:
+            grade = 'A'
+        elif area >= chart.goal_x_value * 0.5:
+            grade = 'B'
+    else:
+        if area <= chart.goal_x_value * 0.5:
+            grade = 'S'
+        elif area <= chart.goal_x_value * 1.0:
+            grade = 'A'
+        elif area <= chart.goal_x_value * 2.0:
+            grade = 'B'
+
+    # Recompensas
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+    xp_reward = {'S': 800, 'A': 400, 'B': 150, 'C': 50}[grade]
+    coin_reward = {'S': ('marco', 1), 'A': ('talento', 2), 'B': (
+        'sueldo', 5), 'C': ('silver_penny', 10)}[grade]
+
+    guild.experience += xp_reward
+    setattr(guild, coin_reward[0], getattr(
+        guild, coin_reward[0]) + coin_reward[1])
+    guild.save()
+    universal_consolidate(guild)
+
+    for adv in Adventurer.objects.all():
+        adv.experience += xp_reward
+        adv.save()
+
+    # Reiniciar el gráfico destruyendo los puntos para el próximo mes
+    chart.data_points.all().delete()
+
+    return {
+        "status": "success",
+        "message": f"¡Ciclo completado! Rango {grade}. Ganaste {xp_reward} XP y {coin_reward[1]} {coin_reward[0].title()}."
+    }
