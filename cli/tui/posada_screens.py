@@ -590,7 +590,7 @@ class PosadaMainScreen(Screen):
         Binding("a", "add_chart_data", "Añadir Dato", show=False),
         Binding("g", "new_chart", "Crear Gráfico", show=False),
         Binding("D", "delete_chart", "Borrar Gráfico", show=False),
-        Binding("x", "delete_habit", "Borrar Hábito", show=False),
+        Binding("-", "delete_habit", "Borrar Hábito", show=False),
         Binding("u", "undo_habit", "Deshacer Hábito", show=False),
         Binding("R", "claim_chart", "Reclamar Gráfico",
                 show=False),
@@ -961,7 +961,7 @@ class PosadaMainScreen(Screen):
                 "La Taberna -> [r] Reclutar Seleccionado  |  [f] Pagar Rondas de Cerveza (Refrescar)")
         elif pane_id == "tab_missions":
             lbl.update(
-                "Misiones -> [m] Marcar | [u] Deshacer | [x] Borrar | [<][>] Carrusel | [a] Coordenada | [R] Reclamar")
+                "Misiones -> [m] Marcar | [u] Deshacer | [-] Borrar | [<][>] Carrusel | [a] Coordenada | [R] Reclamar")
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Permite navegar súper rápido entre pestañas presionando 1, 2, 3 o 4."""
@@ -1414,16 +1414,34 @@ class PosadaMainScreen(Screen):
             pass
 
     def action_delete_habit(self) -> None:
+        """Captura el ID del hábito y llama al hilo de borrado."""
         if self.query_one(TabbedContent).active != "tab_missions":
             return
         table = self.query_one("#missions_table", DataTable)
         try:
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key
-            httpx.delete(f"{API_POSADA_BASE}habits/delete/{row_key.value}/")
-            self.fetch_missions_data()
+            self.request_habit_deletion(row_key.value)
         except Exception:
-            pass
+            self.app.notify(
+                "Selecciona un hábito de la tabla primero.", severity="warning")
+
+    @work(thread=True)
+    def request_habit_deletion(self, habit_id: str) -> None:
+        """Pide a Django que destruya el hábito."""
+        try:
+            resp = httpx.delete(
+                f"{API_POSADA_BASE}habits/delete/{habit_id}/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, resp.json().get("message"), severity="success")
+                self.app.call_from_thread(self.fetch_missions_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "No se pudo borrar el hábito.", severity="error")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Error de conexión con la base de datos.", severity="error")
 
     def action_undo_habit(self) -> None:
         if self.query_one(TabbedContent).active != "tab_missions":
