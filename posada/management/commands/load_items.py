@@ -551,6 +551,31 @@ class Command(BaseCommand):
                 "bonus_damage": 0,
             },
 
+            # ESCUDO DE MADERA (COMÚN)
+
+            {
+                "name": "Escudo de Madera",
+                "description": "Un escudo hecho de madera, adecuado para defenderse en combate.",
+                "item_type": "OFF",
+                "rarity": "COM",
+                "allowed_classes": ["BBN", "FTR", "PAL", "CLR"],
+                "cost_talento": 2,
+                "bonus_armor": 1,
+            },
+
+            # ESCUDO DE HIERRO (COMÚN)
+
+            {
+                "name": "Escudo de Hierro",
+                "description": "Un escudo hecho de hierro, más pesado, más resistente.",
+                "item_type": "OFF",
+                "rarity": "COM",
+                "allowed_classes": ["BBN", "FTR", "PAL", "CLR"],
+                "cost_real": 3,
+                "cost_iota": 5,
+                "bonus_armor": 2,
+            },
+
 
 
 
