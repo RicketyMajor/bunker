@@ -577,17 +577,34 @@ class Command(BaseCommand):
             },
 
             # VARITA DE APRENDIZ (COMÚN)
+
             {
                 "name": "Varita de Aprendiz",
                 "description": "Una varita hecha de madera, adecuada para lanzar hechizos de nivel bajo.",
                 "item_type": "W1H",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
-                "cost_talento": 2,
+                "cost_marco": 1,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 4,
-                "bonus_damage": 0,
+                "bonus_damage": 1,
             },
+
+            # LIBRO DE HECHIZOS DE APRENDIZ (COMÚN)
+
+            {
+                "name": "Libro de Hechizos de Aprendiz",
+                "description": "Un libro que contiene hechizos de nivel bajo.",
+                "item_type": "OFF",
+                "rarity": "COM",
+                "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
+                "cost_marco": 1,
+                "cost_talento": 2,
+                "bonus_int": 1,
+                "bonus_damage": 1,
+            },
+
+            #
 
 
 
