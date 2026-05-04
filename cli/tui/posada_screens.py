@@ -1364,8 +1364,15 @@ class PosadaMainScreen(Screen):
         table = self.query_one("#missions_table", DataTable)
         table.clear()
         for h in habits:
-            status = "Completado" if h["completed_today"] else "Pendiente"
-            table.add_row(h["name"], h["difficulty"], status, key=str(h["id"]))
+            # Usa Rich para darle color a la palabra Completado
+            status = "[bold green]Completado[/]" if h["completed_today"] else "[gray]Pendiente[/]"
+
+            # Construye el texto visual combinando la racha y el estado
+            racha = h.get("current_streak", 0)
+            estado_visual = f"🔥 Racha: {racha} | {status}"
+
+            table.add_row(h["name"], h["difficulty"],
+                          estado_visual, key=str(h["id"]))
 
     def action_add_habit(self) -> None:
         if self.query_one(TabbedContent).active == "tab_missions":

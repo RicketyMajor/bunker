@@ -271,7 +271,8 @@ def list_habits(request):
             "id": h.id,
             "name": h.name,
             "difficulty": h.get_difficulty_display(),
-            "completed_today": h.last_completed_date == today
+            "completed_today": h.last_completed_date == today,
+            "current_streak": h.current_streak
         })
 
     return Response({
