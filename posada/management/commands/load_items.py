@@ -604,7 +604,36 @@ class Command(BaseCommand):
                 "bonus_damage": 1,
             },
 
-            #
+            # ESPADA LARGA DE HIERRO (COMÚN)
+
+            {
+                "name": "Espada Larga de Hierro",
+                "description": "Una espada larga hecha de hierro. Inflinge un daño devastador.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["BBN", "FTR"],
+                "cost_marco": 1,
+                "cost_real": 2,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 10,
+                "bonus_damage": 0,
+            },
+
+            # GRAN HACHA DE BATALLA (COMÚN)
+
+            {
+                "name": "Gran Hacha de Batalla",
+                "description": "Una hacha grande y pesada. Es difícil de manejar, pero inflige mucho daño.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["BBN", "FTR"],
+                "cost_marco": 1,
+                "cost_real": 3,
+                "cost_iota": 5,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 12,
+                "bonus_damage": 0,
+            },
 
 
 
