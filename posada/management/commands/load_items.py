@@ -720,11 +720,45 @@ class Command(BaseCommand):
                 "item_type": "W2H",
                 "rarity": "COM",
                 "allowed_classes": ["WIZ", "SOR", "DRD", "WLK"],
+                "cost_marco": 1,
+                "cost_real": 2,
                 "cost_iota": 5,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
-                "bonus_damage": 0,
+                "bonus_damage": 1,
             },
+
+            # PISTOLA DE CHISPAS (COMÚN)
+
+            {
+                "name": "Pistola de Chispas",
+                "description": "Una pistola de chispas que usa como munición balas de plomo.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["ART"],
+                "cost_real": 1,
+                "cost_talento": 1,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 4,
+                "bonus_damage": 1,
+            },
+
+            # MOSQUETE OXIDADO (COMÚN)
+
+            {
+                "name": "Mosquete Oxidado",
+                "description": "Un mosquete oxidado, pero aún funcional.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["ART"],
+                "cost_marco": 1,
+                "cost_iota": 5,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 6,
+                "bonus_damage": 1,
+            },
+
+
 
 
 
