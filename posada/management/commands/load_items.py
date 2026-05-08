@@ -733,7 +733,7 @@ class Command(BaseCommand):
             {
                 "name": "Pistola de Chispas",
                 "description": "Una pistola de chispas que usa como munición balas de plomo.",
-                "item_type": "W2H",
+                "item_type": "W1H",
                 "rarity": "COM",
                 "allowed_classes": ["ART"],
                 "cost_real": 1,
@@ -758,8 +758,37 @@ class Command(BaseCommand):
                 "bonus_damage": 1,
             },
 
+            # ARPA LIRA (COMÚN)
 
+            {
+                "name": "Arpa Lira",
+                "description": "Una arpa lira, utilizada para tocar melodías y lanzar hechizos de nivel bajo.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["BRD"],
+                "cost_real": 1,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 4,
+                "bonus_damage": 1,
+                "bonus_cha": 1,
+            },
 
+            # LAÚD DE 7 CUERDAS (COMÚN)
+
+            {
+                "name": "Laúd de 7 Cuerdas",
+                "description": "Un laúd de 7 cuerdas, utilizado para tocar melodías y subir la moral de los aliados.",
+                "item_type": "W2H",
+                "rarity": "COM",
+                "allowed_classes": ["BRD"],
+                "cost_real": 3,
+                "cost_talento": 1,
+                "cost_iota": 5,
+                "damage_dice_count": 1,
+                "damage_dice_sides": 6,
+                "bonus_damage": 1,
+                "bonus_cha": 2,
+            },
 
 
         ]
