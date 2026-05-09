@@ -10,4 +10,5 @@ urlpatterns = [
     path('scanner/', scanner_view, name='scanner'),
     path('api/dashboard/', global_dashboard_view, name='dashboard'),
     path('posada/', include('posada.urls')),
+    path('api/music/', include('disquera.urls')),
 ]
