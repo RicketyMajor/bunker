@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
+from .discogs_oracle import search_album_discogs
 
 
 class AlbumDirectoryViewSet(viewsets.ModelViewSet):
@@ -31,17 +32,58 @@ class MusicInboxViewSet(viewsets.ModelViewSet):
     queryset = MusicInbox.objects.all().order_by('-date_scanned')
     serializer_class = MusicInboxSerializer
 
-# --- ENDPOINTS FANTASMA (FASE 2) ---
+# --- ENDPOINTS DEL ORÁCULO DISCOGS ---
 
 
 @api_view(['POST'])
 def process_barcode(request):
-    return Response({"error": "Oráculo de Discogs inactivo. (Requiere Fase 2)"}, status=501)
+    """Recibe un código de barras del escáner móvil y lo busca en Discogs."""
+    barcode = request.data.get('barcode')
+    if not barcode:
+        return Response({"error": "No se proporcionó código de barras."}, status=status.HTTP_400_BAD_REQUEST)
+
+    album_data = search_album_discogs(barcode, search_type="barcode")
+
+    if album_data:
+        # Lo encontramos! Lo guardamos en el inventario oficial
+        Album.objects.create(
+            title=album_data['title'],
+            artist=album_data['artist'],
+            label=album_data['label'],
+            release_year=album_data['release_year'],
+            format_type=album_data['format_type'],
+            genres=album_data['genres'],
+            cover_url=album_data['cover_url']
+        )
+        return Response({"message": "Álbum procesado y guardado en la Disquera."}, status=status.HTTP_201_CREATED)
+    else:
+        # Si no lo encuentra, lo guarda en el Inbox para ingreso manual posterior
+        MusicInbox.objects.get_or_create(barcode=barcode)
+        return Response({"error": "Código no hallado en Discogs. Archivado en el Inbox."}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['POST'])
 def scan_album(request):
-    return Response({"error": "Búsqueda manual inactiva. (Requiere Fase 2)"}, status=501)
+    """Busca un álbum por título/artista y lo añade al inventario (Ingreso semi-automático)."""
+    title = request.data.get('title')
+    if not title:
+        return Response({"error": "Falta el título para la búsqueda."}, status=status.HTTP_400_BAD_REQUEST)
+
+    album_data = search_album_discogs(title, search_type="title")
+
+    if album_data:
+        Album.objects.create(
+            title=album_data['title'],
+            artist=album_data['artist'],
+            label=album_data['label'],
+            release_year=album_data['release_year'],
+            format_type=album_data['format_type'],
+            genres=album_data['genres'],
+            cover_url=album_data['cover_url']
+        )
+        return Response({"message": f"Álbum '{album_data['title']}' archivado."}, status=status.HTTP_201_CREATED)
+
+    return Response({"error": "No se encontraron resultados en los archivos de Discogs."}, status=status.HTTP_404_NOT_FOUND)
 
 # --- TRACKER MUSICAL ---
 

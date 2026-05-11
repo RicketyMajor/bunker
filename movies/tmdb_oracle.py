@@ -1,7 +1,7 @@
 import os
 import requests
 
-TMDB_API_KEY = os.getenv("TMDB_API_KEY", "TU_CLAVE_AQUI")
+TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
 
 
 def search_movie_tmdb(title: str):
