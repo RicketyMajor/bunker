@@ -88,17 +88,29 @@ def scan_album(request):
 # --- TRACKER MUSICAL ---
 
 
+# disquera/views.py
+
 @api_view(['GET'])
 def tracker_stats(request):
-    """Devuelve estadísticas del mes en curso para la música."""
+    """Devuelve estadísticas del mes en curso para la música con nombres en español."""
     today = timezone.localdate()
     start_of_month = today.replace(day=1)
 
+    # Conteo mensual (Solo lo que se registró desde el día 1 de este mes)
     albums_this_month = MusicAnnualRecord.objects.filter(
-        date_listened__gte=start_of_month, date_listened__lte=today).count()
+        date_listened__gte=start_of_month,
+        date_listened__lte=today
+    ).count()
+
+    # Mapeo para asegurar el idioma
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+        5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+        9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
 
     return Response({
-        "current_month": today.strftime("%B").capitalize(),
+        "current_month": meses_es.get(today.month),
         "albums_this_month": albums_this_month
     })
 

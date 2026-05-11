@@ -207,12 +207,21 @@ class MusicMainScreen(Screen):
             pass
 
         try:
-            tracker = httpx.get(API_MUSIC_TRACKER, timeout=5.0).json()
-            annual = httpx.get(API_MUSIC_TRACKER_ANNUAL, timeout=5.0).json()
+            # .raise_for_status() para detectar errores de URL de inmediato
+            tracker_resp = httpx.get(API_MUSIC_TRACKER, timeout=5.0)
+            tracker_resp.raise_for_status()
+            tracker = tracker_resp.json()
+
+            annual_resp = httpx.get(API_MUSIC_TRACKER_ANNUAL, timeout=5.0)
+            annual_resp.raise_for_status()
+            annual = annual_resp.json()
+
             if isinstance(tracker, dict):
                 self.app.call_from_thread(
                     self.populate_tracker, tracker, annual)
-        except Exception:
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error en métricas: {e}", severity="error")
             pass
 
         try:
@@ -262,10 +271,12 @@ class MusicMainScreen(Screen):
 
     def populate_tracker(self, stats: dict, annual: list) -> None:
         md = self.query_one("#music_tracker_content", Markdown)
+        # El backend ya filtra annual por el año actual
         count_year = len(annual)
         count_month = stats.get('albums_this_month', 0)
 
-        text = f"**Mes de {stats.get('current_month', '')}:** `{count_month} sesiones de escucha`  |  **Total Año:** `{count_year} sesiones`"
+        # Implementación
+        text = f"**Mes de {stats.get('current_month', '')}:** `{count_month} álbumes escuchados`  |  **Total Año:** `{count_year} álbumes escuchados`"
         md.update(text)
 
         table = self.query_one("#music_annual_table", DataTable)
@@ -273,10 +284,12 @@ class MusicMainScreen(Screen):
         for rec in annual:
             owned = "✔ Bóveda" if rec.get('is_owned') else "⇋ Digital/Externo"
             table.add_row(
-                str(rec.get('id')), rec.get(
-                    'title', '').upper(), rec.get('artist', '-'),
-                owned, rec.get('date_listened', '')[
-                    :10], key=str(rec.get('id'))
+                str(rec.get('id')),
+                rec.get('title', '').upper(),
+                rec.get('artist', '-'),
+                owned,
+                rec.get('date_listened', '')[:10],
+                key=str(rec.get('id'))
             )
 
     def populate_wishlist(self, items: list) -> None:
