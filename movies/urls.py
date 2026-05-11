@@ -4,7 +4,7 @@ from .views import (
     MovieViewSet, MovieDirectoryViewSet, MovieWatcherViewSet,
     MovieWishlistViewSet, MovieInboxViewSet,
     scan_movie, receive_barcode, process_barcode, movie_scanner_view,
-    tracker_stats, tracker_annual, log_minutes, finish_movie
+    tracker_stats, tracker_annual, log_minutes, finish_movie, delete_annual_record
 )
 
 router = DefaultRouter()
@@ -24,5 +24,7 @@ urlpatterns = [
     path('tracker/annual/', tracker_annual, name='movie-tracker-annual'),
     path('tracker/minutes/', log_minutes, name='movie-log-minutes'),
     path('tracker/finish/', finish_movie, name='movie-finish'),
+    path('tracker/annual/<int:pk>/', delete_annual_record,
+         name='delete-annual-record'),
     path('', include(router.urls)),
 ]

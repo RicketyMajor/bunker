@@ -324,3 +324,22 @@ def finish_movie(request):
         is_owned=is_owned
     )
     return Response({"message": "Película añadida al historial anual."}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+def delete_annual_record(request, pk):
+    """Borra un registro del muro de la fama y revierte el estado de la película."""
+    try:
+        record = MovieAnnualRecord.objects.get(pk=pk)
+
+        # Revertir el estado en el inventario si existe la relación
+        if record.movie:
+            record.movie.is_watched = False
+            record.movie.save()
+
+        # Eliminar el registro histórico
+        record.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except MovieAnnualRecord.DoesNotExist:
+        return Response({"error": "Registro no encontrado"}, status=status.HTTP_404_NOT_FOUND)

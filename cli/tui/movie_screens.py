@@ -778,6 +778,46 @@ class MovieMainScreen(Screen):
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
 
+    # --- REVERSIÓN DE HÁBITOS (VIDEOCLUB) ---
+    def action_delete_habit(self) -> None:
+        if self.query_one("#movie_tabs", TabbedContent).active != "tab_tracker":
+            return
+
+        table = self.query_one("#movie_annual_table", DataTable)
+        try:
+            # Se obtiene la ID y el título de la película seleccionada
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            title = table.get_row(row_key)[1]
+
+            def handle_confirm(confirm: bool) -> None:
+                if confirm:
+                    self.process_delete_habit(row_key)
+
+            self.app.push_screen(ConfirmModal(
+                f"¿Revertir el visionado de '{title}'? La película volverá a aparecer como pendiente."), handle_confirm)
+        except Exception:
+            self.app.notify(
+                "Selecciona un registro en la tabla de hábitos.", severity="warning")
+
+    @work(thread=True)
+    def process_delete_habit(self, record_id: str) -> None:
+        try:
+            # API_MOVIE_TRACKER_ANNUAL_DEL debe terminar en / para que Django concatene la ID
+            resp = httpx.delete(
+                f"{API_MOVIE_TRACKER_ANNUAL_DEL}{record_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Registro de visionado eliminado.", title="Historial Limpio")
+                # Recarga para ver los cambios en Inventario y Hábitos
+                self.app.call_from_thread(self.load_movies)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "No se pudo revertir el registro.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de conexión: {e}", severity="error")
+
     # ================= WISHLIST & RADAR (SCRAPER) =================
     def action_sync_scraper(self) -> None:
         if self.query_one("#movie_tabs", TabbedContent).active != "tab_wishlist":

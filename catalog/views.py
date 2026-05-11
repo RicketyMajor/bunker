@@ -269,6 +269,8 @@ def tracker_stats(request):
     }, status=200)
 
 
+# catalog/views.py
+
 class AnnualRecordViewSet(viewsets.ModelViewSet):
     """Devuelve la lista de libros leídos (filtrada siempre por el año actual)"""
     serializer_class = AnnualRecordSerializer
@@ -278,13 +280,24 @@ class AnnualRecordViewSet(viewsets.ModelViewSet):
         # El reset anual solo devuelve los registros de este año
         return AnnualRecord.objects.filter(date_finished__year=now.year).order_by('-date_finished')
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Revertir el efecto secundario: Si el registro tiene un libro asociado, desmárcalo
+        if instance.book:
+            instance.book.is_read = False
+            instance.book.save()
+
+        # Destruir el registro del Muro de la Fama
+        self.perform_destroy(instance)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class DirectoryViewSet(viewsets.ModelViewSet):
     """Provee operaciones CRUD para los directorios del Sistema de Archivos."""
     queryset = Directory.objects.all().order_by('name')
     serializer_class = DirectorySerializer
-
-# Asegúrate de importar ScanInbox y ScanInboxSerializer
 
 
 class ScanInboxViewSet(viewsets.ModelViewSet):

@@ -927,3 +927,41 @@ class LibraryMainScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error de red: {e}", severity="error")
+
+    # --- REVERSIÓN DE HÁBITOS (ELIMINAR REGISTRO) ---
+    def action_delete_habit(self) -> None:
+        if self.query_one("#main_tabs", TabbedContent).active != "tab_tracker":
+            return
+
+        table = self.query_one("#annual_table", DataTable)
+        try:
+            # obtiene la ID y el título de la fila seleccionada
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            title = table.get_row(row_key)[1]
+
+            def handle_confirm(confirm: bool) -> None:
+                if confirm:
+                    self.process_delete_habit(row_key)
+
+            self.app.push_screen(ConfirmModal(
+                f"¿Revertir la lectura de '{title}'? El libro volverá a estar pendiente."), handle_confirm)
+        except Exception:
+            self.app.notify(
+                "Selecciona un registro en la tabla primero.", severity="warning")
+
+    @work(thread=True)
+    def process_delete_habit(self, record_id: str) -> None:
+        try:
+            resp = httpx.delete(
+                f"{API_TRACKER_ANNUAL}{record_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Registro revertido exitosamente.", title="Anomalía Corregida")
+                self.app.call_from_thread(self.load_all_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error en el servidor al revertir.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Fallo de comunicación: {e}", severity="error")

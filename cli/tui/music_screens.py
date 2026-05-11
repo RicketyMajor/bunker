@@ -686,6 +686,46 @@ class MusicMainScreen(Screen):
         except Exception:
             pass
 
+    # --- REVERSIÓN DE HÁBITOS (DISQUERA) ---
+    def action_delete_habit(self) -> None:
+        if self.query_one("#music_tabs", TabbedContent).active != "tab_tracker":
+            return
+
+        table = self.query_one("#music_annual_table", DataTable)
+        try:
+            # Obtiene la ID y el título del álbum seleccionado
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key.value
+            title = table.get_row(row_key)[1]
+
+            def handle_confirm(confirm: bool) -> None:
+                if confirm:
+                    self.process_delete_habit(row_key)
+
+            self.app.push_screen(ConfirmModal(
+                f"¿Revertir la escucha de '{title}'? El álbum volverá a aparecer como pendiente."), handle_confirm)
+        except Exception:
+            self.app.notify(
+                "Selecciona un registro en la tabla de hábitos.", severity="warning")
+
+    @work(thread=True)
+    def process_delete_habit(self, record_id: str) -> None:
+        try:
+            # Utiliza la constante que ya se tiene definida en constants.py
+            resp = httpx.delete(
+                f"{API_MUSIC_TRACKER_ANNUAL}{record_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Registro de escucha eliminado.", title="Historial Limpio")
+                # Recarga inventario y hábitos
+                self.app.call_from_thread(self.load_data)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "No se pudo revertir el registro.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de conexión: {e}", severity="error")
+
     # --- RADAR MUSICAL (SCRAPER / WISHLIST) ---
     def action_sync_scraper(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_wishlist":

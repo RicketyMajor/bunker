@@ -19,4 +19,6 @@ urlpatterns = [
     path('tracker/', views.tracker_stats, name='tracker-stats'),
     path('tracker/annual/', views.tracker_annual, name='tracker-annual'),
     path('tracker/finish/', views.finish_album, name='finish-album'),
+    path('tracker/annual/<int:pk>/', views.delete_annual_record,
+         name='delete-annual-record'),
 ]

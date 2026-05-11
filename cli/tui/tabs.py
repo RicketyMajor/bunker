@@ -45,6 +45,7 @@ class TrackerTab(TabPane):
     BINDINGS = [
         ("p", "screen.log_pages", "Anotar Páginas"),
         ("f", "screen.finish_book", "Registrar Terminado"),
+        ("x", "screen.delete_habit", "Revertir Registro"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -72,6 +73,7 @@ class MovieTrackerTab(TabPane):
     """Pestaña de Hábitos para el Videoclub."""
     BINDINGS = [
         ("f", "screen.finish_movie", "Registrar Película Vista"),
+        ("x", "screen.delete_habit", "Revertir Registro"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -129,7 +131,8 @@ class MusicLoansTab(TabPane):
 
 
 class MusicTrackerTab(TabPane):
-    BINDINGS = [("f", "screen.finish_album", "Registrar Escucha")]
+    BINDINGS = [("f", "screen.finish_album", "Registrar Escucha"),
+                ("x", "screen.delete_habit", "Revertir Registro")]
 
     def compose(self) -> ComposeResult:
         with Vertical():

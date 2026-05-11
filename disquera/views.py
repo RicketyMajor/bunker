@@ -151,3 +151,22 @@ def finish_album(request):
         is_owned=is_owned
     )
     return Response({"message": f"'{title}' registrado como escuchado."}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+def delete_annual_record(request, pk):
+    """Borra un registro del muro de la fama y revierte el estado del álbum."""
+    try:
+        record = MusicAnnualRecord.objects.get(pk=pk)
+
+        # Revertir el estado en el inventario si existe la relación
+        if record.album:
+            record.album.is_listened = False
+            record.album.save()
+
+        # Eliminar el registro histórico
+        record.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except MusicAnnualRecord.DoesNotExist:
+        return Response({"error": "Registro no encontrado"}, status=status.HTTP_404_NOT_FOUND)
