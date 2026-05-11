@@ -802,3 +802,164 @@ class MovieTitleModal(ModalScreen[str]):
             self.dismiss(self.query_one("#inp_title", Input).value)
         else:
             self.dismiss(None)
+
+
+class AddMusicMenuModal(ModalScreen[str]):
+    def compose(self) -> ComposeResult:
+        with Vertical(id="add_menu_dialog"):
+            yield Label("🎵 Añadir Álbum", classes="modal_title")
+            yield Button("1. Escanear Código de Barras (Celular)", id="btn_scan", variant="primary")
+            yield Button("2. Buscar en Discogs (Nombre/Artista)", id="btn_manual_name", variant="warning")
+            yield Button("3. Ingreso 100% Manual", id="btn_full_manual", variant="success")
+            yield Button("Cancelar", id="btn_cancel", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        options = {"btn_scan": "scan",
+                   "btn_manual_name": "name", "btn_full_manual": "full"}
+        self.dismiss(options.get(event.button.id, "cancel"))
+
+
+class MusicTitleModal(ModalScreen[str]):
+    def compose(self) -> ComposeResult:
+        with Vertical(id="title_dialog"):
+            yield Label("Buscar en Discogs", classes="modal_title")
+            yield Label("Ingresa Título y/o Artista:", classes="edit_label")
+            yield Input(placeholder="Ej: The Dark Side of the Moon", id="inp_title")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Buscar", variant="success", id="btn_search")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_search":
+            self.dismiss(self.query_one("#inp_title", Input).value)
+        else:
+            self.dismiss(None)
+
+
+class FinishMusicModal(ModalScreen[dict]):
+    def compose(self) -> ComposeResult:
+        with Vertical(id="finish_dialog"):
+            yield Label("Registrar Sesión de Escucha", classes="modal_title")
+            yield Label("Título del Álbum:", classes="edit_label")
+            yield Input(id="inp_title", placeholder="Ej: Abbey Road")
+            yield Label("Artista:", classes="edit_label")
+            yield Input(id="inp_artist", placeholder="Ej: The Beatles")
+            yield Label("")
+            yield Checkbox("✔ Lo tengo en mi colección física", value=True, id="chk_owned")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Registrar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            self.dismiss({
+                "title": self.query_one("#inp_title", Input).value,
+                "artist": self.query_one("#inp_artist", Input).value,
+                "is_owned": self.query_one("#chk_owned", Checkbox).value
+            })
+        else:
+            self.dismiss(None)
+
+
+class MusicFullEditModal(ModalScreen[dict]):
+    def __init__(self, album: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.album = album
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="full_edit_dialog"):
+            yield Label("Editando Álbum", classes="modal_title")
+            with VerticalScroll():
+                yield Label("Título (*):", classes="edit_label")
+                yield Input(value=self.album.get('title', ''), id="inp_title")
+                yield Label("Artista:", classes="edit_label")
+                yield Input(value=self.album.get('artist', ''), id="inp_artist")
+                yield Label("Sello Discográfico:", classes="edit_label")
+                yield Input(value=self.album.get('label', ''), id="inp_label")
+                yield Label("Formato:", classes="edit_label")
+                FORMATS = [(f, f)
+                           for f in ["VINYL", "CD", "CASSETTE", "DIGITAL"]]
+                yield Select(FORMATS, value=self.album.get('format_type', 'VINYL'), id="sel_format")
+                yield Label("Año de Lanzamiento:", classes="edit_label")
+                yield Input(value=str(self.album.get('release_year') or ''), id="inp_year")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Guardar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            payload = {
+                "title": self.query_one("#inp_title", Input).value,
+                "artist": self.query_one("#inp_artist", Input).value,
+                "label": self.query_one("#inp_label", Input).value,
+                "format_type": self.query_one("#sel_format", Select).value,
+            }
+            year = self.query_one("#inp_year", Input).value
+            if year.isdigit():
+                payload["release_year"] = int(year)
+            self.dismiss(payload)
+        else:
+            self.dismiss(None)
+
+
+class MusicScannerModal(ModalScreen[None]):
+    def compose(self) -> ComposeResult:
+        with Vertical(id="scanner_dialog"):
+            yield Label("Iniciando Escáner (Discogs)...", id="scanner_title", classes="modal_title")
+            yield RichLog(id="scanner_qr", markup=False, highlight=False)
+            yield Button("Cerrar Conexión Segura", variant="error", id="btn_cancel")
+
+    async def on_mount(self) -> None:
+        log = self.query_one("#scanner_qr", RichLog)
+        title = self.query_one("#scanner_title", Label)
+        log.write("Negociando túnel cifrado SSH...\n")
+        import asyncio
+        from pathlib import Path
+        import re
+        key_path = str(Path.home() / ".ssh" / "library_cli_key")
+        try:
+            self.tunnel_process = await asyncio.create_subprocess_exec(
+                "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
+                "ServerAliveInterval=60", "-R", "80:localhost:8000", "nokey@localhost.run",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            )
+            asyncio.create_task(self.read_output(log, title))
+        except Exception as e:
+            log.write(f"Error crítico SSH: {e}")
+
+    async def read_output(self, log: RichLog, title: Label) -> None:
+        import re
+        while True:
+            line = await self.tunnel_process.stdout.readline()
+            if not line:
+                break
+            text_line = line.decode().strip()
+            match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", text_line)
+            if match:
+                url = match.group(1) + "/api/music/scan/"
+                title.update(f"Escanea o visita:\n{url}")
+                self.render_qr(url, log)
+                break
+
+    def render_qr(self, url: str, log: RichLog) -> None:
+        import qrcode
+        import io
+        qr = qrcode.QRCode(version=1, box_size=1, border=2)
+        qr.add_data(url)
+        qr.make(fit=True)
+        f = io.StringIO()
+        qr.print_ascii(out=f, invert=True)
+        log.clear()
+        log.write(f.getvalue())
+        log.write(
+            "\n[El servidor de Discogs escucha. Escanea y cierra al terminar]")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(None)
+
+    def on_unmount(self) -> None:
+        if hasattr(self, 'tunnel_process') and self.tunnel_process:
+            try:
+                self.tunnel_process.terminate()
+            except:
+                pass

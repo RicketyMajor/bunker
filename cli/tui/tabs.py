@@ -92,3 +92,59 @@ class MovieWishlistTab(TabPane):
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="movie_wishlist_table")
+
+
+class MusicInventoryTab(TabPane):
+    BINDINGS = [
+        ("a", "screen.add_album", "Añadir Disco"),
+        ("e", "screen.edit_album", "Editar Ficha"),
+        ("d", "screen.show_details", "Ver Detalles"),
+        ("l", "screen.lend_album", "Prestar a Amigo"),
+        ("m", "screen.move_album", "Mover a Carpeta"),
+        ("c", "screen.create_dir", "Crear Carpeta"),
+        ("D", "screen.delete_dir", "Borrar Carpeta"),
+        ("x", "screen.delete_album", "Eliminar Ficha"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield DataTable(id="music_table")
+
+
+class MusicInboxTab(TabPane):
+    BINDINGS = [
+        Binding("enter", "screen.process_barcode",
+                "Procesar Escaneo", show=True, priority=True),
+        ("x", "screen.delete_inbox", "Descartar"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield DataTable(id="music_inbox_table")
+
+
+class MusicLoansTab(TabPane):
+    BINDINGS = [("r", "screen.return_album", "Devolver a Estantería")]
+
+    def compose(self) -> ComposeResult:
+        yield DataTable(id="music_loans_table")
+
+
+class MusicTrackerTab(TabPane):
+    BINDINGS = [("f", "screen.finish_album", "Registrar Escucha")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Markdown("Cargando métricas musicales...", id="music_tracker_content")
+            yield DataTable(id="music_annual_table")
+
+
+class MusicWishlistTab(TabPane):
+    BINDINGS = [
+        ("s", "screen.sync_scraper", "Sincronizar Scraper"),
+        ("w", "screen.add_watcher", "Vigilar Artista/Sello"),
+        ("v", "screen.view_watchers", "Ver/Borrar Vigilados"),
+        ("x", "screen.delete_wishlist", "Ocultar Lanzamiento"),
+        ("c", "screen.clear_wishlist", "Limpiar Todo"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield DataTable(id="music_wishlist_table")

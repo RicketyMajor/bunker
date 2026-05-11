@@ -27,3 +27,15 @@ API_MOVIE_WATCHERS = "http://localhost:8000/api/movies/watchers/"
 API_MOVIE_WISHLIST = "http://localhost:8000/api/movies/wishlist/"
 
 API_DASHBOARD = "http://localhost:8000/api/dashboard/"
+
+# --- RUTAS DE LA DISQUERA (MUSIC SHELL) ---
+API_MUSIC = "http://localhost:8000/api/music/albums/"
+API_MUSIC_DIRS = "http://localhost:8000/api/music/directories/"
+API_MUSIC_INBOX = "http://localhost:8000/api/music/inbox/"
+API_MUSIC_PROCESS = "http://localhost:8000/api/music/process-barcode/"
+API_MUSIC_SCAN = "http://localhost:8000/api/music/scan/"
+API_MUSIC_TRACKER = "http://localhost:8000/api/music/tracker/stats/"
+API_MUSIC_TRACKER_ANNUAL = "http://localhost:8000/api/music/tracker/annual/"
+API_MUSIC_TRACKER_FINISH = "http://localhost:8000/api/music/tracker/finish/"
+API_MUSIC_WATCHERS = "http://localhost:8000/api/music/watchers/"
+API_MUSIC_WISHLIST = "http://localhost:8000/api/music/wishlist/"

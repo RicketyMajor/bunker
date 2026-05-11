@@ -325,15 +325,20 @@ class BunkerLauncherScreen(Screen):
                     yield Label("MÓDULO 2: VIDEOCLUB", classes="module_title")
                     yield Button("INICIAR ENLACE", id="btn_movie", classes="launcher_btn", variant="warning")
 
-                # Módulo 3: Centro de Mando
+                # Módulo 3: La Disquera
                 with Vertical(classes="module_panel"):
-                    yield Label("MÓDULO 3: MÉTRICAS GLOBALES", classes="module_title")
-                    yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
+                    yield Label("MÓDULO 3: LA DISQUERA", classes="module_title")
+                    yield Button("REPRODUCIR COLECCIÓN", id="btn_music", classes="launcher_btn", variant="primary")
 
                 # Módulo 4: La Posada
                 with Vertical(classes="module_panel"):
                     yield Label("MÓDULO 4: LA POSADA", classes="module_title")
                     yield Button("INGRESAR AL GREMIO", id="btn_posada", classes="launcher_btn", variant="primary")
+
+                # Módulo 5: Centro de Mando
+                with Vertical(classes="module_panel"):
+                    yield Label("MÓDULO 5: MÉTRICAS GLOBALES", classes="module_title")
+                    yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
 
             yield Button("DESCONECTAR SISTEMA (Salir)", id="btn_quit", variant="error")
 
@@ -350,5 +355,8 @@ class BunkerLauncherScreen(Screen):
         elif event.button.id == "btn_posada":
             from .posada_screens import PosadaMainScreen
             self.app.push_screen(PosadaMainScreen())
+        elif event.button.id == "btn_music":
+            from .music_screens import MusicMainScreen
+            self.app.push_screen(MusicMainScreen())
         elif event.button.id == "btn_quit":
             self.app.exit()
