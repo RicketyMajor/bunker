@@ -50,6 +50,15 @@ services:
     depends_on:
       - web
 
+  scraper-music:
+    build: ./scraper
+    command: npm run start:music
+    volumes:
+      - ./scraper:/app
+      - /app/node_modules
+    depends_on:
+      - web
+
 # volumen persistente para que los datos sobrevivan a reinicios
 volumes:
   postgres_data:
