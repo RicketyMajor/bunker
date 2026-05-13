@@ -963,3 +963,19 @@ class MusicScannerModal(ModalScreen[None]):
                 self.tunnel_process.terminate()
             except:
                 pass
+
+
+class EvacuationModal(ModalScreen[str]):
+    """Menú de emergencia para el Protocolo de Evacuación de Datos."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="add_menu_dialog"):
+            yield Label("Protocolo de Evacuación", classes="modal_title")
+            yield Label("[dim]Administración de las Cápsulas del Tiempo (Backups).[/dim]")
+            yield Button("1. Generar Cápsula (Backup)", id="btn_backup", variant="success")
+            yield Button("2. Restaurar Búnker", id="btn_restore", variant="error")
+            yield Button("Cancelar", id="btn_cancel", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        options = {"btn_backup": "backup", "btn_restore": "restore"}
+        self.dismiss(options.get(event.button.id, "cancel"))

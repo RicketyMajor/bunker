@@ -11,6 +11,8 @@ from textual import work
 from .constants import API_LIBRARY, API_TRACKER, API_MOVIES
 from .movie_screens import MovieMainScreen
 from textual.widgets import ProgressBar
+from .modals import ConfirmModal, EvacuationModal
+from .constants import API_BACKUP, API_RESTORE
 
 
 class BookDetailsScreen(Screen):
@@ -309,7 +311,7 @@ class BunkerLauncherScreen(Screen):
         ██████╔╝╚██████╔╝██║ ╚████║██║  ██╗███████╗██║  ██║
         ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
         """
-        # Cambiamos Vertical por VerticalScroll para blindar la responsividad
+        # Vertical por VerticalScroll para blindar la responsividad
         with VerticalScroll(id="launcher_root"):
             yield Label("SISTEMA: [green]ONLINE[/green] | NÚCLEO: [green]ESTABLE[/green]", id="sys_status")
             yield Label(ascii_art, classes="ascii_logo")
@@ -327,12 +329,12 @@ class BunkerLauncherScreen(Screen):
 
                 # Módulo 3: La Disquera
                 with Vertical(classes="module_panel"):
-                    yield Label("MÓDULO 3: LA DISQUERA", classes="module_title")
+                    yield Label("MÓDULO 3: DISQUERA", classes="module_title")
                     yield Button("REPRODUCIR COLECCIÓN", id="btn_music", classes="launcher_btn", variant="primary")
 
                 # Módulo 4: La Posada
                 with Vertical(classes="module_panel"):
-                    yield Label("MÓDULO 4: LA POSADA", classes="module_title")
+                    yield Label("MÓDULO 4: POSADA", classes="module_title")
                     yield Button("INGRESAR AL GREMIO", id="btn_posada", classes="launcher_btn", variant="primary")
 
                 # Módulo 5: Centro de Mando
@@ -340,7 +342,12 @@ class BunkerLauncherScreen(Screen):
                     yield Label("MÓDULO 5: MÉTRICAS GLOBALES", classes="module_title")
                     yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
 
-            yield Button("DESCONECTAR SISTEMA (Salir)", id="btn_quit", variant="error")
+            # Protocolo de Evacuación
+                with Vertical(classes="module_panel"):
+                    yield Label("SISTEMA DE SEGURIDAD", classes="module_title")
+                    yield Button("PROTOCOLO DE EVACUACIÓN", id="btn_evac", classes="launcher_btn", variant="error")
+
+            yield Button("DESCONECTAR SISTEMA", id="btn_quit", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_lib":
@@ -358,5 +365,52 @@ class BunkerLauncherScreen(Screen):
         elif event.button.id == "btn_music":
             from .music_screens import MusicMainScreen
             self.app.push_screen(MusicMainScreen())
+        elif event.button.id == "btn_evac":
+            def handle_evacuation(choice: str | None) -> None:
+                if choice == "backup":
+                    self.app.notify("Comprimiendo BD...", title="Evacuación")
+                    self.process_backup()
+                elif choice == "restore":
+                    def handle_restore_confirm(confirm: bool) -> None:
+                        if confirm:
+                            self.app.notify(
+                                "Descomprimiendo cápsula...", title="Restauración")
+                            self.process_restore()
+                    # Doble confirmación por seguridad
+                    self.app.push_screen(ConfirmModal(
+                        "⚠️ ESTO SOBRESCRIBIRÁ TU BASE DE DATOS ACTUAL. ¿Continuar?"), handle_restore_confirm)
+
+            self.app.push_screen(EvacuationModal(), handle_evacuation)
         elif event.button.id == "btn_quit":
             self.app.exit()
+
+    # --- FUNCIONES ASÍNCRONAS DE SEGURIDAD ---
+    @work(thread=True)
+    def process_backup(self) -> None:
+        try:
+            # 15s por si la BD es grande
+            resp = httpx.post(API_BACKUP, timeout=15.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.app.call_from_thread(
+                    self.app.notify, f"Cápsula lista en: {data.get('path')}", title="Éxito")
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, f"Error: {resp.json().get('error', 'Desconocido')}", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de red: {e}", severity="error")
+
+    @work(thread=True)
+    def process_restore(self) -> None:
+        try:
+            resp = httpx.post(API_RESTORE, timeout=15.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, "Búnker restaurado con éxito. Datos recargados.", title="Restauración Exitosa")
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, f"Error al restaurar: {resp.json().get('error', 'Revisa si existe el archivo json.')}", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de red: {e}", severity="error")

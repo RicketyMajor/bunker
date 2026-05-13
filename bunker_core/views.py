@@ -1,3 +1,6 @@
+import os
+from django.core.management import call_command
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db.models import Sum
 from django.utils.timezone import localdate
@@ -85,3 +88,42 @@ def global_dashboard_view(request):
         },
         "feed": feed_lines[:6]
     })
+
+
+@csrf_exempt
+def backup_database(request):
+    """Genera una cápsula de tiempo (JSON) de la base de datos de los 4 módulos."""
+    if request.method == 'POST':
+        try:
+            # Apunta a la raíz del proyecto (donde está el docker-compose)
+            backup_path = os.path.join(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))), 'bunker_backup.json')
+
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                # vuelca específicamente las 4 aplicaciones
+                call_command('dumpdata', 'catalog', 'movies', 'disquera',
+                             'posada', format='json', indent=4, stdout=f)
+
+            return JsonResponse({"message": "Cápsula de seguridad generada con éxito.", "path": backup_path}, status=200)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"error": "Método no permitido."}, status=405)
+
+
+@csrf_exempt
+def restore_database(request):
+    """Restaura todo el Búnker a partir de la cápsula de tiempo."""
+    if request.method == 'POST':
+        try:
+            backup_path = os.path.join(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))), 'bunker_backup.json')
+
+            if not os.path.exists(backup_path):
+                return JsonResponse({"error": "No se encontró el archivo bunker_backup.json en la raíz."}, status=404)
+
+            call_command('loaddata', backup_path)
+
+            return JsonResponse({"message": "Búnker restaurado a su estado original."}, status=200)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"error": "Método no permitido."}, status=405)

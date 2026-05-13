@@ -2,4 +2,5 @@ venv/
 *.sqlite3
 __pycache__/
 .env
+bunker_backup.json
 node_modules/
