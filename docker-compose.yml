@@ -59,8 +59,6 @@ services:
     depends_on:
       - web
 
-# volumen persistente para que los datos sobrevivan a reinicios
 volumes:
   postgres_data:
-    external: true
     name: library_manager_postgres_data
