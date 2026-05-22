@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum
 from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade
+from .skills import SkillRegistry
 
 XP_PER_MINUTE = 10
 # Bono si la clase del aventurero hace sinergia con la tarea
@@ -58,6 +59,10 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
     state = "EXPLORING"
     current_second = 0
     active_monsters_group = []  # Lista para manejar a los grupos
+
+    # --- TRACKERS TEMPORALES DE HABILIDADES ---
+    session_skills_tracker = {adv.id: set() for adv in adventurers}
+    combat_skills_tracker = {adv.id: set() for adv in adventurers}
 
     # --- Tablas de Botín por Categoría ---
     # (moneda, cant_max, probabilidad)
@@ -224,6 +229,10 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                   "message": f"{adv.name} falla su ataque contra [bold red]{target_m['name']}[/bold red]."})
 
             if not active_monsters_group:
+                # Reseteo del enfriamiento de habilidades de combate
+                for adv_id in combat_skills_tracker:
+                    combat_skills_tracker[adv_id].clear()
+
                 script.append({"second": current_second, "type": "flavor",
                               "message": "¡VICTORIA! La zona está despejada."})
                 state = "EXPLORING"
@@ -618,6 +627,11 @@ def process_session_completion(session_id, survived_seconds=None):
         multiplier += (wis_bonus * 0.05)
 
         adv.experience += int(base_xp * multiplier)
+
+        # Limpia los enfriamientos para la próxima sesión
+        adv.session_skills_used = []
+        adv.combat_skills_used = []
+
         adv.save()
         check_level_up(adv, event_log)
 

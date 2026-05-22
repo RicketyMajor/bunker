@@ -275,6 +275,12 @@ class Adventurer(WealthMixin):
     level = models.PositiveIntegerField(default=1)
     experience = models.PositiveIntegerField(default=0)
 
+    # --- GRIMORIO ---
+    session_skills_used = models.JSONField(
+        default=list, blank=True, help_text="Habilidades de Sesión ya utilizadas.")
+    combat_skills_used = models.JSONField(
+        default=list, blank=True, help_text="Habilidades de Combate ya utilizadas.")
+
     is_active = models.BooleanField(default=False)
     is_recovering = models.BooleanField(default=False)
     recovery_time_left = models.PositiveIntegerField(default=0)
