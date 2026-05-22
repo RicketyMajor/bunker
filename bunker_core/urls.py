@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/dashboard/', global_dashboard_view, name='dashboard'),
     path('posada/', include('posada.urls')),
     path('api/music/', include('disquera.urls')),
+    path('api/chess/', include('chess_study.urls')),
 
     # --- RUTAS DEL PROTOCOLO DE EVACUACIÓN ---
     path('api/backup/', backup_database, name='backup'),

@@ -3,6 +3,7 @@ anyio==4.12.1
 asgiref==3.11.1
 certifi==2026.2.25
 charset-normalizer==3.4.6
+chess==1.11.2
 click==8.1.8
 click-repl==0.3.0
 colorama==0.4.6
@@ -23,6 +24,7 @@ prompt_toolkit==3.0.52
 psycopg2-binary==2.9.11
 pyfiglet==1.0.4
 Pygments==2.19.2
+python-chess==1.999
 python-dotenv==1.2.2
 qrcode==8.2
 requests==2.32.5

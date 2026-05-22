@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'movies',
     'posada',
     'disquera',
+    'chess_study',
 ]
 
 MIDDLEWARE = [
