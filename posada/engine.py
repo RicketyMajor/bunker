@@ -176,39 +176,93 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                   "message": f"{target.name} esquivó el ataque de [bold red]{m['name']}[/bold red]."})
 
             # --- TURNO DE LOS AVENTUREROS ---
+            # --- TURNO DE LOS AVENTUREROS ---
             for i, adv in enumerate(adventurers):
                 if not active_monsters_group:
                     break  # Si murieron todos, paran de atacar
 
-                target_m = random.choice(active_monsters_group)
                 adv_mods = adv.get_stat_modifiers()
-                a_roll = random.randint(1, 20) + adv_mods['dex']
-                m_evasion = 10 + target_m['stats']['dex']
 
-                if a_roll >= m_evasion:
-                    sides = adv_mods.get('weapon_dice_sides', 4) or 4
-                    count = adv_mods.get('weapon_dice_count', 1) or 1
-                    a_dmg = sum(random.randint(1, sides) for _ in range(
-                        count)) + adv_mods['damage'] + adv_mods['str']
+                # 1. Identificar Habilidades Disponibles en el Grimorio
+                available_skills = []
+                for skill_id, skill_data in SkillRegistry.get_all_skills().items():
+                    if adv.adv_class in skill_data["allowed_classes"] and adv.level >= skill_data["req_level"]:
+                        if skill_data["type"] == "COMBAT" and skill_id not in combat_skills_tracker[adv.id]:
+                            available_skills.append(skill_data)
+                        elif skill_data["type"] == "SESSION" and skill_id not in session_skills_tracker[adv.id]:
+                            available_skills.append(skill_data)
 
-                    target_m['hp'] -= a_dmg
-                    script.append({"second": current_second - 4, "type": "flavor",
-                                  "message": f"{adv.name} asesta un golpe de {a_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
+                # 2. IA de Utilidad: ¿Qué hacer en este turno?
+                best_action = "BASIC_ATTACK"
+                best_score = 50  # Puntuación base para un ataque normal
 
-                    # Si el monstruo muere, soltar botín y remover del grupo
-                    if target_m['hp'] <= 0:
+                context = {
+                    'caster': adv,
+                    'allies': adventurers,
+                    'enemies': active_monsters_group,
+                    'current_second': current_second - 4,
+                    'log': script,
+                    'eval_mode': True  # Modo evaluación silencioso
+                }
+
+                # El aventurero simula mentalmente cada habilidad para ver su utilidad actual
+                for skill in available_skills:
+                    score = skill["execute"](context)
+                    if score > best_score:
+                        best_score = score
+                        best_action = skill
+
+                # Apagamos el modo evaluación para la acción real
+                context['eval_mode'] = False
+
+                # 3. Ejecutar la Mejor Decisión
+                if best_action == "BASIC_ATTACK":
+                    # --- ATAQUE BÁSICO CLÁSICO ---
+                    target_m = random.choice(active_monsters_group)
+                    # Usar la mejor estadística ofensiva disponible
+                    attack_stat = max(adv_mods['str'], adv_mods['dex'])
+                    a_roll = random.randint(1, 20) + attack_stat
+                    m_evasion = 10 + target_m['stats']['dex']
+
+                    if a_roll >= m_evasion:
+                        sides = adv_mods.get('weapon_dice_sides', 4) or 4
+                        count = adv_mods.get('weapon_dice_count', 1) or 1
+                        a_dmg = sum(random.randint(1, sides) for _ in range(
+                            count)) + adv_mods['damage'] + adv_mods['str']
+
+                        target_m['hp'] -= a_dmg
+                        script.append({"second": current_second - 4, "type": "flavor",
+                                      "message": f"{adv.name} asesta un golpe de {a_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
+                    else:
+                        script.append({"second": current_second - 4, "type": "flavor",
+                                      "message": f"{adv.name} falla su ataque contra [bold red]{target_m['name']}[/bold red]."})
+                else:
+                    # --- EJECUCIÓN DE HABILIDAD ---
+                    success = best_action["execute"](context)
+                    if success:
+                        # Coloca la habilidad en enfriamiento temporal
+                        if best_action["type"] == "COMBAT":
+                            combat_skills_tracker[adv.id].add(
+                                best_action["id"])
+                        elif best_action["type"] == "SESSION":
+                            session_skills_tracker[adv.id].add(
+                                best_action["id"])
+
+                # 4. Comprobación Universal de Muertes (Aplica tanto para ataques como daño de área)
+                for m in list(active_monsters_group):
+                    if m['hp'] <= 0:
                         script.append({"second": current_second - 2, "type": "flavor",
-                                      "message": f"[bold red]{target_m['name']}[/bold red] muerde el polvo."})
+                                      "message": f"[bold red]{m['name']}[/bold red] muerde el polvo."})
 
                         # Generar Monedas
-                        for coin, max_amt, prob in coin_drops.get(target_m['base'].category, []):
+                        for coin, max_amt, prob in coin_drops.get(m['base'].category, []):
                             if random.random() < prob:
                                 amt = random.randint(1, max_amt)
                                 script.append({"second": current_second - 1, "type": "loot", "coin": coin, "amount": amt,
                                               "message": f"El monstruo soltó {amt} {coin.replace('_', ' ').title()}."})
 
                         # Generar Items Raros
-                        for rarity, base_prob in item_drops.get(target_m['base'].category, []):
+                        for rarity, base_prob in item_drops.get(m['base'].category, []):
                             if random.random() < (base_prob + (adv.base_luk * 0.01)):
                                 pool = [
                                     it for it in all_items_db if it.rarity == rarity]
@@ -223,10 +277,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                         "message": f"¡BOTÍN RARO! {winner.name} obtuvo [[{color}]{drop_item.name}[/]]."
                                     })
 
-                        active_monsters_group.remove(target_m)
-                else:
-                    script.append({"second": current_second - 4, "type": "flavor",
-                                  "message": f"{adv.name} falla su ataque contra [bold red]{target_m['name']}[/bold red]."})
+                        active_monsters_group.remove(m)
 
             if not active_monsters_group:
                 # Reseteo del enfriamiento de habilidades de combate
