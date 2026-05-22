@@ -760,13 +760,55 @@ def pay_with_change(adv, item):
     return True
 
 
+# --- REGLAS MAESTRAS DE CLASE ---
+CLASS_PROFICIENCIES = {
+    'ART': {'armor': ['NON', 'LGT', 'MED'], 'weapons': ['SLS', 'PRC', 'BLD', 'MAG'], 'forbidden_materials': []},
+    'BBN': {'armor': ['NON', 'LGT', 'MED'], 'weapons': ['SLS', 'PRC', 'BLD'], 'forbidden_materials': []},
+    'BRD': {'armor': ['NON', 'LGT'], 'weapons': ['SLS', 'PRC', 'MAG'], 'forbidden_materials': []},
+    # Clérigos no usan filos
+    'CLR': {'armor': ['NON', 'LGT', 'MED'], 'weapons': ['BLD', 'MAG'], 'forbidden_materials': ['SLS', 'PRC']},
+    # Druidas no usan metal
+    'DRD': {'armor': ['NON', 'LGT', 'MED'], 'weapons': ['BLD', 'PRC', 'MAG'], 'forbidden_materials': ['MTL']},
+    'FTR': {'armor': ['NON', 'LGT', 'MED', 'HVY'], 'weapons': ['SLS', 'PRC', 'BLD'], 'forbidden_materials': []},
+    # Monjes no usan armadura
+    'MNK': {'armor': ['NON'], 'weapons': ['BLD', 'PRC'], 'forbidden_materials': []},
+    'PAL': {'armor': ['NON', 'LGT', 'MED', 'HVY'], 'weapons': ['SLS', 'PRC', 'BLD'], 'forbidden_materials': []},
+    'RGR': {'armor': ['NON', 'LGT', 'MED'], 'weapons': ['SLS', 'PRC', 'BLD'], 'forbidden_materials': []},
+    'ROG': {'armor': ['NON', 'LGT'], 'weapons': ['SLS', 'PRC'], 'forbidden_materials': []},
+    'SOR': {'armor': ['NON'], 'weapons': ['MAG', 'BLD'], 'forbidden_materials': []},
+    'WLK': {'armor': ['NON', 'LGT'], 'weapons': ['MAG', 'BLD', 'SLS'], 'forbidden_materials': []},
+    'WIZ': {'armor': ['NON'], 'weapons': ['MAG', 'BLD'], 'forbidden_materials': []},
+}
+
+
 def is_class_allowed(adv, item):
-    """Verifica si la clase del aventurero puede usar el objeto."""
-    # Si no hay restricciones, todos pueden usarlo.
-    if not item.allowed_classes:
+    """Verifica si la clase del aventurero puede usar el objeto cruzando las etiquetas."""
+    # Consumibles, accesorios y misceláneos pueden ser usados por todos
+    if item.item_type in ['CNS', 'MSC', 'NCK', 'RNG', 'BRC', 'EAR']:
         return True
-    # Si hay restricciones, verifica si la clase del aventurero está en la lista.
-    return adv.adv_class in item.allowed_classes
+
+    prof = CLASS_PROFICIENCIES.get(adv.adv_class)
+    if not prof:
+        return False
+
+    # Filtro de Material (Ej: Druida choca con armaduras de metal)
+    if item.material in prof['forbidden_materials']:
+        return False
+
+    # Filtro de Armas
+    if item.item_type in ['W1H', 'W2H']:
+        # Clérigo choca con una espada (Cortante = SLS, y está en forbidden_materials)
+        if item.weapon_type in prof['forbidden_materials']:
+            return False
+        if item.weapon_type not in prof['weapons']:
+            return False
+
+    # Filtro de Armaduras / Escudos
+    elif item.item_type in ['HED', 'TRS', 'LGS', 'HND', 'FET', 'OFF']:
+        if item.armor_weight not in prof['armor']:
+            return False
+
+    return True
 
 
 def market_phase(adventurers_qs, event_log):

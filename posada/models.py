@@ -76,6 +76,34 @@ class ItemRarity(models.TextChoices):
         return colors.get(rarity, 'white')
 
 
+class ArmorWeight(models.TextChoices):
+    NONE = 'NON', 'Sin Armadura'
+    LIGHT = 'LGT', 'Ligera'
+    MEDIUM = 'MED', 'Media'
+    HEAVY = 'HVY', 'Pesada'
+
+
+class WeaponType(models.TextChoices):
+    NONE = 'NON', 'No es arma'
+    SLASHING = 'SLS', 'Cortante'
+    PIERCING = 'PRC', 'Perforante'
+    BLUDGEONING = 'BLD', 'Contundente'
+    MAGICAL = 'MAG', 'Mágica / Foco'
+
+
+class Material(models.TextChoices):
+    METAL = 'MTL', 'Metal'
+    BONE = 'BNE', 'Hueso'
+    WOOD = 'WOD', 'Madera'
+    DARKWOOD = 'DW', 'Madera Oscura'
+    LEATHER = 'LTH', 'Cuero'
+    CLOTH = 'CLT', 'Tela'
+    ADAMANTINE = 'ADM', 'Adamantio'
+    MITHRAL = 'MTH', 'Mithril'
+    SILVER = 'SLV', 'Plata'
+    MIXED = 'MIX', 'Mixto'
+
+
 class CostMixin(models.Model):
     """Modelo abstracto para definir precios complejos con el sistema de 11 monedas."""
     cost_iron_half_penny = models.PositiveIntegerField(
@@ -108,15 +136,16 @@ class CostMixin(models.Model):
 class Item(CostMixin):
     """Representa un objeto en el mundo. ¡Úsalo como plantilla para tus Excel!"""
     name = models.CharField(max_length=100)
-    allowed_classes = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="Lista de códigos (WIZ, BBN, etc.) que pueden usar este item."
-    )
     description = models.TextField(blank=True)
     item_type = models.CharField(max_length=3, choices=ItemType.choices)
     rarity = models.CharField(
         max_length=3, choices=ItemRarity.choices, default=ItemRarity.COMMON)
+    armor_weight = models.CharField(
+        max_length=3, choices=ArmorWeight.choices, default=ArmorWeight.NONE)
+    weapon_type = models.CharField(
+        max_length=3, choices=WeaponType.choices, default=WeaponType.NONE)
+    material = models.CharField(
+        max_length=3, choices=Material.choices, default=Material.MIXED)
 
     # Modificadores de Combate
     damage_dice_count = models.PositiveIntegerField(

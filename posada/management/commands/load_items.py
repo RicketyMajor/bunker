@@ -1065,6 +1065,10 @@ class Command(BaseCommand):
                 "bonus_dex": 1,
             },
 
+            # CONJUNTO DE ARMADURA DE LA GRULLA ROJA (POCO COMÚN)
+
+
+
         ]
 
         self.stdout.write("Forjando los ítems en la base de datos...")
