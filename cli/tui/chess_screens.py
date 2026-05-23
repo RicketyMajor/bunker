@@ -1,11 +1,8 @@
-# cli/tui/chess_screens.py
-
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown, DataTable, Label, Static
+from textual.widgets import Header, Footer, Markdown, DataTable, Static
 from textual.containers import Vertical, Grid
-from textual.binding import Binding
 from textual import work
 
 from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE
@@ -13,64 +10,99 @@ from .modals import ImportPGNModal, ChessNoteModal
 
 
 def render_fen(fen: str) -> str:
-    """Convierte un string FEN en un tablero Unicode coloreado."""
-    pieces = {
-        'r': '[red]♜[/]', 'n': '[red]♞[/]', 'b': '[red]♝[/]', 'q': '[red]♛[/]', 'k': '[red]♚[/]', 'p': '[red]♟[/]',
-        'R': '[white]♜[/]', 'N': '[white]♞[/]', 'B': '[white]♝[/]', 'Q': '[white]♛[/]', 'K': '[white]♚[/]', 'P': '[white]♟[/]'
+    """Dibuja un tablero de alta fidelidad con proporciones geométricas perfectas."""
+    solid_pieces = {
+        'r': ('♜', '#000000'), 'n': ('♞', '#000000'), 'b': ('♝', '#000000'), 'q': ('♛', '#000000'), 'k': ('♚', '#000000'), 'p': ('♟', '#000000'),
+        'R': ('♜', '#FFFFFF'), 'N': ('♞', '#FFFFFF'), 'B': ('♝', '#FFFFFF'), 'Q': ('♛', '#FFFFFF'), 'K': ('♚', '#FFFFFF'), 'P': ('♟', '#FFFFFF')
     }
+    light_bg = "on #EBECD0"
+    dark_bg = "on #779556"
 
     rows = fen.split()[0].split('/')
-    board_str = "   [dim]a b c d e f g h[/dim]\n"
-    board_str += "  [dim]┌─────────────────┐[/dim]\n"
+    out = "\n"
 
-    for i, row in enumerate(rows):
-        rank = 8 - i
-        line = f"[dim]{rank} │[/dim]"
+    for r_idx, row in enumerate(rows):
+        rank = 8 - r_idx
+        squares = []
+
         for char in row:
             if char.isdigit():
-                line += " [dim]·[/dim]" * int(char)
+                squares.extend([None] * int(char))
             else:
-                line += " " + pieces[char]
-        line += f" [dim]│ {rank}[/dim]"
-        board_str += line + "\n"
+                squares.append(char)
 
-    board_str += "  [dim]└─────────────────┘[/dim]\n"
-    board_str += "   [dim]a b c d e f g h[/dim]"
+        # Ampliamos a 3 líneas de alto y 7 caracteres de ancho por casilla
+        # Esto evita que la terminal aplaste el tablero por las métricas de la fuente.
+        line1 = "   "
+        line2 = f"[bold #A0A0A0]{rank}[/]  "
+        line3 = "   "
 
-    return board_str
+        for c_idx, piece in enumerate(squares):
+            bg = light_bg if (r_idx + c_idx) % 2 == 0 else dark_bg
+
+            # Línea superior (vacía)
+            line1 += f"[{bg}]       [/]"
+
+            # Línea central (con la pieza perfectamente centrada)
+            if piece:
+                char, color = solid_pieces[piece]
+                line2 += f"[{color} {bg}]   {char}   [/]"
+            else:
+                line2 += f"[{bg}]       [/]"
+
+            # Línea inferior (vacía)
+            line3 += f"[{bg}]       [/]"
+
+        out += line1 + "\n" + line2 + "\n" + line3 + "\n"
+
+    # Coordenadas inferiores calculadas geométricamente (6 espacios de separación)
+    out += "      [bold #A0A0A0]a      b      c      d      e      f      g      h[/]\n"
+    return out
 
 
 class ChessMainScreen(Screen):
     """Laboratorio Táctico de Ajedrez."""
 
+    # ¡CORRECCIÓN CRÍTICA! Se retira el prefijo "action_" de los atajos
     BINDINGS = [
         ("escape, q", "go_back", "Volver al Launcher"),
-        ("a", "action_add_pgn", "Importar PGN"),
-        ("n", "action_edit_note", "Anotar Jugada"),
+        ("a", "add_pgn", "Importar PGN"),
+        ("n", "edit_note", "Anotar Jugada"),
     ]
 
     CSS = """
     #chess_root {
         layout: grid;
         grid-size: 2 2;
-        grid-columns: 1fr 1fr;
+        grid-columns: 1.5fr 1fr;
         grid-rows: 2fr 1fr;
         padding: 1 2;
         grid-gutter: 1 2;
     }
     
-    #board_panel { row-span: 2; border: heavy $success; background: $surface; align: center middle; }
+    #board_panel { 
+        row-span: 2; 
+        border: heavy $success; 
+        background: $surface; 
+        align: center middle; 
+        content-align: center middle;
+    }
+    
+    #board_view {
+        text-align: left; /* Mantiene la integridad del bloque 3x7 */
+        width: auto;
+    }
+    
     #moves_panel { border: heavy $warning; background: $surface; height: 100%; }
     #notes_panel { border: heavy $primary; background: $surface; height: 100%; padding: 0 1; }
-    
-    #board_view { text-align: center; content-align: center middle; }
     """
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Grid(id="chess_root"):
             with Vertical(id="board_panel"):
-                yield Static("Inicializando motor táctico...", id="board_view")
+                # Cargamos la posición inicial al iniciar el panel
+                yield Static(render_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"), id="board_view")
             with Vertical(id="moves_panel"):
                 yield DataTable(id="moves_table")
             with Vertical(id="notes_panel"):
@@ -81,26 +113,19 @@ class ChessMainScreen(Screen):
         self.title = "BUNKER"
         self.sub_title = "Laboratorio de Ajedrez"
 
-        # Estado interno de la partida activa
         self.current_room_id = None
         self.current_moves = []
-        self.current_notes = {}  # Mapeo ply -> {"id": x, "text": "..."}
+        self.current_notes = {}
         self.current_ply = 0
 
         table = self.query_one("#moves_table", DataTable)
-        table.cursor_type = "cell"  # Cursor por celda para máxima precisión al navegar
+        table.cursor_type = "cell"
         table.zebra_stripes = True
         table.add_columns("Turno", "Blancas", "Negras")
-
-        self.update_board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
-
-    def update_board(self, fen: str) -> None:
-        self.query_one("#board_view", Static).update(render_fen(fen))
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
 
-    # --- IMPORTACIÓN Y PARSEO ---
     def action_add_pgn(self) -> None:
         def handle_pgn(payload: dict | None) -> None:
             if payload and payload.get("pgn"):
@@ -129,13 +154,13 @@ class ChessMainScreen(Screen):
                         self.load_game_into_ui, room_data["id"], moves)
                 else:
                     self.app.call_from_thread(
-                        self.app.notify, "Error guardando la estancia.", severity="error")
+                        self.app.notify, f"Rechazo de BD: {room_resp.text}", severity="error", timeout=8)
             else:
                 self.app.call_from_thread(
-                    self.app.notify, "PGN corrupto o inválido.", severity="error")
+                    self.app.notify, f"Error de Parseo: {parse_resp.text}", severity="error", timeout=8)
         except Exception as e:
             self.app.call_from_thread(
-                self.app.notify, f"Error de red: {e}", severity="error")
+                self.app.notify, f"Error de red crítico: {e}", severity="error")
 
     def load_game_into_ui(self, room_id: int, moves: list) -> None:
         self.current_room_id = room_id
@@ -146,7 +171,6 @@ class ChessMainScreen(Screen):
         table = self.query_one("#moves_table", DataTable)
         table.clear()
 
-        # moves[0] es pos inicial, moves[1] es mov blancas 1
         turn_number = 1
         for i in range(1, len(moves), 2):
             white_move = moves[i]["san"]
@@ -160,9 +184,7 @@ class ChessMainScreen(Screen):
         table.focus()
         self.fetch_notes()
 
-    # --- REACTIVIDAD DEL TECLADO ---
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
-        """Cambia el tablero mágicamente al moverte por las celdas."""
         if not self.current_moves:
             return
 
@@ -170,21 +192,17 @@ class ChessMainScreen(Screen):
         row_idx = coord.row
         col_idx = coord.column
 
-        # Calcular el 'ply' exacto basado en la celda (col 1=blancas, col 2=negras)
-        # Si está en la col 0 (el número de turno) asumimos que mira el movimiento blanco
         ply = (row_idx * 2) + 1 if col_idx <= 1 else (row_idx * 2) + 2
 
-        # Evitar OutOfIndex si nos paramos en la columna negra de una partida que acabó en turno blanco
         if ply < len(self.current_moves):
             self.current_ply = ply
         else:
             self.current_ply = len(self.current_moves) - 1
 
         fen = self.current_moves[self.current_ply]["fen"]
-        self.update_board(fen)
+        self.query_one("#board_view", Static).update(render_fen(fen))
         self.refresh_notes_panel()
 
-    # --- ANOTACIONES ---
     @work(thread=True)
     def fetch_notes(self) -> None:
         if not self.current_room_id:
@@ -198,8 +216,7 @@ class ChessMainScreen(Screen):
                                                 "text": n["text"]} for n in notes_list}
                 self.app.call_from_thread(self.update_notes_dict, notes_dict)
         except Exception:
-            self.app.call_from_thread(
-                self.app.notify, "Error fetching notes.", severity="error")
+            pass
 
     def update_notes_dict(self, notes_dict: dict) -> None:
         self.current_notes = notes_dict
@@ -235,11 +252,9 @@ class ChessMainScreen(Screen):
             existing_note = self.current_notes.get(self.current_ply)
 
             if existing_note and "id" in existing_note:
-                # Update (PATCH)
                 resp = httpx.patch(
                     f"{API_CHESS_NOTES}{existing_note['id']}/", json={"text": text}, timeout=5.0)
             else:
-                # Create (POST)
                 payload = {
                     "room": self.current_room_id,
                     "ply_number": self.current_ply,
@@ -251,10 +266,10 @@ class ChessMainScreen(Screen):
             if resp.status_code in [200, 201]:
                 self.app.call_from_thread(
                     self.app.notify, "Nota táctica archivada.", title="Éxito")
-                self.fetch_notes()  # Recarga para obtener los IDs
+                self.fetch_notes()
             else:
                 self.app.call_from_thread(
-                    self.app.notify, "Error guardando la nota.", severity="error")
+                    self.app.notify, f"Error DB Notas: {resp.text}", severity="error", timeout=8)
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
