@@ -44,3 +44,8 @@ API_MUSIC_WISHLIST = "http://localhost:8000/api/music/wishlist/"
 # --- RUTAS DEL PROTOCOLO DE EVACUACIÓN (BACKUP/RESTORE) ---
 API_BACKUP = "http://localhost:8000/api/backup/"
 API_RESTORE = "http://localhost:8000/api/restore/"
+
+# --- RUTAS DEL AJEDREZ ---
+API_CHESS_ROOMS = "http://localhost:8000/api/chess/rooms/"
+API_CHESS_NOTES = "http://localhost:8000/api/chess/notes/"
+API_CHESS_PARSE = "http://localhost:8000/api/chess/parse-pgn/"

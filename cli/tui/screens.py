@@ -337,9 +337,14 @@ class BunkerLauncherScreen(Screen):
                     yield Label("MÓDULO 4: POSADA", classes="module_title")
                     yield Button("INGRESAR AL GREMIO", id="btn_posada", classes="launcher_btn", variant="primary")
 
-                # Módulo 5: Centro de Mando
+                # Módulo 5: Ajedrez
                 with Vertical(classes="module_panel"):
-                    yield Label("MÓDULO 5: MÉTRICAS GLOBALES", classes="module_title")
+                    yield Label("MÓDULO 5: AJEDREZ", classes="module_title")
+                    yield Button("LABORATORIO DE AJEDREZ", id="btn_chess", classes="launcher_btn", variant="primary")
+
+                # Módulo 6: Centro de Mando
+                with Vertical(classes="module_panel"):
+                    yield Label("MÓDULO 6: MÉTRICAS GLOBALES", classes="module_title")
                     yield Button("CENTRO DE MANDO", id="btn_dash", classes="launcher_btn", variant="success")
 
             # Protocolo de Evacuación
@@ -362,6 +367,9 @@ class BunkerLauncherScreen(Screen):
         elif event.button.id == "btn_posada":
             from .posada_screens import PosadaMainScreen
             self.app.push_screen(PosadaMainScreen())
+        elif event.button.id == "btn_chess":
+            from .chess_screens import ChessMainScreen
+            self.app.push_screen(ChessMainScreen())
         elif event.button.id == "btn_music":
             from .music_screens import MusicMainScreen
             self.app.push_screen(MusicMainScreen())

@@ -7,7 +7,7 @@ import socket
 import asyncio
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
-from textual.widgets import Input, Button, Label, Checkbox, RichLog, Select, Markdown
+from textual.widgets import Input, Button, Label, Checkbox, RichLog, Select, Markdown, TextArea
 from textual.containers import Vertical, Horizontal, VerticalScroll
 from pathlib import Path
 from textual import work
@@ -979,3 +979,51 @@ class EvacuationModal(ModalScreen[str]):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         options = {"btn_backup": "backup", "btn_restore": "restore"}
         self.dismiss(options.get(event.button.id, "cancel"))
+
+
+class ImportPGNModal(ModalScreen[dict]):
+    """Diálogo para pegar una partida PGN en crudo."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="full_edit_dialog"):
+            yield Label("♟️ Importar Partida (PGN)", classes="modal_title")
+            with VerticalScroll():
+                yield Label("Título de la Estancia:", classes="edit_label")
+                yield Input(id="inp_title", placeholder="Ej: Kasparov vs Topalov (Inmortal)")
+
+                yield Label("Pega el texto PGN:", classes="edit_label")
+                # Usa TextArea para permitir múltiples líneas cómodamente
+                yield TextArea(id="inp_pgn", language="markdown")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Analizar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            self.dismiss({
+                "title": self.query_one("#inp_title", Input).value,
+                "pgn": self.query_one("#inp_pgn", TextArea).text
+            })
+        else:
+            self.dismiss(None)
+
+
+class ChessNoteModal(ModalScreen[str]):
+    """Editor para la bitácora teórica de una jugada."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="full_edit_dialog"):  # Reutiliza el tamaño grande
+            yield Label("Anotar Jugada", classes="modal_title")
+            yield Label("Escribe tus apuntes para esta posición exacta:", classes="edit_label")
+            yield TextArea(id="inp_note")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Guardar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            self.dismiss(self.query_one("#inp_note", TextArea).text)
+        else:
+            self.dismiss(None)
