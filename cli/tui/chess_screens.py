@@ -1,19 +1,19 @@
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown, DataTable, Static, Tree
-from textual.containers import Vertical, Grid
+from textual.widgets import Header, Footer, Markdown, DataTable, Static, Tree, ProgressBar, Input
+from textual.containers import Vertical, Grid, Horizontal
 from textual import work
-
-from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS
+from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS, API_CHESS_EVALUATE, API_CHESS_VALIDATE
 from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal, ConfirmModal
 
 
 def render_fen(fen: str) -> str:
     """Dibuja un tablero de alta fidelidad con proporciones geométricas perfectas."""
+    # Piezas blancas ajustadas a un tono beige/hueso (#E8D2A6) para máximo contraste
     solid_pieces = {
         'r': ('♜', '#000000'), 'n': ('♞', '#000000'), 'b': ('♝', '#000000'), 'q': ('♛', '#000000'), 'k': ('♚', '#000000'), 'p': ('♟', '#000000'),
-        'R': ('♜', '#FFFFFF'), 'N': ('♞', '#FFFFFF'), 'B': ('♝', '#FFFFFF'), 'Q': ('♛', '#FFFFFF'), 'K': ('♚', '#FFFFFF'), 'P': ('♟', '#FFFFFF')
+        'R': ('♜', '#E8D2A6'), 'N': ('♞', '#E8D2A6'), 'B': ('♝', '#E8D2A6'), 'Q': ('♛', '#E8D2A6'), 'K': ('♚', '#E8D2A6'), 'P': ('♟', '#E8D2A6')
     }
     light_bg = "on #EBECD0"
     dark_bg = "on #779556"
@@ -60,6 +60,7 @@ class ChessMainScreen(Screen):
         ("n", "edit_note", "Anotar Jugada"),
         ("delete, x", "delete_note", "Eliminar Nota"),
         ("backspace", "delete_node", "Destruir Nodo (Árbol)"),
+        ("e", "evaluate_pos", "Oráculo (IA)"),
     ]
 
     CSS = """
@@ -74,36 +75,74 @@ class ChessMainScreen(Screen):
     
     #tree_panel { row-span: 2; border: heavy $accent; background: $surface; height: 100%; padding: 0; margin: 0; }
     
-    #board_panel { 
-        row-span: 2; 
-        border: heavy $success; 
-        background: $surface; 
-        align: center middle; 
+    /* Panel Central Rediseñado */
+    #center_panel {
+        row-span: 2;
+        height: 100%;
+        layout: vertical;
+    }
+    
+    #board_container {
+        height: 1fr;
+        border: heavy $success;
+        background: $surface;
+        align: center middle;
         content-align: center middle;
+        layout: horizontal;
+    }
+    
+    #eval_bar {
+        width: 3;
+        height: 90%;
+        margin-right: 2;
+        border: solid $warning;
+        /* La barra térmica irá aquí */
     }
     
     #board_view { text-align: left; width: auto; }
+    
+    #oracle_panel {
+        height: 3;
+        border: solid $secondary;
+        background: $surface-darken-1;
+        content-align: center middle;
+        color: $text-muted;
+    }
+    
+    #manual_move_input {
+        dock: bottom;
+        margin-top: 1;
+        border: solid $primary;
+    }
     
     #moves_panel { border: heavy $warning; background: $surface; height: 100%; }
     #notes_panel { border: heavy $primary; background: $surface; height: 100%; padding: 0 1; }
     """
 
     def compose(self) -> ComposeResult:
+
         yield Header(show_clock=True)
+
         with Grid(id="chess_root"):
-            # Nuevo Panel Izquierdo: El Árbol
             with Vertical(id="tree_panel"):
                 yield Tree("Archivos Tácticos", id="chess_tree")
 
-            # Panel Central: Tablero
-            with Vertical(id="board_panel"):
-                yield Static(render_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"), id="board_view")
+            # EL NUEVO NÚCLEO CENTRAL
+            with Vertical(id="center_panel"):
+                with Horizontal(id="board_container"):
+                    # Barra de Evaluación Vertical
+                    yield ProgressBar(total=100, show_eta=False, show_percentage=False, id="eval_bar")
+                    # Tablero Geométrico
+                    yield Static(render_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"), id="board_view")
 
-            # Panel Derecho Superior: Movimientos
+                # Panel del Oráculo (Stockfish)
+                yield Static("Oráculo inactivo. Presiona 'E' para evaluar posición.", id="oracle_panel")
+
             with Vertical(id="moves_panel"):
                 yield DataTable(id="moves_table")
+                # Barra para crear estudios (Input Manual)
+                yield Input(placeholder="Ingresa jugada (Ej: e4, Nf3)...", id="manual_move_input")
 
-            # Panel Derecho Inferior: Notas
             with Vertical(id="notes_panel"):
                 yield Markdown("### Apuntes Teóricos\n\nPresiona **A** para importar un PGN, o **D** para crear una carpeta.", id="notes_view")
         yield Footer()
@@ -418,3 +457,126 @@ class ChessMainScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
+
+    # --- MODO ESTUDIO (INPUT MANUAL) ---
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Captura cuando presionas Enter en la barra de comandos de ajedrez."""
+        if event.control.id == "manual_move_input":
+            san_move = event.value.strip()
+            if san_move:
+                self.process_manual_move(san_move)
+                event.control.value = ""  # Limpia la barra tras enviar
+
+    @work(thread=True)
+    def process_manual_move(self, san_move: str) -> None:
+        # Si el tablero está vacío, inicia desde la posición cero
+        current_fen = self.current_moves[self.current_ply][
+            "fen"] if self.current_moves else "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+
+        try:
+            resp = httpx.post(API_CHESS_VALIDATE, json={
+                              "fen": current_fen, "san": san_move}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.apply_manual_move, resp.json())
+            else:
+                err = resp.json().get("error", "Movimiento inválido")
+                self.app.call_from_thread(
+                    self.app.notify, f"Ilegal: {err}", severity="warning")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
+
+    def apply_manual_move(self, data: dict) -> None:
+        new_ply = self.current_ply + 1
+
+        # Si se está escribiendo en medio de una partida, corta el futuro
+        if new_ply < len(self.current_moves):
+            self.current_moves = self.current_moves[:new_ply]
+
+        move_entry = {
+            "ply": new_ply,
+            "san": data["san"],
+            "fen": data["new_fen"],
+            "turn": data["turn"]
+        }
+
+        # Si es la primera jugada del estudio, inserta también la inicial
+        if not self.current_moves:
+            self.current_moves.append(
+                {"ply": 0, "san": "Inicial", "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", "turn": "white"})
+
+        self.current_moves.append(move_entry)
+        self.current_ply = new_ply
+
+        self.query_one("#board_view", Static).update(
+            render_fen(data["new_fen"]))
+        self.refresh_moves_table()
+
+    def refresh_moves_table(self) -> None:
+        table = self.query_one("#moves_table", DataTable)
+        table.clear()
+        turn_number = 1
+        for i in range(1, len(self.current_moves), 2):
+            white_move = self.current_moves[i]["san"]
+            black_move = self.current_moves[i+1]["san"] if i + \
+                1 < len(self.current_moves) else ""
+            table.add_row(str(turn_number), white_move,
+                          black_move, key=str(turn_number))
+            turn_number += 1
+
+        # Despla el cursor automáticamente a la jugada recién hecha
+        if self.current_ply > 0:
+            row = (self.current_ply - 1) // 2
+            col = 1 if self.current_ply % 2 != 0 else 2
+            table.move_cursor(row=row, column=col)
+
+    # --- ORÁCULO DE STOCKFISH ---
+
+    def action_evaluate_pos(self) -> None:
+        """Se activa al presionar la E."""
+        if not self.current_moves:
+            return
+
+        fen = self.current_moves[self.current_ply]["fen"]
+        self.query_one("#oracle_panel", Static).update(
+            "⏳ [italic text-muted]Oráculo calculando árboles de variantes...[/]")
+        self.process_evaluation(fen)
+
+    @work(thread=True)
+    def process_evaluation(self, fen: str) -> None:
+        try:
+            resp = httpx.post(API_CHESS_EVALUATE, json={
+                              "fen": fen, "depth": 15}, timeout=15.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.update_oracle_ui, resp.json())
+            else:
+                self.app.call_from_thread(self.query_one(
+                    "#oracle_panel", Static).update, f"Error del Oráculo.")
+        except Exception as e:
+            self.app.call_from_thread(self.query_one(
+                "#oracle_panel", Static).update, f"Fallo de comunicación: {e}")
+
+    def update_oracle_ui(self, data: dict) -> None:
+        eval_info = data.get("eval", {})
+        best_move = data.get("best_move", "Ninguno")
+
+        panel = self.query_one("#oracle_panel", Static)
+        bar = self.query_one("#eval_bar", ProgressBar)
+
+        if eval_info.get("type") == "mate":
+            mate_in = eval_info.get("value", 0)
+            color = "Blancas" if mate_in > 0 else "Negras"
+            text = f"[bold red]MATE INMINENTE[/]: {color} en {abs(mate_in)} | Sugerencia: [bold]{best_move}[/]"
+            bar.progress = 100 if mate_in > 0 else 0
+        else:
+            cp = eval_info.get("value", 0)
+            score = cp / 100.0
+            sign = "+" if score > 0 else ""
+
+            text = f"[bold cyan]Análisis (Stockfish):[/] {sign}{score:.2f} | Mejor jugada: [bold]{best_move}[/]"
+
+            # Matemática para la barra térmica: -5 a +5 puntos (500 centipeones) llenan o vacían la barra
+            percentage = 50 + (score * 10)
+            bar.progress = max(0, min(100, percentage))
+
+        panel.update(text)
