@@ -6,7 +6,7 @@ from textual.containers import Vertical, Grid
 from textual import work
 
 from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS
-from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal
+from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal, ConfirmModal
 
 
 def render_fen(fen: str) -> str:
@@ -58,6 +58,8 @@ class ChessMainScreen(Screen):
         ("d", "add_dir", "Crear Carpeta"),
         ("a", "add_pgn", "Importar PGN"),
         ("n", "edit_note", "Anotar Jugada"),
+        ("delete, x", "delete_note", "Eliminar Nota"),
+        ("backspace", "delete_node", "Destruir Nodo (Árbol)"),
     ]
 
     CSS = """
@@ -323,10 +325,13 @@ class ChessMainScreen(Screen):
                 "Selecciona una jugada blanca o negra en la tabla.", severity="warning")
             return
 
+        existing_text = self.current_notes.get(
+            self.current_ply, {}).get("text", "")
+
         def save_note(text: str | None) -> None:
             if text is not None:
                 self.process_save_note(text)
-        self.app.push_screen(ChessNoteModal(), save_note)
+        self.app.push_screen(ChessNoteModal(existing_text), save_note)
 
     @work(thread=True)
     def process_save_note(self, text: str) -> None:
@@ -352,6 +357,64 @@ class ChessMainScreen(Screen):
             else:
                 self.app.call_from_thread(
                     self.app.notify, f"Error DB Notas: {resp.text}", severity="error", timeout=8)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
+
+# --- SISTEMA DE ELIMINACIÓN ---
+    def action_delete_node(self) -> None:
+        tree = self.query_one("#chess_tree", Tree)
+        node = tree.cursor_node
+        if not node or not node.data:
+            return
+
+        def check_del(confirm: bool) -> None:
+            if confirm:
+                self.process_delete_node(node.data)
+
+        tipo = "carpeta" if node.data['type'] == 'dir' else "partida"
+        self.app.push_screen(ConfirmModal(
+            f"¿Destruir irreversiblemente esta {tipo}?"), check_del)
+
+    @work(thread=True)
+    def process_delete_node(self, data: dict) -> None:
+        try:
+            endpoint = API_CHESS_DIRS if data['type'] == 'dir' else API_CHESS_ROOMS
+            resp = httpx.delete(f"{endpoint}{data['id']}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Elemento destruido.", title="Éxito")
+                self.app.call_from_thread(self.fetch_library)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al eliminar.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error: {e}", severity="error")
+
+    def action_delete_note(self) -> None:
+        if not self.current_moves or self.current_ply not in self.current_notes:
+            return
+
+        def check_del(confirm: bool) -> None:
+            if confirm:
+                self.process_delete_note(
+                    self.current_notes[self.current_ply]["id"])
+
+        self.app.push_screen(ConfirmModal(
+            "¿Eliminar los apuntes de esta jugada?"), check_del)
+
+    @work(thread=True)
+    def process_delete_note(self, note_id: int) -> None:
+        try:
+            resp = httpx.delete(f"{API_CHESS_NOTES}{note_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Nota eliminada.", title="Éxito")
+                self.fetch_notes()
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al eliminar nota.", severity="error")
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
