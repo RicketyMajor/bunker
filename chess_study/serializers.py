@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import ChessRoom, ChessNote
+from .models import ChessRoom, ChessNote, ChessDirectory
+
+
+class ChessDirectorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChessDirectory
+        fields = '__all__'
 
 
 class ChessNoteSerializer(serializers.ModelSerializer):
@@ -9,7 +15,6 @@ class ChessNoteSerializer(serializers.ModelSerializer):
 
 
 class ChessRoomSerializer(serializers.ModelSerializer):
-    # Anidamos las notas para que al descargar una partida, vengan todos sus apuntes
     notes = ChessNoteSerializer(many=True, read_only=True)
 
     class Meta:

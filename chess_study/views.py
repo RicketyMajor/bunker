@@ -4,8 +4,14 @@ import chess.pgn
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import ChessRoom, ChessNote
-from .serializers import ChessRoomSerializer, ChessNoteSerializer
+from .models import ChessRoom, ChessNote, ChessDirectory
+from .serializers import ChessRoomSerializer, ChessNoteSerializer, ChessDirectorySerializer
+
+
+class ChessDirectoryViewSet(viewsets.ModelViewSet):
+    """Controlador para gestionar el árbol de directorios de ajedrez."""
+    queryset = ChessDirectory.objects.all().order_by('name')
+    serializer_class = ChessDirectorySerializer
 
 
 class ChessRoomViewSet(viewsets.ModelViewSet):

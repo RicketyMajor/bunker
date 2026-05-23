@@ -1027,3 +1027,73 @@ class ChessNoteModal(ModalScreen[str]):
             self.dismiss(self.query_one("#inp_note", TextArea).text)
         else:
             self.dismiss(None)
+
+
+class ChessDirModal(ModalScreen[dict]):
+    """Diálogo para crear un directorio táctico en el árbol."""
+
+    def __init__(self, dirs: list, **kwargs):
+        super().__init__(**kwargs)
+        self.dirs = dirs
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dir_dialog"):
+            yield Label("📁 Nuevo Directorio Táctico", classes="modal_title")
+            yield Input(placeholder="Ej: Defensa Siciliana", id="inp_dirname")
+
+            yield Label("Directorio Padre (Opcional):", classes="edit_label")
+            options = [("Raíz (Ninguno)", "")] + \
+                [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
+            yield Select(options, id="sel_parent")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Crear", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            parent_val = self.query_one("#sel_parent", Select).value
+            self.dismiss({
+                "name": self.query_one("#inp_dirname", Input).value,
+                "parent": int(parent_val) if parent_val else None
+            })
+        else:
+            self.dismiss(None)
+
+
+class ImportPGNModal(ModalScreen[dict]):
+    """Diálogo para pegar una partida PGN en crudo y ubicarla en el árbol."""
+
+    def __init__(self, dirs: list, **kwargs):
+        super().__init__(**kwargs)
+        self.dirs = dirs
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="full_edit_dialog"):
+            yield Label("♟️ Importar Partida (PGN)", classes="modal_title")
+            with VerticalScroll():
+                yield Label("Título de la Estancia:", classes="edit_label")
+                yield Input(id="inp_title", placeholder="Ej: Kasparov vs Topalov (Inmortal)")
+
+                yield Label("Ubicación en el Explorador:", classes="edit_label")
+                options = [("Raíz (Ninguno)", "")] + \
+                    [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
+                yield Select(options, id="sel_dir")
+
+                yield Label("Pega el texto PGN:", classes="edit_label")
+                yield TextArea(id="inp_pgn", language="markdown")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Analizar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            dir_val = self.query_one("#sel_dir", Select).value
+            self.dismiss({
+                "title": self.query_one("#inp_title", Input).value,
+                "directory": int(dir_val) if dir_val else None,
+                "pgn": self.query_one("#inp_pgn", TextArea).text
+            })
+        else:
+            self.dismiss(None)
