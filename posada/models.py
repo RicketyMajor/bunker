@@ -104,6 +104,18 @@ class Material(models.TextChoices):
     MIXED = 'MIX', 'Mixto'
 
 
+class OnHitEffect(models.TextChoices):
+    """Efectos que se aplican al golpear (DoTs, debuffs, curación vampírica, etc.)"""
+    NONE = 'NON', 'Sin Efecto'
+    POISON = 'PSN', 'Envenenar (Daño por turno)'
+    BLEED = 'BLD', 'Sangrar (Daño por turno)'
+    BURN = 'BRN', 'Quemar (Daño por turno)'
+    STUN = 'STN', 'Aturdir (Pierde el turno)'
+    BLIND = 'BLN', 'Cegar (Desventaja al atacar)'
+    LIFESTEAL = 'LFS', 'Drenar Vida (Cura al usuario)'
+    THORNS = 'THN', 'Pinchos (Daño de represalia al ser golpeado)'
+
+
 class CostMixin(models.Model):
     """Modelo abstracto para definir precios complejos con el sistema de 11 monedas."""
     cost_iron_half_penny = models.PositiveIntegerField(
@@ -147,15 +159,27 @@ class Item(CostMixin):
     material = models.CharField(
         max_length=3, choices=Material.choices, default=Material.MIXED)
 
-    # Modificadores de Combate
+    # Modificadores de Combate Base (Armas)
     damage_dice_count = models.PositiveIntegerField(
-        default=0, help_text="Cantidad de dados (Ej: 1 para 1d6)")
+        default=0, help_text="Dados del arma base (Ej: 1)")
     damage_dice_sides = models.PositiveIntegerField(
-        default=0, help_text="Caras del dado (Ej: 6 para 1d6)")
+        default=0, help_text="Caras del arma base (Ej: 6)")
+
+    # Modificadores Extra Dinámicos (Magia / Anillos / Runas)
+    bonus_damage_dice_count = models.PositiveIntegerField(
+        default=0, help_text="Dados extra de daño mágico (Ej: 1)")
+    bonus_damage_dice_sides = models.PositiveIntegerField(
+        default=0, help_text="Caras del dado extra mágico (Ej: 4)")
     bonus_damage = models.PositiveIntegerField(
-        default=0, help_text="Suma al Daño Plano (Ej: Anillos o armas mágicas)")
+        default=0, help_text="Daño Plano garantizado adicional")
     bonus_armor = models.PositiveIntegerField(
-        default=0, help_text="Suma a la Armadura (Ropa/Escudos)")
+        default=0, help_text="Suma a la Armadura")
+
+    # Sistema de Efectos Alterados (Procs)
+    on_hit_effect = models.CharField(
+        max_length=3, choices=OnHitEffect.choices, default=OnHitEffect.NONE)
+    effect_chance = models.PositiveIntegerField(
+        default=0, help_text="Probabilidad 1-100 de aplicar el efecto al golpear")
 
     # Modificadores de Atributos RPG
     bonus_str = models.IntegerField(default=0, verbose_name="Fuerza")
@@ -303,9 +327,11 @@ class Adventurer(WealthMixin):
         ] if i is not None]
 
     def get_stat_modifiers(self):
-        # Cambiamos: Daño base 2, desarmado
+
         mods = {'str': 0, 'dex': 0, 'con': 0, 'int': 0, 'wis': 0, 'cha': 0, 'luk': 0,
-                'armor': 0, 'damage': 2, 'weapon_dice_count': 0, 'weapon_dice_sides': 0}
+                'armor': 0, 'damage': 2, 'weapon_dice_count': 0, 'weapon_dice_sides': 0,
+                'bonus_dmg_dice_count': 0, 'bonus_dmg_dice_sides': 0,
+                'on_hit_effect': 'NON', 'effect_chance': 0}
 
         # Modificadores de Raza
         race_mods = {
@@ -345,6 +371,17 @@ class Adventurer(WealthMixin):
             mods['luk'] += item.bonus_luk
             mods['armor'] += item.bonus_armor
             mods['damage'] += item.bonus_damage
+
+            # --- Acumular dados extra y efectos ---
+            mods['bonus_dmg_dice_count'] += item.bonus_damage_dice_count
+            if item.bonus_damage_dice_sides > mods['bonus_dmg_dice_sides']:
+                # Guarda el dado más grande
+                mods['bonus_dmg_dice_sides'] = item.bonus_damage_dice_sides
+
+            # Si un arma tiene un efecto, el aventurero lo adquiere para atacar
+            if item.on_hit_effect != 'NON' and item.item_type in ['W1H', 'W2H', 'RNG', 'NCK']:
+                mods['on_hit_effect'] = item.on_hit_effect
+                mods['effect_chance'] = item.effect_chance
 
         # --- LÓGICA DE DEFENSA SIN ARMADURA ---
         is_unarmored = True
@@ -476,10 +513,20 @@ class Monster(models.Model):
 
     base_hp = models.PositiveIntegerField(default=10)
 
-    # Daño basado en dados (Ej: 1d6 + 2)
+    # Daño basado en dados
     damage_dice_count = models.PositiveIntegerField(default=1)
     damage_dice_sides = models.PositiveIntegerField(default=4)
+
+    # Daño Extra Dinámico
+    bonus_damage_dice_count = models.PositiveIntegerField(default=0)
+    bonus_damage_dice_sides = models.PositiveIntegerField(default=0)
     bonus_damage = models.PositiveIntegerField(default=0)
+
+    # Sistema de Efectos Alterados (Procs)
+    on_hit_effect = models.CharField(
+        max_length=3, choices=OnHitEffect.choices, default=OnHitEffect.NONE)
+    effect_chance = models.PositiveIntegerField(
+        default=0, help_text="Probabilidad 1-100 de aplicar el efecto")
 
     loot_multiplier = models.FloatField(default=1.0)
     xp_reward = models.PositiveIntegerField(default=50)
