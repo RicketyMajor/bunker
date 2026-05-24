@@ -43,6 +43,30 @@ FLAVOR_ADV = [
 ]
 
 
+def roll_d20(advantage=False, disadvantage=False):
+    """Realiza una tirada D20 aplicando reglas de Ventaja o Desventaja."""
+    r1, r2 = random.randint(1, 20), random.randint(1, 20)
+    if advantage and not disadvantage:
+        return max(r1, r2)
+    if disadvantage and not advantage:
+        return min(r1, r2)
+    return random.randint(1, 20)
+
+
+def calculate_save_dc(adv):
+    """
+    Dificultad de Salvación (Save DC) = 8 + Modificador Principal + Bono de Competencia.
+    Se usa para que los enemigos resistan hechizos o efectos del aventurero.
+    """
+    mods = adv.get_stat_modifiers()
+    # Identifica la mejor estadística mágica/táctica del personaje
+    spellcasting_mod = max(mods.get('int', 0), mods.get(
+        'wis', 0), mods.get('cha', 0))
+    # Competencia en D&D 5e escala con el nivel: +2 (niveles 1-4), +3 (5-8), +4 (9+)
+    prof_bonus = 2 + ((adv.level - 1) // 4)
+    return 8 + spellcasting_mod + prof_bonus
+
+
 def generate_session_script(session_id, duration_minutes, adventurers_qs):
     random.seed(session_id)
     script = []
@@ -63,6 +87,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
     # --- TRACKERS TEMPORALES DE HABILIDADES ---
     session_skills_tracker = {adv.id: set() for adv in adventurers}
     combat_skills_tracker = {adv.id: set() for adv in adventurers}
+    adv_status_tracker = {adv.id: set() for adv in adventurers}
 
     # --- Tablas de Botín por Categoría ---
     # (moneda, cant_max, probabilidad)
@@ -87,7 +112,6 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
         valid_advs = [a for a in adventurers if is_class_allowed(a, item)]
         if not valid_advs:
             return random.choice(adventurers)
-        # El que tenga menos items equipados tiene prioridad
         valid_advs.sort(key=lambda a: len(a.get_equipped_items()))
         return valid_advs[0]
 
@@ -107,7 +131,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 spawn_count = random.randint(
                     base_monster.min_spawn, base_monster.max_spawn)
 
-                # Genera cada individuo del grupo
+                # Genera cada individuo del grupo con su propio registro de estados
                 for i in range(spawn_count):
                     pts_map = {'SML': 15, 'MED': 25, 'LRG': 45, 'EPC': 65}
                     pts = pts_map.get(base_monster.category, 15)
@@ -121,7 +145,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     name = f"{base_monster.name} {'ABCDEF'[i]}" if spawn_count > 1 else base_monster.name
 
                     active_monsters_group.append({
-                        'name': name, 'hp': hp, 'stats': m_stats, 'base': base_monster
+                        'name': name, 'hp': hp, 'stats': m_stats, 'base': base_monster,
+                        # <-- NUEVO: Los monstruos pueden ser Cegados, Aturdidos, etc.
+                        'status': set()
                     })
 
                 msg = f"¡EMBOSCADA! Un grupo de {spawn_count} [bold red]{base_monster.name}s[/bold red] corta el paso." if spawn_count > 1 else f"¡PELIGRO! Un [bold red]{base_monster.name}[/bold red] bloquea el camino."
@@ -144,7 +170,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 break
 
             # --- INMERSIÓN (1 por ronda) ---
-            if random.random() < 0.5:  # 50% aventurero, 50% monstruo
+            if random.random() < 0.5:
                 f_adv = random.choice(adventurers)
                 script.append({"second": current_second - 12, "type": "flavor",
                               "message": f"{f_adv.name} {random.choice(FLAVOR_ADV)}"})
@@ -157,10 +183,24 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
             # --- TURNO DE LOS MONSTRUOS ---
             for m in active_monsters_group:
+                # Si el monstruo está aturdido, pierde el turno y se limpia el estado
+                if 'STUNNED' in m['status']:
+                    m['status'].remove('STUNNED')
+                    script.append({"second": current_second - 8, "type": "flavor",
+                                  "message": f"💫 [bold red]{m['name']}[/bold red] está aturdido y no puede moverse."})
+                    continue
+
                 target = random.choice(adventurers)
                 adv_mods = target.get_stat_modifiers()
-                m_roll = random.randint(1, 20) + m['stats']['dex']
                 adv_evasion = 10 + adv_mods['dex']
+
+                # Lógica de Ventaja/Desventaja en base a estados
+                adv_on_attack = 'BLINDED' in adv_status_tracker[
+                    target.id] or 'RECKLESS' in adv_status_tracker[target.id]
+                disadv_on_attack = 'BLINDED' in m['status'] or 'DODGING' in adv_status_tracker[target.id]
+
+                m_roll = roll_d20(
+                    advantage=adv_on_attack, disadvantage=disadv_on_attack) + m['stats']['dex']
 
                 if m_roll >= adv_evasion:
                     base_m = m['base']
@@ -168,6 +208,10 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                      for _ in range(base_m.damage_dice_count))
                     m_dmg = m_dmg_dice + \
                         base_m.bonus_damage + m['stats']['str']
+
+                    # --- HOOK DE REACCIONES (Fase 28+) ---
+                    # Aquí el sistema pausará y verificará si el aventurero tiene "Esquiva Asombrosa" o "Escudo"
+
                     final_dmg = max(1, m_dmg - adv_mods['armor'])
                     script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
                                   "message": f"[bold red]{m['name']}[/bold red] golpea a {target.name} ({final_dmg} daño)."})
@@ -175,7 +219,6 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     script.append({"second": current_second - 8, "type": "flavor",
                                   "message": f"{target.name} esquivó el ataque de [bold red]{m['name']}[/bold red]."})
 
-            # --- TURNO DE LOS AVENTUREROS ---
             # --- TURNO DE LOS AVENTUREROS ---
             for i, adv in enumerate(adventurers):
                 if not active_monsters_group:
@@ -200,6 +243,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     'caster': adv,
                     'allies': adventurers,
                     'enemies': active_monsters_group,
+                    'adv_status': adv_status_tracker,
                     'current_second': current_second - 4,
                     'log': script,
                     'eval_mode': True  # Modo evaluación silencioso
@@ -219,9 +263,14 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 if best_action == "BASIC_ATTACK":
                     # --- ATAQUE BÁSICO CLÁSICO ---
                     target_m = random.choice(active_monsters_group)
-                    # Usar la mejor estadística ofensiva disponible
                     attack_stat = max(adv_mods['str'], adv_mods['dex'])
-                    a_roll = random.randint(1, 20) + attack_stat
+
+                    # Ventaja/Desventaja
+                    adv_on_attack = 'BLINDED' in target_m['status']
+                    disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
+
+                    a_roll = roll_d20(advantage=adv_on_attack,
+                                      disadvantage=disadv_on_attack) + attack_stat
                     m_evasion = 10 + target_m['stats']['dex']
 
                     if a_roll >= m_evasion:

@@ -281,6 +281,10 @@ class Adventurer(WealthMixin):
     combat_skills_used = models.JSONField(
         default=list, blank=True, help_text="Habilidades de Combate ya utilizadas.")
 
+    # --- RECURSOS DE CLASE ---
+    class_resources = models.JSONField(
+        default=dict, blank=True, help_text="Reserva de energía (ej: {'ki': 3, 'spell_slots_1': 2})")
+
     is_active = models.BooleanField(default=False)
     is_recovering = models.BooleanField(default=False)
     recovery_time_left = models.PositiveIntegerField(default=0)
