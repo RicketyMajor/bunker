@@ -346,7 +346,22 @@ class Adventurer(WealthMixin):
             mods['armor'] += item.bonus_armor
             mods['damage'] += item.bonus_damage
 
-        # Si usa arma, quita el daño base desarmado y usa los dados del arma
+        # --- LÓGICA DE DEFENSA SIN ARMADURA ---
+        is_unarmored = True
+        for item in self.get_equipped_items():
+            # Si tiene casco, torso, pantalones o escudo que no sean 'NON'
+            if item.item_type in ['TRS', 'HED', 'LGS', 'OFF'] and item.armor_weight != 'NON':
+                is_unarmored = False
+
+        # Monje: Suma su Sabiduría a la Armadura si está ligero
+        if self.adv_class == 'MNK' and is_unarmored:
+            mods['armor'] += mods['wis']
+
+        # Bárbaro (Nv 4+): Piel Curtida (+1 CA permanente sin armadura)
+        if self.adv_class == 'BBN' and self.level >= 4 and is_unarmored:
+            mods['armor'] += 1
+
+        # Si usa arma, quita el daño base desarmado y usa los
         if self.equip_main_hand and self.equip_main_hand.damage_dice_count > 0:
             mods['weapon_dice_count'] = self.equip_main_hand.damage_dice_count
             mods['weapon_dice_sides'] = self.equip_main_hand.damage_dice_sides

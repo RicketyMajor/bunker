@@ -209,8 +209,17 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     m_dmg = m_dmg_dice + \
                         base_m.bonus_damage + m['stats']['str']
 
-                    # --- HOOK DE REACCIONES (Fase 28+) ---
-                    # Aquí el sistema pausará y verificará si el aventurero tiene "Esquiva Asombrosa" o "Escudo"
+                    # --- HOOK DE REACCIONES Y PASIVAS DEFENSIVAS ---
+                    # Pícaro Nv 5: Esquiva Asombrosa (Mitiga a la mitad, gasta la reacción del turno)
+                    if target.adv_class == 'ROG' and target.level >= 5 and 'REACTION_USED' not in adv_status_tracker[target.id]:
+                        m_dmg = m_dmg // 2
+                        adv_status_tracker[target.id].add('REACTION_USED')
+                        script.append({"second": current_second - 8, "type": "flavor",
+                                       "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y desliza su cuerpo para mitigar el impacto."})
+
+                    # Bárbaro: Furia Feroz (Resistencia al daño)
+                    if 'RAGING' in adv_status_tracker[target.id]:
+                        m_dmg = m_dmg // 2
 
                     final_dmg = max(1, m_dmg - adv_mods['armor'])
                     script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
@@ -261,30 +270,70 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 # 3. Ejecutar la Mejor Decisión
                 if best_action == "BASIC_ATTACK":
-                    # --- ATAQUE BÁSICO CLÁSICO ---
-                    target_m = random.choice(active_monsters_group)
-                    attack_stat = max(adv_mods['str'], adv_mods['dex'])
+                    # --- ATAQUE BÁSICO Y MULTIATAQUE ---
 
-                    # Ventaja/Desventaja
-                    adv_on_attack = 'BLINDED' in target_m['status']
-                    disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
+                    # Limpiamos la Reacción para que el Pícaro la vuelva a tener disponible
+                    adv_status_tracker[adv.id].discard('REACTION_USED')
 
-                    a_roll = roll_d20(advantage=adv_on_attack,
-                                      disadvantage=disadv_on_attack) + attack_stat
-                    m_evasion = 10 + target_m['stats']['dex']
+                    # Nivel 5: Clases Marciales atacan dos veces
+                    attacks = 2 if adv.level >= 5 and adv.adv_class in [
+                        'FTR', 'BBN', 'RGR', 'PAL', 'MNK'] else 1
 
-                    if a_roll >= m_evasion:
-                        sides = adv_mods.get('weapon_dice_sides', 4) or 4
-                        count = adv_mods.get('weapon_dice_count', 1) or 1
-                        a_dmg = sum(random.randint(1, sides) for _ in range(
-                            count)) + adv_mods['damage'] + adv_mods['str']
+                    for _ in range(attacks):
+                        if not active_monsters_group:
+                            break
 
-                        target_m['hp'] -= a_dmg
-                        script.append({"second": current_second - 4, "type": "flavor",
-                                      "message": f"{adv.name} asesta un golpe de {a_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
-                    else:
-                        script.append({"second": current_second - 4, "type": "flavor",
-                                      "message": f"{adv.name} falla su ataque contra [bold red]{target_m['name']}[/bold red]."})
+                        target_m = random.choice(active_monsters_group)
+                        attack_stat = max(adv_mods['str'], adv_mods['dex'])
+
+                        # Lógica de Ventaja/Desventaja
+                        adv_on_attack = 'BLINDED' in target_m['status'] or 'RECKLESS' in adv_status_tracker[adv.id]
+                        disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
+
+                        a_roll = roll_d20(
+                            advantage=adv_on_attack, disadvantage=disadv_on_attack) + attack_stat
+                        m_evasion = 10 + target_m['stats']['dex']
+
+                        if a_roll >= m_evasion:
+                            sides = adv_mods.get('weapon_dice_sides', 4) or 4
+                            count = adv_mods.get('weapon_dice_count', 1) or 1
+                            a_dmg = sum(random.randint(1, sides) for _ in range(
+                                count)) + adv_mods['damage'] + adv_mods['str']
+
+                            # --- PASIVAS OFENSIVAS ---
+                            # Ataque Furtivo del Pícaro
+                            if adv.adv_class == 'ROG' and adv_on_attack:
+                                sneak_dice = (adv.level + 1) // 2
+                                sneak_dmg = sum(random.randint(1, 6)
+                                                for _ in range(sneak_dice))
+                                a_dmg += sneak_dmg
+                                script.append({"second": current_second - 5, "type": "flavor",
+                                               "message": f"🗡️ ¡Ataque Furtivo brutal de {adv.name}! (+{sneak_dmg} daño extra)"})
+
+                            # Bono de Furia
+                            if 'RAGING' in adv_status_tracker[adv.id]:
+                                a_dmg += 2
+
+                            # Arma Infundida del Artificiero
+                            if 'INFUSED_WEAPON' in adv_status_tracker[adv.id]:
+                                a_dmg += 1
+
+                            # Inspiración Bárdica (Suma 1d6 al ataque y luego se gasta)
+                            if 'INSPIRED' in adv_status_tracker[adv.id]:
+                                bard_dice = random.randint(1, 6)
+                                a_roll += bard_dice  # Modificamos el dado que tiró para asegurar que golpee
+                                adv_status_tracker[adv.id].remove('INSPIRED')
+                                script.append({"second": current_second - 5, "type": "flavor",
+                                               "message": f"🎵 ¡La música del Bardo guía el golpe de {adv.name}! (+{bard_dice} precisión)"})
+
+                            target_m['hp'] -= a_dmg
+
+                            target_m['hp'] -= a_dmg
+                            script.append({"second": current_second - 4, "type": "flavor",
+                                          "message": f"{adv.name} asesta un golpe de {a_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
+                        else:
+                            script.append({"second": current_second - 4, "type": "flavor",
+                                          "message": f"{adv.name} falla su ataque contra [bold red]{target_m['name']}[/bold red]."})
                 else:
                     # --- EJECUCIÓN DE HABILIDAD ---
                     success = best_action["execute"](context)
