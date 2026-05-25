@@ -2,7 +2,7 @@ import random
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum
-from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade
+from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade, JournalEntry
 from .skills import SkillRegistry
 
 XP_PER_MINUTE = 10
@@ -182,8 +182,24 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                               "message": f"El [bold red]{f_mon['name']}[/bold red] {flav}"})
 
             # --- TURNO DE LOS MONSTRUOS ---
+            # --- TURNO DE LOS MONSTRUOS ---
             for m in active_monsters_group:
-                # Si el monstruo está aturdido, pierde el turno y se limpia el estado
+                # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL MONSTRUO ---
+                dot_damage = 0
+                if 'PSN' in m['status']:
+                    dot_damage += random.randint(1, 4)
+                if 'BRN' in m['status']:
+                    dot_damage += random.randint(1, 6)
+                if 'BLD' in m['status']:
+                    dot_damage += random.randint(1, 4)
+                if dot_damage > 0:
+                    m['hp'] -= dot_damage
+                    script.append({"second": current_second - 10, "type": "flavor",
+                                  "message": f"🩸 [bold red]{m['name']}[/bold red] sufre {dot_damage} de daño por estados alterados."})
+                    if m['hp'] <= 0:
+                        continue  # Si muere por DoT, pierde su turno
+
+                # Si el monstruo está aturdido, pierde el turno
                 if 'STUNNED' in m['status']:
                     m['status'].remove('STUNNED')
                     script.append({"second": current_second - 8, "type": "flavor",
@@ -194,7 +210,6 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 adv_mods = target.get_stat_modifiers()
                 adv_evasion = 10 + adv_mods['dex']
 
-                # Lógica de Ventaja/Desventaja en base a estados
                 adv_on_attack = 'BLINDED' in adv_status_tracker[
                     target.id] or 'RECKLESS' in adv_status_tracker[target.id]
                 disadv_on_attack = 'BLINDED' in m['status'] or 'DODGING' in adv_status_tracker[target.id]
@@ -204,22 +219,40 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 if m_roll >= adv_evasion:
                     base_m = m['base']
+                    # Daño Base
                     m_dmg_dice = sum(random.randint(1, base_m.damage_dice_sides)
                                      for _ in range(base_m.damage_dice_count))
-                    m_dmg = m_dmg_dice + \
+                    # Daño Extra Dinámico
+                    m_extra_dice = sum(random.randint(1, getattr(base_m, 'bonus_damage_dice_sides', 4)) for _ in range(
+                        getattr(base_m, 'bonus_damage_dice_count', 0))) if getattr(base_m, 'bonus_damage_dice_count', 0) > 0 else 0
+
+                    m_dmg = m_dmg_dice + m_extra_dice + \
                         base_m.bonus_damage + m['stats']['str']
 
                     # --- HOOK DE REACCIONES Y PASIVAS DEFENSIVAS ---
-                    # Pícaro Nv 5: Esquiva Asombrosa (Mitiga a la mitad, gasta la reacción del turno)
                     if target.adv_class == 'ROG' and target.level >= 5 and 'REACTION_USED' not in adv_status_tracker[target.id]:
                         m_dmg = m_dmg // 2
                         adv_status_tracker[target.id].add('REACTION_USED')
                         script.append({"second": current_second - 8, "type": "flavor",
-                                       "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y desliza su cuerpo para mitigar el impacto."})
+                                       "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y mitiga el impacto."})
 
-                    # Bárbaro: Furia Feroz (Resistencia al daño)
                     if 'RAGING' in adv_status_tracker[target.id]:
                         m_dmg = m_dmg // 2
+
+                    # --- EFECTOS AL IMPACTAR (PROCS MONSTRUO) ---
+                    eff_m = getattr(base_m, 'on_hit_effect', 'NON')
+                    if eff_m != 'NON' and random.randint(1, 100) <= getattr(base_m, 'effect_chance', 0):
+                        adv_status_tracker[target.id].add(eff_m)
+                        script.append({"second": current_second - 8, "type": "flavor",
+                                      "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+
+                    # --- PINCHOS (THORNS) DEL AVENTURERO ---
+                    eff_adv = adv_mods.get('on_hit_effect', 'NON')
+                    if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
+                        thorns_dmg = random.randint(1, 4)
+                        m['hp'] -= thorns_dmg
+                        script.append({"second": current_second - 7, "type": "flavor",
+                                      "message": f"La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
 
                     final_dmg = max(1, m_dmg - adv_mods['armor'])
                     script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
@@ -227,13 +260,24 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 else:
                     script.append({"second": current_second - 8, "type": "flavor",
                                   "message": f"{target.name} esquivó el ataque de [bold red]{m['name']}[/bold red]."})
-
             # --- TURNO DE LOS AVENTUREROS ---
             for i, adv in enumerate(adventurers):
                 if not active_monsters_group:
                     break  # Si murieron todos, paran de atacar
 
                 adv_mods = adv.get_stat_modifiers()
+
+                # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL AVENTURERO ---
+                dot_damage = 0
+                if 'PSN' in adv_status_tracker[adv.id]:
+                    dot_damage += random.randint(1, 4)
+                if 'BRN' in adv_status_tracker[adv.id]:
+                    dot_damage += random.randint(1, 6)
+                if 'BLD' in adv_status_tracker[adv.id]:
+                    dot_damage += random.randint(1, 4)
+                if dot_damage > 0:
+                    script.append({"second": current_second - 6, "type": "damage", "adventurer_id": adv.id,
+                                  "amount": dot_damage, "message": f"🩸 {adv.name} sufre {dot_damage} de daño continuo."})
 
                 # 1. Identificar Habilidades Disponibles en el Grimorio
                 available_skills = []
@@ -300,6 +344,15 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             a_dmg = sum(random.randint(1, sides) for _ in range(
                                 count)) + adv_mods['damage'] + adv_mods['str']
 
+                            # --- DADOS EXTRA DINÁMICOS ---
+                            extra_count = adv_mods.get(
+                                'bonus_dmg_dice_count', 0)
+                            if extra_count > 0:
+                                extra_sides = adv_mods.get(
+                                    'bonus_dmg_dice_sides', 4) or 4
+                                a_dmg += sum(random.randint(1, extra_sides)
+                                             for _ in range(extra_count))
+
                             # --- PASIVAS OFENSIVAS ---
                             # Ataque Furtivo del Pícaro
                             if adv.adv_class == 'ROG' and adv_on_attack:
@@ -326,7 +379,21 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                 script.append({"second": current_second - 5, "type": "flavor",
                                                "message": f"🎵 ¡La música del Bardo guía el golpe de {adv.name}! (+{bard_dice} precisión)"})
 
-                            target_m['hp'] -= a_dmg
+                            # --- EFECTOS AL IMPACTAR (PROCS AVENTURERO) ---
+                            eff = adv_mods.get('on_hit_effect', 'NON')
+                            if eff != 'NON' and eff != 'THN':
+                                if random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
+                                    if eff == 'LFS':
+                                        heal = random.randint(1, 4)
+                                        # Daño negativo cura al aventurero en el post-proceso
+                                        script.append({"second": current_second - 4, "type": "damage", "adventurer_id": adv.id,
+                                                      "amount": -heal, "message": f"🦇 {adv.name} drena {heal} HP de su enemigo."})
+                                    else:
+                                        target_m['status'].add(eff)
+                                        eff_names = {
+                                            'PSN': 'Veneno', 'BLD': 'Sangrado', 'BRN': 'Quemaduras', 'STN': 'Aturdimiento', 'BLN': 'Ceguera'}
+                                        script.append({"second": current_second - 4, "type": "flavor",
+                                                      "message": f"🦠 ¡{adv.name} inflige {eff_names.get(eff, eff)} a [bold red]{target_m['name']}[/bold red]!"})
 
                             target_m['hp'] -= a_dmg
                             script.append({"second": current_second - 4, "type": "flavor",
@@ -346,7 +413,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             session_skills_tracker[adv.id].add(
                                 best_action["id"])
 
-                # 4. Comprobación Universal de Muertes (Aplica tanto para ataques como daño de área)
+                # Comprobación Universal de Muertes (Aplica tanto para ataques como daño de área)
                 for m in list(active_monsters_group):
                     if m['hp'] <= 0:
                         script.append({"second": current_second - 2, "type": "flavor",
@@ -381,6 +448,8 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 # Reseteo del enfriamiento de habilidades de combate
                 for adv_id in combat_skills_tracker:
                     combat_skills_tracker[adv_id].clear()
+                    # Limpia los estados negativos al terminar el combate
+                    adv_status_tracker[adv_id].clear()
 
                 script.append({"second": current_second, "type": "flavor",
                               "message": "¡VICTORIA! La zona está despejada."})
