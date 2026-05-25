@@ -208,19 +208,27 @@ class CharacterCreationModal(ModalScreen[dict]):
 
 
 class AdventurerDetailsModal(ModalScreen[None]):
-    """Ficha de personaje con scroll, desglose de riqueza y tabla de equipo interactiva."""
+    """Ficha de personaje interactiva con scroll, lore de objetos y grimorio."""
 
     CSS = """
-    #adv_details_dialog { width: 75; height: 35; padding: 1 2; border: double $primary; background: $surface; }
+    /* Cambiamos height de 40 a 90% para que nunca desborde tu monitor */
+    #adv_details_dialog { width: 85; height: 90%; padding: 1 2; border: double $primary; background: $surface; }
     .title_bar { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; }
+    
     .stats_grid { grid-size: 2; grid-columns: 1fr 1fr; border: solid $accent; padding: 1; margin-bottom: 1; height: auto; }
+    .skills_grid { grid-size: 3; grid-columns: 1fr 1fr 1fr; border: solid $success; padding: 1; margin-bottom: 1; height: auto; }
     .wealth_grid { grid-size: 3; grid-columns: 1fr 1fr 1fr; border: solid $warning; padding: 1; margin-bottom: 1; height: auto; }
     .section_title { color: $success; text-style: bold; margin-top: 1; margin-bottom: 1; }
     
-    /* El nuevo estilo para que la tabla de equipo se vea imponente */
-    #equipment_table { height: 14; border: solid $success; margin-bottom: 1; }
+    #equipment_table { height: 10; border: solid $success; margin-bottom: 1; }
+    #item_description { height: auto; min-height: 4; border: dashed $accent; padding: 1; color: $text-muted; margin-bottom: 1; background: $panel; }
+    #grimoire_table { height: 1fr; border: solid $primary; margin-bottom: 1; }
     
-    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    /* Obliga al contenedor de pestañas a respetar el límite de la ventana */
+    TabbedContent { height: 1fr; margin-bottom: 1; }
+    
+    /* Anclamos los botones al fondo para que nunca desaparezcan */
+    .btn_row { dock: bottom; height: 3; align: center middle; }
     .btn_row Button { margin: 0 1; }
     #btn_unequip { width: 100%; margin-bottom: 1; }
     """
@@ -234,59 +242,71 @@ class AdventurerDetailsModal(ModalScreen[None]):
         with Vertical(id="adv_details_dialog"):
             yield Label(f"📜 FICHA: {a.get('name')} | {a.get('class_name')} | {a.get('race')}", classes="title_bar")
 
-            # Usamos VerticalScroll para que quepa todo
-            with VerticalScroll():
-                yield Label(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP)")
+            with TabbedContent():
+                # --- PESTAÑA 1: HOJA DE PERSONAJE (Scroll con todo lo físico) ---
+                with TabPane("Hoja de Personaje", id="tab_stats"):
+                    with VerticalScroll():
+                        yield Label(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP)")
 
-                # --- SECCIÓN DE ATRIBUTOS ---
-                yield Label("Atributos:", classes="section_title")
-                with Grid(classes="stats_grid"):
-                    yield Label(f"Fuerza: {a.get('str')}")
-                    yield Label(f"Inteligencia: {a.get('int')}")
-                    yield Label(f"Destreza: {a.get('dex')}")
-                    yield Label(f"Sabiduría: {a.get('wis')}")
-                    yield Label(f"Constitución: {a.get('con')}")
-                    yield Label(f"Carisma: {a.get('cha')}")
-                    yield Label(f"Suerte: {a.get('luk')}")
+                        yield Label("Atributos Base:", classes="section_title")
+                        with Grid(classes="stats_grid"):
+                            yield Label(f"Fuerza: {a.get('str')}")
+                            yield Label(f"Inteligencia: {a.get('int')}")
+                            yield Label(f"Destreza: {a.get('dex')}")
+                            yield Label(f"Sabiduría: {a.get('wis')}")
+                            yield Label(f"Constitución: {a.get('con')}")
+                            yield Label(f"Carisma: {a.get('cha')}")
+                            yield Label(f"Suerte: {a.get('luk')}")
 
-                # --- SECCIÓN DE COMBATE ---
-                yield Label("Efectividad en Combate:", classes="section_title")
-                with Grid(classes="stats_grid"):
-                    yield Label(f"⚔️ Daño Total: {a.get('combat_damage')}")
-                    yield Label(f"🛡️ Armadura Total: {a.get('combat_armor')}")
+                        yield Label("Talentos y Competencias (D&D):", classes="section_title")
+                        with Grid(classes="skills_grid"):
+                            for skill_name, skill_val in a.get('rpg_skills', {}).items():
+                                color = "bold green" if skill_val > 0 else (
+                                    "bold red" if skill_val < 0 else "white")
+                                yield Label(f"{skill_name}: [{color}]{skill_val:+d}[/]")
 
-                # --- SECCIÓN DE EQUIPO (AHORA INTERACTIVA Y HERMOSA) ---
-                yield Label("Equipamiento Actual (Selecciona y Desequipa):", classes="section_title")
-                # cursor_type="row" hace que se ilumine toda la fila al navegar
-                yield DataTable(id="equipment_table", cursor_type="row")
-                yield Button("Desequipar Objeto Seleccionado", variant="warning", id="btn_unequip")
+                        yield Label("Efectividad en Combate:", classes="section_title")
+                        with Grid(classes="stats_grid"):
+                            yield Label(f"⚔️ Daño Total: {a.get('combat_damage')}")
+                            yield Label(f"🛡️ Armadura Total: {a.get('combat_armor')}")
 
-                # --- SECCIÓN DE RIQUEZA ---
-                yield Label("Tesoro Personal:", classes="section_title")
-                w = a.get('wealth', {})
-                with Grid(classes="wealth_grid"):
-                    yield Label(f"Marco: {w.get('marco', 0)}")
-                    yield Label(f"Real: {w.get('real', 0)}")
-                    yield Label(f"Talento: {w.get('talento', 0)}")
-                    yield Label(f"Sueldo: {w.get('sueldo', 0)}")
-                    yield Label(f"P. Plata: {w.get('silver_penny', 0)}")
-                    yield Label(f"Iota: {w.get('iota', 0)}")
-                    yield Label(f"P. Cobre: {w.get('copper_penny', 0)}")
-                    yield Label(f"Drabín: {w.get('drabin', 0)}")
-                    yield Label(f"Ardite: {w.get('ardite', 0)}")
-                    yield Label(f"P. Hierro: {w.get('iron_penny', 0)}")
-                    yield Label(f"1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
+                        yield Label("Equipamiento Actual (Selecciona para Inspeccionar):", classes="section_title")
+                        yield DataTable(id="equipment_table", cursor_type="row")
+                        yield Label("Selecciona un objeto de la tabla para analizarlo.", id="item_description")
+                        yield Button("Desequipar Objeto Seleccionado", variant="warning", id="btn_unequip")
 
-            # --- BOTONES INFERIORES ---
+                        yield Label("Tesoro Personal:", classes="section_title")
+                        w = a.get('wealth', {})
+                        with Grid(classes="wealth_grid"):
+                            yield Label(f"Marco: {w.get('marco', 0)}")
+                            yield Label(f"Real: {w.get('real', 0)}")
+                            yield Label(f"Talento: {w.get('talento', 0)}")
+                            yield Label(f"Sueldo: {w.get('sueldo', 0)}")
+                            yield Label(f"P. Plata: {w.get('silver_penny', 0)}")
+                            yield Label(f"Iota: {w.get('iota', 0)}")
+                            yield Label(f"P. Cobre: {w.get('copper_penny', 0)}")
+                            yield Label(f"Drabín: {w.get('drabin', 0)}")
+                            yield Label(f"Ardite: {w.get('ardite', 0)}")
+                            yield Label(f"P. Hierro: {w.get('iron_penny', 0)}")
+                            yield Label(f"1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
+
+                # --- PESTAÑA 2: GRIMORIO ---
+                with TabPane("Grimorio Arcano/Marcial", id="tab_grimoire"):
+                    with VerticalScroll():
+                        yield Label("Habilidades Memorizadas:", classes="section_title")
+                        yield DataTable(id="grimoire_table", cursor_type="row")
+
+            # --- BOTONES SIEMPRE VISIBLES EN LA RAÍZ DEL MODAL ---
             with Horizontal(classes="btn_row"):
                 yield Button("Abrir Mochila", variant="success", id="btn_open_backpack")
                 yield Button("Cerrar Ficha", variant="primary", id="btn_close_details")
 
     def on_mount(self):
+        # 1. Poblar Tabla de Equipo
         table = self.query_one("#equipment_table", DataTable)
         table.add_columns("Ranura", "Objeto Equipado")
 
-        # ¡Emojis restaurados para el inventario!
+        eq = self.adv_data.get("equipment", {})
         slots = [
             ("Mano Principal", "equip_main_hand"), ("Mano Secundaria", "equip_off_hand"),
             ("Cabeza", "equip_head"), ("Torso",
@@ -297,8 +317,35 @@ class AdventurerDetailsModal(ModalScreen[None]):
             ("Brazalete", "equip_bracelet"), ("Aretes", "equip_earring")
         ]
         for name, key in slots:
-            item_name = self.adv_data.get(key, "Vacío")
-            table.add_row(name, item_name, key=key)
+            if eq:
+                item_info = eq.get(
+                    key, {"name": "Vacío", "desc": "Ranura vacía."})
+                table.add_row(name, item_info["name"], key=key)
+            else:
+                # Fallback de seguridad
+                item_str = self.adv_data.get(key, "Vacío")
+                table.add_row(name, item_str, key=key)
+
+        # 2. Poblar Tabla del Grimorio
+        grim_table = self.query_one("#grimoire_table", DataTable)
+        grim_table.add_columns("Habilidad", "Tipo / Gasto", "Nivel Req.")
+        for skill in self.adv_data.get("grimoire", []):
+            grim_table.add_row(
+                skill["name"], skill["type"], str(skill["req_level"]))
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Captura el evento del cursor para el Panel de Lore."""
+        if event.data_table.id == "equipment_table":
+            row_key = event.row_key.value
+            eq = self.adv_data.get("equipment", {})
+            if eq:
+                item_info = eq.get(
+                    row_key, {"desc": "Ningún objeto equipado."})
+                self.query_one("#item_description", Label).update(
+                    item_info["desc"])
+            else:
+                self.query_one("#item_description", Label).update(
+                    "Objeto sin descripción.")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_close_details":

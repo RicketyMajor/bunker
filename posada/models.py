@@ -531,7 +531,23 @@ class Monster(models.Model):
     min_spawn = models.PositiveIntegerField(default=1)
     max_spawn = models.PositiveIntegerField(default=1)
 
-    base_hp = models.PositiveIntegerField(default=10)
+    # Rango de Salud
+    min_hp = models.PositiveIntegerField(default=10)
+    max_hp = models.PositiveIntegerField(default=15)
+
+    # Rangos de Atributos RPG
+    min_str = models.IntegerField(default=0)
+    max_str = models.IntegerField(default=0)
+    min_dex = models.IntegerField(default=0)
+    max_dex = models.IntegerField(default=0)
+    min_con = models.IntegerField(default=0)
+    max_con = models.IntegerField(default=0)
+    min_int = models.IntegerField(default=0)
+    max_int = models.IntegerField(default=0)
+    min_wis = models.IntegerField(default=0)
+    max_wis = models.IntegerField(default=0)
+    min_cha = models.IntegerField(default=0)
+    max_cha = models.IntegerField(default=0)
 
     # Daño basado en dados
     damage_dice_count = models.PositiveIntegerField(default=1)
@@ -554,6 +570,9 @@ class Monster(models.Model):
 
     loot_multiplier = models.FloatField(default=1.0)
     xp_reward = models.PositiveIntegerField(default=50)
+
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.name}"
 
     def __str__(self):
         return f"[{self.get_category_display()}] {self.name}"

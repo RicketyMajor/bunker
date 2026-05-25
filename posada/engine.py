@@ -282,22 +282,29 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 spawn_count = random.randint(
                     base_monster.min_spawn, base_monster.max_spawn)
 
-                # Genera cada individuo del grupo con su propio registro de estados
+                # Genera cada individuo del grupo con su propio registro de estados y stats precisos
                 for i in range(spawn_count):
-                    pts_map = {'SML': 15, 'MED': 25, 'LRG': 45, 'EPC': 65}
-                    pts = pts_map.get(base_monster.category, 15)
-                    m_stats = {'str': 0, 'dex': 0, 'con': 0,
-                               'int': 0, 'wis': 0, 'cha': 0, 'luk': 0}
-                    keys = list(m_stats.keys())
-                    for _ in range(pts):
-                        m_stats[random.choice(keys)] += 1
+                    # Generación dentro de los rangos definidos
+                    m_stats = {
+                        'str': random.randint(base_monster.min_str, base_monster.max_str),
+                        'dex': random.randint(base_monster.min_dex, base_monster.max_dex),
+                        'con': random.randint(base_monster.min_con, base_monster.max_con),
+                        'int': random.randint(base_monster.min_int, base_monster.max_int),
+                        'wis': random.randint(base_monster.min_wis, base_monster.max_wis),
+                        'cha': random.randint(base_monster.min_cha, base_monster.max_cha),
+                        'luk': 0  # Monstruos no usan suerte por ahora
+                    }
 
-                    hp = base_monster.base_hp + (m_stats['con'] * 2)
+                    # La salud se calcula desde el rango base + bonificador de constitución
+                    base_hp_roll = random.randint(
+                        base_monster.min_hp, base_monster.max_hp)
+                    hp = base_hp_roll + (m_stats['con'] * 2)
+
+                    # Nombra al monstruo para distinguirlo (Ej: Goblin Saqueador A, Goblin Saqueador B)
                     name = f"{base_monster.name} {'ABCDEF'[i]}" if spawn_count > 1 else base_monster.name
 
                     active_monsters_group.append({
                         'name': name, 'hp': hp, 'stats': m_stats, 'base': base_monster,
-                        # Los monstruos pueden ser Cegados, Aturdidos, etc.
                         'status': set()
                     })
 

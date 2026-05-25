@@ -6,14 +6,37 @@ import random
 from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, is_class_allowed, get_derived_skills
 from django.utils import timezone
 from datetime import timedelta
+from .skills import SkillRegistry
 
 
-def fmt_item_rich(item, default="Vacío"):
-    """Devuelve el nombre del item envuelto en su color de rareza para la TUI."""
+def get_item_info(item, default="Vacío"):
+    """Devuelve el nombre formateado y su descripción rica con lore y stats."""
     if not item:
-        return default
+        return {"name": default, "desc": "Ranura vacía. No hay equipo para inspeccionar."}
+
     color = ItemRarity.get_color(item.rarity)
-    return f"[{color}]{item.name}[/]"
+    name_rich = f"[[{color}]{item.name}[/]]"
+
+    desc = item.description or "Un objeto común sin propiedades especiales registradas."
+    stats = []
+
+    # Recopilar estadísticas para el Tooltip
+    if item.damage_dice_count > 0 or item.bonus_damage > 0:
+        stats.append(
+            f"Daño: {item.damage_dice_count}d{item.damage_dice_sides} + {item.bonus_damage}")
+    if item.bonus_damage_dice_count > 0:
+        stats.append(
+            f"Daño Mágico: {item.bonus_damage_dice_count}d{item.bonus_damage_dice_sides}")
+    if item.bonus_armor > 0:
+        stats.append(f"Armadura: +{item.bonus_armor}")
+    if item.on_hit_effect != 'NON':
+        stats.append(
+            f"Efecto: {item.get_on_hit_effect_display()} ({item.effect_chance}%)")
+
+    if stats:
+        desc += f"\n\n[bold cyan]Atributos:[/] " + " | ".join(stats)
+
+    return {"name": name_rich, "desc": desc}
 
 
 @api_view(['GET'])
@@ -36,6 +59,16 @@ def guild_status(request):
                 return f"{total} [bold red]({mod})[/bold red]"
             return str(total)
 
+        # --- Recopilar Grimorio ---
+        grimoire = []
+        for skill_id, skill_data in SkillRegistry.get_all_skills().items():
+            if adv.adv_class in skill_data["allowed_classes"] and adv.level >= skill_data["req_level"]:
+                grimoire.append({
+                    "name": skill_data["name"],
+                    "type": "Pasiva/Apoyo" if skill_data["type"] == "SESSION" else "Combate",
+                    "req_level": skill_data["req_level"]
+                })
+
         adv_data.append({
             "id": adv.id,
             "name": adv.name,
@@ -45,7 +78,7 @@ def guild_status(request):
             "xp": adv.experience,
             "hp": f"{adv.current_hp}/{adv.max_hp}",
 
-            # --- Estadísticas Formateadas con Color ---
+            # --- Estadísticas Formateadas ---
             "str": fmt_stat(adv.base_str, 'str'),
             "dex": fmt_stat(adv.base_dex, 'dex'),
             "con": fmt_stat(adv.base_con, 'con'),
@@ -65,47 +98,40 @@ def guild_status(request):
                 "talento": adv.talento, "real": adv.real, "marco": adv.marco
             },
             "wealth_summary": f"{adv.talento}T, {adv.iota}i, {adv.ardite}a",
-            # --- SLOTS ---
-            "equip_main_hand": fmt_item_rich(adv.equip_main_hand, "Desarmado"),
-            "equip_off_hand": fmt_item_rich(adv.equip_off_hand),
-            "equip_head": fmt_item_rich(adv.equip_head),
-            "equip_torso": fmt_item_rich(adv.equip_torso, "Ropa común"),
-            "equip_hands": fmt_item_rich(adv.equip_hands),
-            "equip_legs": fmt_item_rich(adv.equip_legs),
-            "equip_feet": fmt_item_rich(adv.equip_feet),
-            "equip_necklace": fmt_item_rich(adv.equip_necklace, "Ninguno"),
-            "equip_ring_1": fmt_item_rich(adv.equip_ring_1),
-            "equip_ring_2": fmt_item_rich(adv.equip_ring_2),
-            "equip_bracelet": fmt_item_rich(adv.equip_bracelet, "Ninguno"),
-            "equip_earring": fmt_item_rich(adv.equip_earring, "Ninguno"),
-            # --- HABILIDADES DE EXPLORACIÓN ---
+
+            # --- Habilidades, Grimorio y Diccionario de Equipamiento ---
             "rpg_skills": get_derived_skills(adv),
+            "grimoire": grimoire,
+            "equipment": {
+                "equip_main_hand": get_item_info(adv.equip_main_hand, "Desarmado"),
+                "equip_off_hand": get_item_info(adv.equip_off_hand),
+                "equip_head": get_item_info(adv.equip_head),
+                "equip_torso": get_item_info(adv.equip_torso, "Ropa común"),
+                "equip_hands": get_item_info(adv.equip_hands),
+                "equip_legs": get_item_info(adv.equip_legs),
+                "equip_feet": get_item_info(adv.equip_feet),
+                "equip_necklace": get_item_info(adv.equip_necklace, "Ninguno"),
+                "equip_ring_1": get_item_info(adv.equip_ring_1),
+                "equip_ring_2": get_item_info(adv.equip_ring_2),
+                "equip_bracelet": get_item_info(adv.equip_bracelet, "Ninguno"),
+                "equip_earring": get_item_info(adv.equip_earring, "Ninguno"),
+            }
         })
 
     guild_data = {
         "prestige_level": guild.prestige_level,
         "prestige": guild.prestige,
-        "prestige_meta": guild.prestige_level * 100,  # Nv1=100, Nv2=200, etc.
+        "prestige_meta": guild.prestige_level * 100,
         "net_worth_talents": guild.net_worth_in_talents,
         "inventory": {
-            "iron_half_penny": guild.iron_half_penny,
-            "iron_penny": guild.iron_penny,
-            "ardite": guild.ardite,
-            "drabin": guild.drabin,
-            "copper_penny": guild.copper_penny,
-            "iota": guild.iota,
-            "silver_penny": guild.silver_penny,
-            "sueldo": guild.sueldo,
-            "talento": guild.talento,
-            "real": guild.real,
-            "marco": guild.marco
+            "iron_half_penny": guild.iron_half_penny, "iron_penny": guild.iron_penny,
+            "ardite": guild.ardite, "drabin": guild.drabin, "copper_penny": guild.copper_penny,
+            "iota": guild.iota, "silver_penny": guild.silver_penny, "sueldo": guild.sueldo,
+            "talento": guild.talento, "real": guild.real, "marco": guild.marco
         }
     }
 
-    return Response({
-        "guild": guild_data,
-        "adventurers": adv_data
-    })
+    return Response({"guild": guild_data, "adventurers": adv_data})
 
 
 @api_view(['POST'])
