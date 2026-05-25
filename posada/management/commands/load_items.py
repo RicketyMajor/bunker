@@ -34,7 +34,11 @@ class Command(BaseCommand):
             #     "bonus_wis": 0, "bonus_cha": 0, "bonus_luk": 0,
             # },
 
-            # CONJUNTO DE ARMADURA DE TELA (Común)
+            # ==========================================
+            # ⚪ ARMAS Y ARMADURAS (COMÚN)
+            # ==========================================
+
+            # CONJUNTO DE ARMADURA DE TELA (COMÚN)
             {
                 "name": "Capucha de Tela",
                 "description": "Una capucha hecha de tela cómoda. Proporciona cobertura ligera para la cabeza.",
@@ -923,6 +927,10 @@ class Command(BaseCommand):
                 "bonus_cha": 2,
             },
 
+            # ==========================================
+            # 🟢 ARMAS Y ARMADURAS (POCO COMÚN)
+            # ==========================================
+
             # CONJUNTO DE ARMADURA DE CUERO TACHONADA (POCO COMÚN)
 
             {
@@ -1534,6 +1542,10 @@ class Command(BaseCommand):
                 "bonus_wis": 1,
             },
 
+            # ==========================================
+            # 🔵 ARMAS Y ARMADURAS (RARO)
+            # ==========================================
+
             # --- NUEVOS CONJUNTOS DE ARMADURA Y ARMAS (RAROS) ---
 
             # CONJUNTO DE MITHRIL (RARO)
@@ -2004,6 +2016,10 @@ class Command(BaseCommand):
                 "effect_dice_sides": 4,
             },
 
+            # ==========================================
+            # 🟣 ARMAS Y ARMADURAS (ÉPICO)
+            # ==========================================
+
             # --- NUEVOS CONJUNTOS DE ARMADURA Y ARMAS (ÉPICOS) ---
 
             # CONJUNTO DE ESCAMAS DE DRAGÓN ROJO (ÉPICO)
@@ -2383,6 +2399,10 @@ class Command(BaseCommand):
                 "bonus_damage_dice_count": 1,
                 "bonus_damage_dice_sides": 8,
             },
+
+            # ==========================================
+            # 🟡 ARMAS Y ARMADURAS (LEGENDARIO)
+            # ==========================================
 
             # --- NUEVOS CONJUNTOS DE ARMADURA Y ARMAS (LEGENDARIOS) ---
 

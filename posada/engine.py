@@ -33,6 +33,53 @@ FLAVOR_MONSTER = {
     'EPC': ["irradia un aura de terror insoportable.", "te mira como si fueras un simple insecto.", "levita levemente mientras el aire se distorsiona."]
 }
 
+# --- MAPEO DE HABILIDADES D&D 5E ---
+SKILL_STAT_MAP = {
+    "Acrobacias": "dex", "Atletismo": "str", "Arcano": "int", "Engaño": "cha",
+    "Historia": "int", "Perspicacia": "wis", "Intimidación": "cha", "Investigación": "int",
+    "Medicina": "wis", "Naturaleza": "wis", "Percepción": "wis", "Interpretación": "cha",
+    "Persuasión": "cha", "Religión": "int", "Juego de Manos": "dex", "Sigilo": "dex",
+    "Supervivencia": "wis", "Trato con Animales": "wis"
+}
+
+CLASS_SKILL_PROFICIENCIES = {
+    'ART': ['Arcano', 'Historia', 'Investigación', 'Medicina', 'Naturaleza'],
+    'BBN': ['Trato con Animales', 'Atletismo', 'Intimidación', 'Naturaleza', 'Percepción', 'Supervivencia'],
+    'BRD': ['Acrobacias', 'Arcano', 'Engaño', 'Historia', 'Interpretación', 'Persuasión', 'Juego de Manos', 'Sigilo'],
+    'CLR': ['Historia', 'Perspicacia', 'Medicina', 'Persuasión', 'Religión'],
+    'DRD': ['Arcano', 'Trato con Animales', 'Perspicacia', 'Medicina', 'Naturaleza', 'Percepción', 'Religión', 'Supervivencia'],
+    'FTR': ['Acrobacias', 'Trato con Animales', 'Atletismo', 'Historia', 'Perspicacia', 'Intimidación', 'Percepción', 'Supervivencia'],
+    'MNK': ['Acrobacias', 'Atletismo', 'Historia', 'Perspicacia', 'Religión', 'Sigilo'],
+    'PAL': ['Atletismo', 'Perspicacia', 'Intimidación', 'Medicina', 'Persuasión', 'Religión'],
+    'RGR': ['Trato con Animales', 'Atletismo', 'Perspicacia', 'Investigación', 'Naturaleza', 'Percepción', 'Sigilo', 'Supervivencia'],
+    'ROG': ['Acrobacias', 'Atletismo', 'Engaño', 'Perspicacia', 'Intimidación', 'Investigación', 'Percepción', 'Interpretación', 'Persuasión', 'Juego de Manos', 'Sigilo'],
+    'SOR': ['Arcano', 'Engaño', 'Perspicacia', 'Intimidación', 'Persuasión', 'Religión'],
+    'WLK': ['Arcano', 'Engaño', 'Historia', 'Intimidación', 'Investigación', 'Naturaleza', 'Religión'],
+    'WIZ': ['Arcano', 'Historia', 'Perspicacia', 'Investigación', 'Medicina', 'Religión']
+}
+
+
+def get_derived_skills(adv):
+    """Calcula el valor de las 18 habilidades de D&D."""
+    mods = adv.get_stat_modifiers()
+    prof_bonus = 2 + ((adv.level - 1) // 4)
+
+    skills = {}
+    is_bard = adv.adv_class == 'BRD'  # Regla de 'Jack of All Trades'
+    proficiencies = CLASS_SKILL_PROFICIENCIES.get(adv.adv_class, [])
+
+    for skill, stat in SKILL_STAT_MAP.items():
+        stat_val = mods.get(stat, 0)
+        if skill in proficiencies:
+            skills[skill] = stat_val + prof_bonus
+        elif is_bard:
+            skills[skill] = stat_val + (prof_bonus // 2)
+        else:
+            skills[skill] = stat_val
+
+    return skills
+
+
 FLAVOR_ADV = [
     "toma firmemente su arma, listo para cualquier cosa.",
     "se limpia el sudor de la frente sin apartar la mirada.",
@@ -140,6 +187,43 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
             adv = random.choice(adventurers)
             luk_bonus = adv.base_luk + \
                 sum(item.bonus_luk for item in adv.get_equipped_items())
+
+            # --- MICRO-EVENTOS NARRATIVOS DE EXPLORACIÓN ---
+            if random.random() < 0.25:  # 25% de probabilidad de suceso narrativo
+                event_adv = random.choice(adventurers)
+                skills = get_derived_skills(event_adv)
+
+                event_texts = {
+                    "Atletismo": ("escalar un muro de roca suelta", "llega a la cima demostrando una fuerza bruta envidiable", "resbala y cae torpemente de espaldas"),
+                    "Sigilo": ("moverse sin hacer ruido entre la maleza", "pasa como una sombra indetectable", "pisa una rama seca que hace eco en toda la cueva"),
+                    "Percepción": ("agudizar sus sentidos buscando peligros", "nota unas tenues marcas de garras en la pared", "solo logra ver formas confusas en la oscuridad"),
+                    "Acrobacias": ("cruzar un abismo sobre un tronco húmedo", "mantiene un equilibrio perfecto como un felino", "casi cae al vacío, recuperándose a duras penas"),
+                    "Supervivencia": ("buscar rastros frescos en la tierra", "identifica claramente hacia dónde fueron los monstruos", "pierde el rastro en el fango denso"),
+                    "Arcano": ("intentar descifrar unas runas brillantes", "comprende el flujo de magia antigua", "le da dolor de cabeza al intentar leerlas"),
+                    "Juego de Manos": ("intentar forzar el cerrojo de un cofre viejo", "lo abre con un click maestro", "rompe su ganzúa dentro de la cerradura"),
+                    "Historia": ("recordar a qué dinastía pertenece una estatua", "recuerda exactamente el nombre del rey antiguo", "la estatua está demasiado desgastada para saberlo"),
+                    "Religión": ("identificar un altar profano", "reconoce los símbolos impíos de inmediato", "siente un escalofrío pero no logra descifrar nada"),
+                    "Medicina": ("evaluar unas extrañas plantas pálidas", "descubre que sus hojas son cicatrizantes", "cree que son venenosas y prefiere no tocarlas"),
+                }
+
+                # Elegimos una habilidad que tenga narrativa
+                skill_name = random.choice(list(event_texts.keys()))
+                action, succ_msg, fail_msg = event_texts[skill_name]
+
+                skill_bonus = skills[skill_name]
+                dc = random.randint(10, 18)  # Dificultad Dinámica
+                roll = roll_d20()
+                total = roll + skill_bonus
+
+                script.append({"second": current_second - 45, "type": "flavor",
+                              "message": f"🎲 {event_adv.name} intenta {action} (Chequeo de {skill_name}, CD {dc})."})
+                if total >= dc:
+                    script.append({"second": current_second - 42, "type": "flavor",
+                                  "message": f"   -> ¡ÉXITO! ({roll} + {skill_bonus} = {total}). {event_adv.name} {succ_msg}."})
+                else:
+                    script.append({"second": current_second - 42, "type": "flavor",
+                                  "message": f"   -> FALLO ({roll} + {skill_bonus} = {total}). {event_adv.name} {fail_msg}."})
+            # --------------------------------------------------------
 
             # Tirada de Encuentro
             if monsters_db and random.random() < 0.15:

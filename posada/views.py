@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
 import random
-from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, is_class_allowed
+from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, is_class_allowed, get_derived_skills
 from django.utils import timezone
 from datetime import timedelta
 
@@ -78,6 +78,8 @@ def guild_status(request):
             "equip_ring_2": fmt_item_rich(adv.equip_ring_2),
             "equip_bracelet": fmt_item_rich(adv.equip_bracelet, "Ninguno"),
             "equip_earring": fmt_item_rich(adv.equip_earring, "Ninguno"),
+            # --- HABILIDADES DE EXPLORACIÓN ---
+            "rpg_skills": get_derived_skills(adv),
         })
 
     guild_data = {
