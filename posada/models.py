@@ -116,6 +116,14 @@ class OnHitEffect(models.TextChoices):
     THORNS = 'THN', 'Pinchos (Daño de represalia al ser golpeado)'
 
 
+class ItemConsumableType(models.TextChoices):
+    """Categorías para los objetos que pueden ser consumidos."""
+    NONE = 'NON', 'No es consumible'
+    HEAL = 'HEL', 'Poción de Curación (HP)'
+    MANA = 'MAN', 'Poción de Energía (Recurso)'
+    FLAVOR = 'FLV', 'Inmersión (Raciones, Cuerdas, etc.)'
+
+
 class CostMixin(models.Model):
     """Modelo abstracto para definir precios complejos con el sistema de 11 monedas."""
     cost_iron_half_penny = models.PositiveIntegerField(
@@ -179,11 +187,17 @@ class Item(CostMixin):
     on_hit_effect = models.CharField(
         max_length=3, choices=OnHitEffect.choices, default=OnHitEffect.NONE)
     effect_chance = models.PositiveIntegerField(
-        default=0, help_text="Probabilidad 1-100 de aplicar el efecto al golpear")
+        default=0, help_text="Probabilidad 1-100 de aplicar el efecto")
     effect_dice_count = models.PositiveIntegerField(
         default=1, help_text="Cantidad de dados para el efecto (Ej: 1)")
     effect_dice_sides = models.PositiveIntegerField(
         default=4, help_text="Caras del dado del efecto (Ej: 6)")
+
+    # --- SISTEMA DE CONSUMIBLES ---
+    consumable_type = models.CharField(
+        max_length=3, choices=ItemConsumableType.choices, default=ItemConsumableType.NONE)
+    consumable_amount = models.PositiveIntegerField(
+        default=0, help_text="Cantidad que cura o restaura")
 
     # Modificadores de Atributos RPG
     bonus_str = models.IntegerField(default=0, verbose_name="Fuerza")

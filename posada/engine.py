@@ -223,8 +223,59 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 else:
                     script.append({"second": current_second - 42, "type": "flavor",
                                   "message": f"   -> FALLO ({roll} + {skill_bonus} = {total}). {event_adv.name} {fail_msg}."})
-            # --------------------------------------------------------
 
+            # --- EVENTOS DE CONSUMIBLES (INMERSIÓN FLAVOR EXTENDIDA) ---
+            if random.random() < 0.15:
+                flavor_slots = list(InventorySlot.objects.filter(
+                    adventurer=adv, item__consumable_type='FLV', quantity__gt=0))
+                if flavor_slots:
+                    slot = random.choice(flavor_slots)
+                    slot.quantity -= 1
+                    if slot.quantity <= 0:
+                        slot.delete()
+                    else:
+                        slot.save()
+
+                    item_name = slot.item.name.lower()
+
+                    # --- DICCIONARIO DE INFINITAS ACCIONES MAPPED ---
+                    # El motor buscará si el nombre del objeto contiene alguna de estas llaves
+                    flavor_database = {
+                        "cuerda": [
+                            f"🧬 {adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan] para asegurar el descenso del grupo por una pendiente.",
+                            f"🧗 {adv.name} lanza su [bold cyan]{slot.item.name}[/bold cyan] hacia una saliente alta, trepando para explorar un nivel superior.",
+                            f"⛓️ {adv.name} usa una [bold cyan]{slot.item.name}[/bold cyan] para amarrar firmemente una puerta sospechosa y evitar emboscadas."
+                        ],
+                        "ración": [
+                            f"🍖 {adv.name} hace una pausa para consumir su [bold cyan]{slot.item.name}[/bold cyan], recuperando aliento.",
+                            f"🍞 {adv.name} comparte un pedazo de su [bold cyan]{slot.item.name}[/bold cyan] mientras revisa el mapa de la mazmorra."
+                        ],
+                        "antorcha": [
+                            f"🔥 {adv.name} enciende una [bold cyan]{slot.item.name}[/bold cyan], iluminando rincones oscuros y revelando un pasadizo.",
+                            f"🦇 {adv.name} blande su [bold cyan]{slot.item.name}[/bold cyan] encendida para ahuyentar a una bandada de murciélagos molestos."
+                        ],
+                        "mapa": [
+                            f"📜 {adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] antiguo sobre una roca, tratando de orientar la marcha de la party."
+                        ],
+                        "pala": [
+                            f"⛏️ {adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para remover unos escombros del camino, buscando pasajes secretos."
+                        ]
+                    }
+
+                    # Lógica de búsqueda por palabra clave
+                    message_chosen = None
+                    for key, lines in flavor_database.items():
+                        if key in item_name:
+                            message_chosen = random.choice(lines)
+                            break
+
+                    # Fallback genérico por si creas un ítem flavor que no esté en el diccionario
+                    if not message_chosen:
+                        message_chosen = f"🏕️ Durante la marcha, {adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
+
+                    script.append({"second": current_second - 35,
+                                  "type": "flavor", "message": message_chosen})
+            # --------------------------------------------------------
             # Tirada de Encuentro
             if monsters_db and random.random() < 0.15:
                 base_monster = random.choice(monsters_db)
@@ -246,7 +297,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                     active_monsters_group.append({
                         'name': name, 'hp': hp, 'stats': m_stats, 'base': base_monster,
-                        # <-- NUEVO: Los monstruos pueden ser Cegados, Aturdidos, etc.
+                        # Los monstruos pueden ser Cegados, Aturdidos, etc.
                         'status': set()
                     })
 
@@ -281,7 +332,6 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 script.append({"second": current_second - 12, "type": "flavor",
                               "message": f"El [bold red]{f_mon['name']}[/bold red] {flav}"})
 
-            # --- TURNO DE LOS MONSTRUOS ---
             # --- TURNO DE LOS MONSTRUOS ---
             for m in active_monsters_group:
                 # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL MONSTRUO ---
@@ -375,6 +425,31 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 adv_mods = adv.get_stat_modifiers()
 
+                # --- IA DE CONSUMIBLES TÁCTICOS (POCIONES DE SALUD) ---
+                # Si la salud está por debajo del 30% (Crítico)
+                if adv.current_hp < (adv.max_hp * 0.3):
+                    heal_slots = list(InventorySlot.objects.filter(
+                        adventurer=adv, item__consumable_type='HEL', quantity__gt=0))
+                    if heal_slots:
+                        # Toma la primera poción curativa que encuentre
+                        slot = heal_slots[0]
+                        slot.quantity -= 1
+                        if slot.quantity <= 0:
+                            slot.delete()
+                        else:
+                            slot.save()
+
+                        # Si el ítem no tiene una curación base, asume 15 por defecto
+                        heal_amount = slot.item.consumable_amount if slot.item.consumable_amount > 0 else random.randint(
+                            10, 20)
+                        adv.current_hp = min(
+                            adv.max_hp, adv.current_hp + heal_amount)
+
+                        script.append({"second": current_second - 5, "type": "flavor",
+                                       "message": f"🧪 ¡Salud Crítica! {adv.name} bebe desesperadamente una [bold cyan]{slot.item.name}[/bold cyan] (+{heal_amount} HP)."})
+                        continue  # ¡Termina su turno inmediatamente, beber la poción fue su acción!
+                # --------------------------------------------------------
+
                 # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL AVENTURERO ---
                 dot_damage = 0
                 if 'PSN' in adv_status_tracker[adv.id]:
@@ -417,14 +492,14 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         best_score = score
                         best_action = skill
 
-                # Apagamos el modo evaluación para la acción real
+                # Apaga el modo evaluación para la acción real
                 context['eval_mode'] = False
 
                 # 3. Ejecutar la Mejor Decisión
                 if best_action == "BASIC_ATTACK":
                     # --- ATAQUE BÁSICO Y MULTIATAQUE ---
 
-                    # Limpiamos la Reacción para que el Pícaro la vuelva a tener disponible
+                    # Limpia la Reacción para que el Pícaro la vuelva a tener disponible
                     adv_status_tracker[adv.id].discard('REACTION_USED')
 
                     # Nivel 5: Clases Marciales atacan dos veces
@@ -482,7 +557,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             # Inspiración Bárdica (Suma 1d6 al ataque y luego se gasta)
                             if 'INSPIRED' in adv_status_tracker[adv.id]:
                                 bard_dice = random.randint(1, 6)
-                                a_roll += bard_dice  # Modificamos el dado que tiró para asegurar que golpee
+                                a_roll += bard_dice  # Modifica el dado que tiró para asegurar que golpee
                                 adv_status_tracker[adv.id].remove('INSPIRED')
                                 script.append({"second": current_second - 5, "type": "flavor",
                                                "message": f"🎵 ¡La música del Bardo guía el golpe de {adv.name}! (+{bard_dice} precisión)"})

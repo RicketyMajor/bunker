@@ -32,6 +32,14 @@ class Command(BaseCommand):
             #     # --- ESTADÍSTICAS RPG ---
             #     "bonus_str": 0, "bonus_dex": 0, "bonus_con": 0, "bonus_int": 0,
             #     "bonus_wis": 0, "bonus_cha": 0, "bonus_luk": 0,
+            #     # --- PARA POCIONES DE CURACIÓN (EJEMPLO) ---
+            #     "item_type": "CNS",
+            #     "consumable_type": "HEL",
+            #     "consumable_amount": 15,
+            #     # --- PARA MISCELÁNEOS COMO RACIONES, CUERDA, ETC. (EJEMPLO) ---
+            #     "item_type": "MSC",
+            #     "consumable_type": "FLV",
+            #     "consumable_amount": 0,
             # },
 
             # ==========================================
