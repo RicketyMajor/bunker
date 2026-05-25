@@ -9,6 +9,25 @@ class Command(BaseCommand):
         # ==========================================
         # BESTIARIO
         # ==========================================
+
+        # --- TEMPLATE MONSTRUO BASE ---
+        # {
+        #     "name": "Nombre Monstruo",
+        #     "category": "SML|MED|LRG|EPC",
+        #     "rarity": "COM|UNC|RAR|EPC|LEG",
+        #     "min_spawn": 1, "max_spawn": 1,
+        #     "base_hp": 10,
+        #     # --- DAÑO BASE ---
+        #     "damage_dice_count": 1, "damage_dice_sides": 4, "bonus_damage": 0,
+        #     # --- DAÑO EXTRA MAGICO ---
+        #     "bonus_damage_dice_count": 0, "bonus_damage_dice_sides": 0,
+        #     # --- EFECTOS AL IMPACTAR ---
+        #     "on_hit_effect": "NON|PSN|BLD|BRN|STN|BLN|LFS",
+        #     "effect_chance": 0, # 1 a 100
+        #     "effect_dice_count": 0, "effect_dice_sides": 0, # Dado del efecto
+        #     # --- RECOMPENSAS ---
+        #     "loot_multiplier": 1.0, "xp_reward": 50
+        # }
         BESTIARIO = [
             # 🟢 EJEMPLO 1: Monstruo Pequeño en grupo
             {

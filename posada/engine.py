@@ -77,6 +77,22 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
         random.seed()
         return script
 
+    # --- INICIALIZACIÓN DINÁMICA DE RECURSOS ---
+    for adv in adventurers:
+        res = {}
+        if adv.adv_class in ['WIZ', 'SOR', 'WLK', 'CLR', 'DRD', 'BRD']:
+            res['mana'] = adv.level * 3
+        elif adv.adv_class == 'PAL':
+            res['mana'] = adv.level * 2
+            res['sanacion'] = adv.level * 5
+        elif adv.adv_class == 'MNK':
+            res['ki'] = adv.level * 2
+        elif adv.adv_class == 'BBN':
+            res['furia'] = 2 + (adv.level // 3)
+        else:  # FTR, ROG, RGR, ART
+            res['stamina'] = adv.level * 2
+        adv.class_resources = res
+
     monsters_db = list(Monster.objects.all())
     all_items_db = list(Item.objects.all())
 
@@ -242,9 +258,17 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     # --- EFECTOS AL IMPACTAR (PROCS MONSTRUO) ---
                     eff_m = getattr(base_m, 'on_hit_effect', 'NON')
                     if eff_m != 'NON' and random.randint(1, 100) <= getattr(base_m, 'effect_chance', 0):
-                        adv_status_tracker[target.id].add(eff_m)
-                        script.append({"second": current_second - 8, "type": "flavor",
-                                      "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+                        if eff_m == 'LFS':
+                            heal = sum(random.randint(1, getattr(base_m, 'effect_dice_sides', 4)) for _ in range(
+                                getattr(base_m, 'effect_dice_count', 1)))
+                            max_hp = base_m.base_hp + (m['stats']['con'] * 2)
+                            m['hp'] = min(max_hp, m['hp'] + heal)
+                            script.append({"second": current_second - 8, "type": "flavor",
+                                          "message": f"🦇 ¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
+                        else:
+                            adv_status_tracker[target.id].add(eff_m)
+                            script.append({"second": current_second - 8, "type": "flavor",
+                                          "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
 
                     # --- PINCHOS (THORNS) DEL AVENTURERO ---
                     eff_adv = adv_mods.get('on_hit_effect', 'NON')
@@ -384,8 +408,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             if eff != 'NON' and eff != 'THN':
                                 if random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
                                     if eff == 'LFS':
-                                        heal = random.randint(1, 4)
-                                        # Daño negativo cura al aventurero en el post-proceso
+                                        # Usa el dado de efecto asignado
+                                        heal = sum(random.randint(1, adv_mods['effect_dice_sides']) for _ in range(
+                                            adv_mods['effect_dice_count']))
                                         script.append({"second": current_second - 4, "type": "damage", "adventurer_id": adv.id,
                                                       "amount": -heal, "message": f"🦇 {adv.name} drena {heal} HP de su enemigo."})
                                     else:
@@ -849,6 +874,7 @@ def process_session_completion(session_id, survived_seconds=None):
         # Limpia los enfriamientos para la próxima sesión
         adv.session_skills_used = []
         adv.combat_skills_used = []
+        adv.class_resources = {}
 
         adv.save()
         check_level_up(adv, event_log)

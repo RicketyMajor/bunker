@@ -7,7 +7,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         CATALOGO = [
-            # --- TEMPLATE BASE PARA COPIAR Y PEGAR ---
+            # --- TEMPLATE ITEMS BASE PARA COPIAR Y PEGAR ---
             # {
             #     "name": "Nombre del Item",
             #     "description": "Descripción narrativa (opcional)",
@@ -16,13 +16,19 @@ class Command(BaseCommand):
             #     "armor_weight": "NON|LGT|MED|HVY",
             #     "weapon_type": "NON|SLS|PRC|BLD|MAG",
             #     "material": "MTL|BNE|WOD|DW|LTH|CLT|ADM|MTH|SLV|MIX",
-            #     # --- ECONOMÍA (Borra las monedas que no uses o déjalas en 0) ---
+            #     # --- ECONOMÍA ---
             #     "cost_iron_half_penny": 0, "cost_iron_penny": 0, "cost_ardite": 0,
             #     "cost_drabin": 0, "cost_copper_penny": 0, "cost_iota": 0,
             #     "cost_silver_penny": 0, "cost_sueldo": 0, "cost_talento": 0,
             #     "cost_real": 0, "cost_marco": 0,
-            #     # --- COMBATE ---
+            #     # --- COMBATE BASE ---
+            #     "damage_dice_count": 0, "damage_dice_sides": 0,
             #     "bonus_damage": 0, "bonus_armor": 0,
+            #     # --- MAGIA Y EFECTOS ---
+            #     "bonus_damage_dice_count": 0, "bonus_damage_dice_sides": 0,
+            #     "on_hit_effect": "NON|PSN|BLD|BRN|STN|BLN|LFS|THN",
+            #     "effect_chance": 0, # Probabilidad de 1 a 100
+            #     "effect_dice_count": 0, "effect_dice_sides": 0, # Para LFS o Thorns (Ej: 1d4)
             #     # --- ESTADÍSTICAS RPG ---
             #     "bonus_str": 0, "bonus_dex": 0, "bonus_con": 0, "bonus_int": 0,
             #     "bonus_wis": 0, "bonus_cha": 0, "bonus_luk": 0,
@@ -623,6 +629,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
                 "bonus_damage": 0,
+                "on_hit_effect": "BLD",
+                "effect_chance": 10,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
 
             # MARTILLO LIGERO DE HIERRO (COMÚN)
@@ -1309,6 +1319,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 6,
                 "bonus_damage": 2,
+                "on_hit_effect": "BLD",
+                "effect_chance": 20,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
 
             {
@@ -1323,6 +1337,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 4,
                 "bonus_str": 1,
+                "on_hit_effect": "BLD",
+                "effect_chance": 15,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
 
             {
@@ -1350,6 +1368,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 6,
                 "bonus_int": 1,
+                "on_hit_effect": "BRN",
+                "effect_chance": 15,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
 
             {
@@ -1779,6 +1801,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 4,
                 "bonus_damage": 1,
+                "on_hit_effect": "LFS",
+                "effect_chance": 100,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 1,
             },
             {
                 "name": "Martillo de Trueno Menor",
@@ -1791,7 +1817,8 @@ class Command(BaseCommand):
                 "cost_marco": 280,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
-                "bonus_damage": 1,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 6,
             },
             {
                 "name": "Estoque de Duelista",
@@ -1844,6 +1871,8 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
                 "bonus_int": 2,
+                "on_hit_effect": "STN",
+                "effect_chance": 30,
             },
             {
                 "name": "Grimorio Iluminado",
@@ -1910,7 +1939,8 @@ class Command(BaseCommand):
                 "cost_marco": 270,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 10,
-                "bonus_damage": 1,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 4,
             },
             {
                 "name": "Guadaña de Almas",
@@ -1923,8 +1953,9 @@ class Command(BaseCommand):
                 "cost_marco": 350,
                 "damage_dice_count": 2,
                 "damage_dice_sides": 4,
-                "bonus_damage": 1,
                 "bonus_wis": 2,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 4,
             },
             {
                 "name": "Arco Élfico de los Bosques",
@@ -1965,6 +1996,12 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
                 "bonus_wis": 2,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 6,
+                "on_hit_effect": "PSN",
+                "effect_chance": 30,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
 
             # --- NUEVOS CONJUNTOS DE ARMADURA Y ARMAS (ÉPICOS) ---
@@ -2167,8 +2204,13 @@ class Command(BaseCommand):
                 "cost_marco": 1200,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
-                "bonus_damage": 2,
                 "bonus_str": 3,
+                "bonus_damage_dice_count": 2,
+                "bonus_damage_dice_sides": 6,
+                "on_hit_effect": "BRN",
+                "effect_chance": 50,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
             {
                 "name": "Martillo Forjado en Magma",
@@ -2183,6 +2225,10 @@ class Command(BaseCommand):
                 "damage_dice_sides": 8,
                 "bonus_damage": 2,
                 "bonus_str": 3,
+                "on_hit_effect": "BRN",
+                "effect_chance": 50,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 6,
             },
             {
                 "name": "Maza del Alba Radiante",
@@ -2196,6 +2242,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 1,
                 "damage_dice_sides": 6,
                 "bonus_damage": 2,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 8,
+                "on_hit_effect": "BLN",
+                "effect_chance": 40,
             },
             {
                 "name": "Escudo del Titán",
@@ -2222,6 +2272,10 @@ class Command(BaseCommand):
                 "damage_dice_count": 2,
                 "damage_dice_sides": 8,
                 "bonus_int": 3,
+                "on_hit_effect": "BRN",
+                "effect_chance": 40,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 8,
             },
             {
                 "name": "Libro de Magia Arcana Mayor",
@@ -2247,8 +2301,9 @@ class Command(BaseCommand):
                 "cost_marco": 1900,
                 "damage_dice_count": 2,
                 "damage_dice_sides": 6,
-                "bonus_damage": 2,
                 "bonus_str": 3,
+                "bonus_damage_dice_count": 2,
+                "bonus_damage_dice_sides": 6,
             },
             {
                 "name": "Gran Hacha del Minotauro",
@@ -2263,6 +2318,8 @@ class Command(BaseCommand):
                 "damage_dice_sides": 12,
                 "bonus_damage": 3,
                 "bonus_str": 3,
+                "on_hit_effect": "STN",
+                "effect_chance": 30,
             },
             {
                 "name": "Lanza Matadragones",
@@ -2275,7 +2332,8 @@ class Command(BaseCommand):
                 "cost_marco": 2500,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 10,
-                "bonus_damage": 2,
+                "bonus_damage_dice_count": 3,
+                "bonus_damage_dice_sides": 6,
             },
             {
                 "name": "Arco de la Tormenta",
@@ -2288,8 +2346,9 @@ class Command(BaseCommand):
                 "cost_marco": 1800,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
-                "bonus_damage": 2,
                 "bonus_dex": 3,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 8,
             },
             {
                 "name": "Ballesta Explosiva Enana",
@@ -2302,7 +2361,12 @@ class Command(BaseCommand):
                 "cost_marco": 1500,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 10,
-                "bonus_damage": 2,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 6,
+                "on_hit_effect": "BRN",
+                "effect_chance": 30,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 6,
             },
             {
                 "name": "Báculo de Poder Druídico",
@@ -2315,8 +2379,9 @@ class Command(BaseCommand):
                 "cost_marco": 2100,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 8,
-                "bonus_damage": 3,
                 "bonus_wis": 3,
+                "bonus_damage_dice_count": 1,
+                "bonus_damage_dice_sides": 8,
             },
 
             # --- NUEVOS CONJUNTOS DE ARMADURA Y ARMAS (LEGENDARIOS) ---
@@ -2457,6 +2522,10 @@ class Command(BaseCommand):
                 "cost_marco": 25000,
                 "bonus_armor": 11,
                 "bonus_con": 4,
+                "on_hit_effect": "THN",
+                "effect_chance": 100,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
             {
                 "name": "Coraza de Escamas de Tarrasque",
@@ -2469,6 +2538,10 @@ class Command(BaseCommand):
                 "cost_marco": 25000,
                 "bonus_armor": 11,
                 "bonus_con": 4,
+                "on_hit_effect": "THN",
+                "effect_chance": 100,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
             {
                 "name": "Quijotes de Escamas de Tarrasque",
@@ -2481,6 +2554,10 @@ class Command(BaseCommand):
                 "cost_marco": 25000,
                 "bonus_armor": 11,
                 "bonus_con": 4,
+                "on_hit_effect": "THN",
+                "effect_chance": 100,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
             {
                 "name": "Botas de Escamas de Tarrasque",
@@ -2493,6 +2570,10 @@ class Command(BaseCommand):
                 "cost_marco": 25000,
                 "bonus_armor": 11,
                 "bonus_con": 4,
+                "on_hit_effect": "THN",
+                "effect_chance": 100,
+                "effect_dice_count": 1,
+                "effect_dice_sides": 4,
             },
             {
                 "name": "Manoplas de Escamas de Tarrasque",
@@ -2505,6 +2586,8 @@ class Command(BaseCommand):
                 "cost_marco": 25000,
                 "bonus_armor": 11,
                 "bonus_con": 4,
+                "on_hit_effect": "THN",
+                "effect_chance": 100,
             },
 
             # ARMAS LEGENDARIAS (1 MANO)
@@ -2559,8 +2642,9 @@ class Command(BaseCommand):
                 "cost_marco": 22000,
                 "damage_dice_count": 1,
                 "damage_dice_sides": 6,
-                "bonus_damage": 3,
                 "bonus_int": 4,
+                "bonus_damage_dice_count": 3,
+                "bonus_damage_dice_sides": 8,
             },
 
             # ARMAS LEGENDARIAS (2 MANOS)
@@ -2575,8 +2659,11 @@ class Command(BaseCommand):
                 "cost_marco": 28000,
                 "damage_dice_count": 2,
                 "damage_dice_sides": 6,
-                "bonus_damage": 3,
                 "bonus_str": 4,
+                "bonus_damage_dice_count": 3,
+                "bonus_damage_dice_sides": 8,
+                "on_hit_effect": "STN",
+                "effect_chance": 30,
             },
             {
                 "name": "Arco del Árbol del Mundo",

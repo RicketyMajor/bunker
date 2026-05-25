@@ -180,6 +180,10 @@ class Item(CostMixin):
         max_length=3, choices=OnHitEffect.choices, default=OnHitEffect.NONE)
     effect_chance = models.PositiveIntegerField(
         default=0, help_text="Probabilidad 1-100 de aplicar el efecto al golpear")
+    effect_dice_count = models.PositiveIntegerField(
+        default=1, help_text="Cantidad de dados para el efecto (Ej: 1)")
+    effect_dice_sides = models.PositiveIntegerField(
+        default=4, help_text="Caras del dado del efecto (Ej: 6)")
 
     # Modificadores de Atributos RPG
     bonus_str = models.IntegerField(default=0, verbose_name="Fuerza")
@@ -331,7 +335,7 @@ class Adventurer(WealthMixin):
         mods = {'str': 0, 'dex': 0, 'con': 0, 'int': 0, 'wis': 0, 'cha': 0, 'luk': 0,
                 'armor': 0, 'damage': 2, 'weapon_dice_count': 0, 'weapon_dice_sides': 0,
                 'bonus_dmg_dice_count': 0, 'bonus_dmg_dice_sides': 0,
-                'on_hit_effect': 'NON', 'effect_chance': 0}
+                'on_hit_effect': 'NON', 'effect_chance': 0, 'effect_dice_count': 1, 'effect_dice_sides': 4}
 
         # Modificadores de Raza
         race_mods = {
@@ -382,6 +386,8 @@ class Adventurer(WealthMixin):
             if item.on_hit_effect != 'NON' and item.item_type in ['W1H', 'W2H', 'RNG', 'NCK']:
                 mods['on_hit_effect'] = item.on_hit_effect
                 mods['effect_chance'] = item.effect_chance
+                mods['effect_dice_count'] = item.effect_dice_count
+                mods['effect_dice_sides'] = item.effect_dice_sides
 
         # --- LÓGICA DE DEFENSA SIN ARMADURA ---
         is_unarmored = True
@@ -527,6 +533,10 @@ class Monster(models.Model):
         max_length=3, choices=OnHitEffect.choices, default=OnHitEffect.NONE)
     effect_chance = models.PositiveIntegerField(
         default=0, help_text="Probabilidad 1-100 de aplicar el efecto")
+    effect_dice_count = models.PositiveIntegerField(
+        default=1, help_text="Cantidad de dados para el efecto (Ej: 1)")
+    effect_dice_sides = models.PositiveIntegerField(
+        default=4, help_text="Caras del dado del efecto (Ej: 6)")
 
     loot_multiplier = models.FloatField(default=1.0)
     xp_reward = models.PositiveIntegerField(default=50)
