@@ -118,6 +118,7 @@ def calculate_save_dc(adv):
 def generate_session_script(session_id, duration_minutes, adventurers_qs):
     random.seed(session_id)
     script = []
+    session_monster_xp = 0
     total_seconds = duration_minutes * 60
     adventurers = list(adventurers_qs)
 
@@ -279,7 +280,16 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
             # --------------------------------------------------------
             # Tirada de Encuentro
             if monsters_db and random.random() < 0.15:
-                base_monster = random.choice(monsters_db)
+                # --- TABLAS DE ENCUENTRO PONDERADAS ---
+                # SML: 60%, MED: 30%, LRG: 8%, EPC: 2%
+                category_weights = {'SML': 60, 'MED': 30, 'LRG': 8, 'EPC': 2}
+
+                weights = [category_weights.get(
+                    m.category, 10) for m in monsters_db]
+                base_monster = random.choices(
+                    monsters_db, weights=weights, k=1)[0]
+                # ---------------------------------------------------------------
+
                 spawn_count = random.randint(
                     base_monster.min_spawn, base_monster.max_spawn)
 
@@ -368,7 +378,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 target = random.choice(adventurers)
                 adv_mods = target.get_stat_modifiers()
 
-                # --- CA: 8 + Mayor entre Destreza o Armadura ---
+                # --- CA AVENTURERO: 8 + Mayor entre Destreza o Armadura ---
                 adv_evasion = 8 + max(adv_mods['dex'], adv_mods['armor'])
 
                 adv_on_attack = 'BLINDED' in adv_status_tracker[
@@ -377,7 +387,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 # Tirada Crítica vs Normal
                 m_raw_roll = roll_d20(
-                    advantage=adv_on_attack, disadvantage=disadv_on_attack)
+                    advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
                 m_roll_total = m_raw_roll + m['stats']['dex']
 
                 is_hit = False
@@ -409,9 +419,17 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                     eff_m = getattr(base_m, 'on_hit_effect', 'NON')
                     if eff_m != 'NON' and random.randint(1, 100) <= getattr(base_m, 'effect_chance', 0):
-                        adv_status_tracker[target.id].add(eff_m)
-                        script.append({"second": current_second - 8, "type": "flavor",
-                                      "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+                        if eff_m == 'LFS':
+                            heal = sum(random.randint(1, getattr(base_m, 'effect_dice_sides', 4)) for _ in range(
+                                getattr(base_m, 'effect_dice_count', 1)))
+                            max_hp = base_m.base_hp + (m['stats']['con'] * 2)
+                            m['hp'] = min(max_hp, m['hp'] + heal)
+                            script.append({"second": current_second - 8, "type": "flavor",
+                                          "message": f"🦇 ¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
+                        else:
+                            adv_status_tracker[target.id].add(eff_m)
+                            script.append({"second": current_second - 8, "type": "flavor",
+                                          "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
 
                     eff_adv = adv_mods.get('on_hit_effect', 'NON')
                     if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
@@ -430,6 +448,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     fail_msg = "falla estrepitosamente" if m_raw_roll == 1 else "falla su ataque"
                     script.append({"second": current_second - 8, "type": "flavor",
                                   "message": f"[bold red]{m['name']}[/bold red] {fail_msg} contra {target.name}."})
+
             # --- TURNO DE LOS AVENTUREROS ---
             for i, adv in enumerate(adventurers):
                 if not active_monsters_group:
@@ -529,13 +548,13 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         adv_on_attack = 'BLINDED' in target_m['status'] or 'RECKLESS' in adv_status_tracker[adv.id]
                         disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
 
-                        # --- 8 + Mayor entre Destreza o Armadura ---
+                        # --- CA MONSTRUO: 8 + Mayor entre Destreza o Armadura ---
                         m_evasion = 8 + \
                             max(target_m['stats']['dex'],
                                 target_m['stats'].get('armor', 0))
 
                         a_raw_roll = roll_d20(
-                            advantage=adv_on_attack, disadvantage=disadv_on_attack)
+                            advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
                         a_roll_total = a_raw_roll + attack_stat
 
                         if 'INSPIRED' in adv_status_tracker[adv.id]:
@@ -607,6 +626,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             fail_msg = "falla catastróficamente" if a_raw_roll == 1 else "falla su ataque"
                             script.append({"second": current_second - 4, "type": "flavor",
                                           "message": f"{adv.name} {fail_msg} contra [bold red]{target_m['name']}[/bold red]."})
+
                 else:
                     # --- EJECUCIÓN DE HABILIDAD ---
                     success = best_action["execute"](context)
@@ -619,11 +639,16 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             session_skills_tracker[adv.id].add(
                                 best_action["id"])
 
-                # Comprobación Universal de Muertes (Aplica tanto para ataques como daño de área)
+                # --- Comprobación Universal de Muertes ---
                 for m in list(active_monsters_group):
                     if m['hp'] <= 0:
+                        # Rescata la XP que otorga el monstruo y la sumamos al pozo
+                        xp_ganada = getattr(m['base'], 'xp_reward', 0)
+                        session_monster_xp += xp_ganada
+
                         script.append({"second": current_second - 2, "type": "flavor",
-                                      "message": f"[bold red]{m['name']}[/bold red] muerde el polvo."})
+                                      "message": f"💀 [bold red]{m['name']}[/bold red] cae derrotado (+{xp_ganada} XP)."})
+                        active_monsters_group.remove(m)
 
                         # Generar Monedas
                         for coin, max_amt, prob in coin_drops.get(m['base'].category, []):
@@ -663,7 +688,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
     script.sort(key=lambda x: x["second"])
     random.seed()
-    return script
+    return script, session_monster_xp
 
 
 def distribute_tithe(guild, adventurers_qs, loot_dict, event_log):
@@ -984,7 +1009,7 @@ def process_session_completion(session_id, survived_seconds=None):
         survived_seconds = session.duration_minutes * 60
 
     # Re-genera el guion exacto usando determinista
-    script = generate_session_script(
+    script, session_monster_xp = generate_session_script(
         session.id, session.duration_minutes, adventurers)
 
     loot = {
@@ -1050,7 +1075,17 @@ def process_session_completion(session_id, survived_seconds=None):
         wis_bonus = sum(item.bonus_wis for item in adv.get_equipped_items())
         multiplier += (wis_bonus * 0.05)
 
-        adv.experience += int(base_xp * multiplier)
+        # --- EXPERIENCIA HÍBRIDA ---
+        # Divide la XP total de los monstruos muertos entre los miembros del grupo
+        adv_monster_xp = session_monster_xp // len(
+            adventurers) if adventurers else 0
+        total_earned_xp = int(base_xp * multiplier) + adv_monster_xp
+
+        adv.experience += total_earned_xp
+        # Registro en el log del botín de XP híbrida
+        event_log.append(
+            f"🎖️ {adv.name} ganó {total_earned_xp} XP ({int(base_xp * multiplier)} por tiempo + {adv_monster_xp} por monstruos).")
+        # ------------------------------------
 
         # Limpia los enfriamientos para la próxima sesión
         adv.session_skills_used = []
@@ -1084,23 +1119,35 @@ def distribute_random_stats(adv, points_to_distribute):
     adv.save()
 
 
-def check_level_up(adv, event_log):
-    """Comprueba si el aventurero tiene suficiente XP para subir de nivel."""
-    xp_needed = adv.level * 100  # Escala simple: Nv 1->2 pide 100XP, Nv 2->3 pide 200XP
+def get_xp_requirement(level):
+    """
+    Calcula la experiencia necesaria para el SIGUIENTE nivel.
+    Fórmula de curva cuadrática: (Nivel^2 * 500) + 500
+    Lv 1->2: 1000 XP | Lv 2->3: 1500 XP | Lv 3->4: 2500 XP | Lv 4->5: 4000 XP
+    """
+    return (level ** 2) * 500 + 500
 
-    if adv.experience >= xp_needed:
+
+def check_level_up(adv, log):
+    leveled_up = False
+    # Evalua usando la nueva curva de dificultad
+    while adv.experience >= get_xp_requirement(adv.level):
+        adv.experience -= get_xp_requirement(adv.level)
         adv.level += 1
-        adv.experience -= xp_needed
-        adv.max_hp += 2
-        adv.current_hp = adv.max_hp  # Cura completa al subir de nivel
+        leveled_up = True
 
-        distribute_random_stats(adv, 3)  # +3 puntos aleatorios
+        adv.max_hp += random.randint(4, 8) + adv.base_con
+        adv.current_hp = adv.max_hp
 
-        event_log.append(
-            f"¡Sube de Nivel! {adv.name} alcanza el Nivel {adv.level} (+2 HP, +3 Stats).")
+        stats = ['base_str', 'base_dex', 'base_con',
+                 'base_int', 'base_wis', 'base_cha']
+        chosen_stat = random.choice(stats)
+        setattr(adv, chosen_stat, getattr(adv, chosen_stat) + 1)
 
-        # Llamada recursiva por si ganó muchísima XP de golpe
-        check_level_up(adv, event_log)
+        log.append(
+            f"🎉 ¡[bold yellow]{adv.name}[/bold yellow] ha alcanzado el Nivel {adv.level}! (+HP, +{chosen_stat.split('_')[1].upper()})")
+
+    return leveled_up
 
 # --- LÓGICA BANCARIA Y MERCADO ---
 
