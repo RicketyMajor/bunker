@@ -21,6 +21,7 @@ class Command(BaseCommand):
         #     "min_str": -1, "max_str": 1, "min_dex": 1, "max_dex": 3,
         #     "min_con": 0, "max_con": 2, "min_int": -2, "max_int": 0,
         #     "min_wis": -1, "max_wis": 1, "min_cha": -2, "max_cha": -1,
+        #     "min_armor": 0, "max_armor": 0
         #     # --- DAÑO BASE ---
         #     "damage_dice_count": 1, "damage_dice_sides": 4, "bonus_damage": 0,
         #     # --- DAÑO EXTRA MAGICO ---

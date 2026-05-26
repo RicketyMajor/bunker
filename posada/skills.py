@@ -100,8 +100,6 @@ def curacion_menor(context):
 )
 def golpe_brutal(context):
     caster = context['caster']
-
-    # COSTO: 1 Stamina
     if context.get('eval_mode'):
         if caster.class_resources.get('stamina', 0) < 1 and caster.class_resources.get('furia', 0) < 1:
             return 0
@@ -112,20 +110,25 @@ def golpe_brutal(context):
 
     target = random.choice(context['enemies'])
     adv_mods = caster.get_stat_modifiers()
-    a_roll = random.randint(1, 20) + adv_mods['str'] - 2
-    m_evasion = 10 + target['stats']['dex']
 
-    if a_roll >= m_evasion:
+    m_evasion = 8 + max(target['stats']['dex'],
+                        target['stats'].get('armor', 0))
+    a_raw_roll = random.randint(1, 20)
+    a_roll_total = a_raw_roll + adv_mods['str'] - 2
+
+    if a_raw_roll == 20 or (a_raw_roll != 1 and a_roll_total >= m_evasion):
         sides = adv_mods.get('weapon_dice_sides', 4) or 4
         count = adv_mods.get('weapon_dice_count', 1) or 1
         dmg = sum(random.randint(1, sides) for _ in range(count + 1)
                   ) + adv_mods['damage'] + (adv_mods['str'] * 2)
-        target['hp'] -= dmg
+
+        final_dmg = max(1, dmg - target['stats']['con'])
+        target['hp'] -= final_dmg
         context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"💥 {caster.name} ejecuta un [bold yellow]Golpe Brutal[/bold yellow] aplastando a [bold red]{target['name']}[/bold red] por {dmg} de daño."})
+                               "message": f"💥 {caster.name} ejecuta un [bold yellow]Golpe Brutal[/bold yellow] aplastando a [bold red]{target['name']}[/bold red] por {final_dmg} de daño."})
     else:
         context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"💨 {caster.name} intenta un [bold yellow]Golpe Brutal[/bold yellow] pero pierde el equilibrio."})
+                               "message": f"💨 {caster.name} intenta un [bold yellow]Golpe Brutal[/bold yellow] pero falla."})
     return True
 
 
@@ -229,8 +232,6 @@ def imposicion_manos(context):
 )
 def castigo_divino(context):
     caster = context['caster']
-
-    # COSTO: 1 Maná
     if context.get('eval_mode'):
         if caster.class_resources.get('mana', 0) < 1:
             return 0
@@ -238,20 +239,24 @@ def castigo_divino(context):
 
     target = random.choice(context['enemies'])
     adv_mods = caster.get_stat_modifiers()
-    a_roll = random.randint(1, 20) + max(adv_mods['str'], adv_mods['dex'])
-    m_evasion = 10 + target['stats']['dex']
 
-    if a_roll >= m_evasion:
-        caster.class_resources['mana'] -= 1  # Solo cobra si acierta
+    m_evasion = 8 + max(target['stats']['dex'],
+                        target['stats'].get('armor', 0))
+    a_raw_roll = random.randint(1, 20)
+    a_roll_total = a_raw_roll + max(adv_mods['str'], adv_mods['dex'])
+
+    if a_raw_roll == 20 or (a_raw_roll != 1 and a_roll_total >= m_evasion):
+        caster.class_resources['mana'] -= 1
         sides = adv_mods.get('weapon_dice_sides', 4) or 4
         count = adv_mods.get('weapon_dice_count', 1) or 1
         base_dmg = sum(random.randint(1, sides) for _ in range(
             count)) + adv_mods['damage'] + adv_mods['str']
         smite_dmg = sum(random.randint(1, 8) for _ in range(2))
 
-        target['hp'] -= (base_dmg + smite_dmg)
+        final_dmg = max(1, (base_dmg + smite_dmg) - target['stats']['con'])
+        target['hp'] -= final_dmg
         context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"☀️ ¡Gasto de Maná! [bold yellow]Castigo Divino[/bold yellow] de {caster.name} arrasa a [bold red]{target['name']}[/bold red] ({base_dmg + smite_dmg} daño)."})
+                               "message": f"☀️ ¡Gasto de Maná! [bold yellow]Castigo Divino[/bold yellow] de {caster.name} arrasa a [bold red]{target['name']}[/bold red] ({final_dmg} daño)."})
     else:
         context['log'].append({"second": context['current_second'], "type": "flavor",
                                "message": f"🛡️ {caster.name} falla el golpe y retiene su Maná."})
@@ -268,8 +273,6 @@ def castigo_divino(context):
 )
 def bola_de_fuego(context):
     caster = context['caster']
-
-    # COSTO: 3 Maná
     if context.get('eval_mode'):
         if caster.class_resources.get('mana', 0) < 3:
             return 0
@@ -277,18 +280,29 @@ def bola_de_fuego(context):
 
     caster.class_resources['mana'] -= 3
     from posada.engine import calculate_save_dc, roll_d20
+    save_dc = calculate_save_dc(caster)
 
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"🔥 {caster.name} sacrifica 3 de Maná conjurando [bold red]BOLA DE FUEGO[/bold red]."})
 
     fire_dmg = sum(random.randint(1, 6) for _ in range(8))
     for target in context['enemies']:
-        m_save = roll_d20() + target['stats']['dex']
-        dmg_taken = fire_dmg if m_save < calculate_save_dc(
-            caster) else fire_dmg // 2
-        target['hp'] -= dmg_taken
+        # Monstruo tira D20 para intentar salvarse
+        m_raw_save = random.randint(1, 20)
+        is_saved = False
+        if m_raw_save == 20:
+            is_saved = True  # 20 Natural salva siempre
+        elif m_raw_save == 1:
+            is_saved = False  # 1 Natural falla siempre
+        else:
+            is_saved = (m_raw_save + target['stats']['dex']) >= save_dc
+
+        dmg_taken = fire_dmg // 2 if is_saved else fire_dmg
+        final_dmg = max(1, dmg_taken - target['stats']['con'])
+
+        target['hp'] -= final_dmg
         context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"    -> [bold red]{target['name']}[/bold red] recibe {dmg_taken} daño."})
+                               "message": f"    -> [bold red]{target['name']}[/bold red] recibe {final_dmg} daño."})
     return True
 
 
@@ -297,8 +311,6 @@ def bola_de_fuego(context):
 )
 def eldritch_blast(context):
     caster = context['caster']
-
-    # COSTO: 0 (Es un Truco Mágico / Cantrip)
     if context.get('eval_mode'):
         return 55 if context['enemies'] else 0
 
@@ -312,9 +324,18 @@ def eldritch_blast(context):
         if not context['enemies']:
             break
         target = random.choice(context['enemies'])
-        if (random.randint(1, 20) + adv_mods['cha']) >= (10 + target['stats']['dex']):
+
+        m_evasion = 8 + max(target['stats']['dex'],
+                            target['stats'].get('armor', 0))
+        a_raw_roll = random.randint(1, 20)
+
+        if a_raw_roll == 20 or (a_raw_roll != 1 and (a_raw_roll + adv_mods['cha']) >= m_evasion):
             dmg = random.randint(1, 10) + adv_mods['cha']
-            target['hp'] -= dmg
+            final_dmg = max(1, dmg - target['stats']['con'])
+            target['hp'] -= final_dmg
             context['log'].append({"second": context['current_second'], "type": "flavor",
-                                   "message": f"    -> ¡Impacto en [bold red]{target['name']}[/bold red]! ({dmg} daño)"})
+                                   "message": f"    -> ¡Impacto en [bold red]{target['name']}[/bold red]! ({final_dmg} daño)"})
+        else:
+            context['log'].append({"second": context['current_second'], "type": "flavor",
+                                   "message": f"    -> El rayo falla contra [bold red]{target['name']}[/bold red]."})
     return True

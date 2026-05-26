@@ -548,6 +548,8 @@ class Monster(models.Model):
     max_wis = models.IntegerField(default=0)
     min_cha = models.IntegerField(default=0)
     max_cha = models.IntegerField(default=0)
+    min_armor = models.IntegerField(default=0)
+    max_armor = models.IntegerField(default=0)
 
     # Daño basado en dados
     damage_dice_count = models.PositiveIntegerField(default=1)

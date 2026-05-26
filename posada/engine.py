@@ -91,27 +91,28 @@ FLAVOR_ADV = [
 
 
 def roll_d20(advantage=False, disadvantage=False):
-    """Realiza una tirada D20 aplicando reglas de Ventaja o Desventaja."""
+    """
+    Devuelve un diccionario con el valor del dado y si fue crítico.
+    """
     r1, r2 = random.randint(1, 20), random.randint(1, 20)
+
     if advantage and not disadvantage:
-        return max(r1, r2)
-    if disadvantage and not advantage:
-        return min(r1, r2)
-    return random.randint(1, 20)
+        val = max(r1, r2)
+    elif disadvantage and not advantage:
+        val = min(r1, r2)
+    else:
+        val = r1  # Tirada normal
+
+    return {"value": val, "is_crit": val == 20, "is_fail": val == 1}
 
 
 def calculate_save_dc(adv):
-    """
-    Dificultad de Salvación (Save DC) = 8 + Modificador Principal + Bono de Competencia.
-    Se usa para que los enemigos resistan hechizos o efectos del aventurero.
-    """
     mods = adv.get_stat_modifiers()
-    # Identifica la mejor estadística mágica/táctica del personaje
-    spellcasting_mod = max(mods.get('int', 0), mods.get(
-        'wis', 0), mods.get('cha', 0))
-    # Competencia en D&D 5e escala con el nivel: +2 (niveles 1-4), +3 (5-8), +4 (9+)
+    spellcasting_stat = {'WIZ': 'int', 'ART': 'int', 'CLR': 'wis', 'DRD': 'wis', 'RGR': 'wis',
+                         'BRD': 'cha', 'PAL': 'cha', 'SOR': 'cha', 'WLK': 'cha'}.get(adv.adv_class, 'int')
+    spellcasting_mod = mods.get(spellcasting_stat, 0)
     prof_bonus = 2 + ((adv.level - 1) // 4)
-    return 8 + spellcasting_mod + prof_bonus
+    return 6 + spellcasting_mod + prof_bonus  # CA Base de Hechizos bajada a 6
 
 
 def generate_session_script(session_id, duration_minutes, adventurers_qs):
@@ -292,7 +293,8 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         'int': random.randint(base_monster.min_int, base_monster.max_int),
                         'wis': random.randint(base_monster.min_wis, base_monster.max_wis),
                         'cha': random.randint(base_monster.min_cha, base_monster.max_cha),
-                        'luk': 0  # Monstruos no usan suerte por ahora
+                        'armor': random.randint(base_monster.min_armor, base_monster.max_armor),
+                        'luk': 0
                     }
 
                     # La salud se calcula desde el rango base + bonificador de constitución
@@ -365,66 +367,69 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 target = random.choice(adventurers)
                 adv_mods = target.get_stat_modifiers()
-                adv_evasion = 10 + adv_mods['dex']
+
+                # --- CA: 8 + Mayor entre Destreza o Armadura ---
+                adv_evasion = 8 + max(adv_mods['dex'], adv_mods['armor'])
 
                 adv_on_attack = 'BLINDED' in adv_status_tracker[
                     target.id] or 'RECKLESS' in adv_status_tracker[target.id]
                 disadv_on_attack = 'BLINDED' in m['status'] or 'DODGING' in adv_status_tracker[target.id]
 
-                m_roll = roll_d20(
-                    advantage=adv_on_attack, disadvantage=disadv_on_attack) + m['stats']['dex']
+                # Tirada Crítica vs Normal
+                m_raw_roll = roll_d20(
+                    advantage=adv_on_attack, disadvantage=disadv_on_attack)
+                m_roll_total = m_raw_roll + m['stats']['dex']
 
-                if m_roll >= adv_evasion:
+                is_hit = False
+                if m_raw_roll == 20:
+                    is_hit = True  # Éxito Crítico
+                elif m_raw_roll == 1:
+                    is_hit = False  # Fallo Crítico
+                else:
+                    is_hit = (m_roll_total >= adv_evasion)
+
+                if is_hit:
                     base_m = m['base']
-                    # Daño Base
                     m_dmg_dice = sum(random.randint(1, base_m.damage_dice_sides)
                                      for _ in range(base_m.damage_dice_count))
-                    # Daño Extra Dinámico
                     m_extra_dice = sum(random.randint(1, getattr(base_m, 'bonus_damage_dice_sides', 4)) for _ in range(
                         getattr(base_m, 'bonus_damage_dice_count', 0))) if getattr(base_m, 'bonus_damage_dice_count', 0) > 0 else 0
 
                     m_dmg = m_dmg_dice + m_extra_dice + \
                         base_m.bonus_damage + m['stats']['str']
 
-                    # --- HOOK DE REACCIONES Y PASIVAS DEFENSIVAS ---
                     if target.adv_class == 'ROG' and target.level >= 5 and 'REACTION_USED' not in adv_status_tracker[target.id]:
                         m_dmg = m_dmg // 2
                         adv_status_tracker[target.id].add('REACTION_USED')
                         script.append({"second": current_second - 8, "type": "flavor",
-                                       "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y mitiga el impacto."})
+                                      "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y mitiga el impacto."})
 
                     if 'RAGING' in adv_status_tracker[target.id]:
                         m_dmg = m_dmg // 2
 
-                    # --- EFECTOS AL IMPACTAR (PROCS MONSTRUO) ---
                     eff_m = getattr(base_m, 'on_hit_effect', 'NON')
                     if eff_m != 'NON' and random.randint(1, 100) <= getattr(base_m, 'effect_chance', 0):
-                        if eff_m == 'LFS':
-                            heal = sum(random.randint(1, getattr(base_m, 'effect_dice_sides', 4)) for _ in range(
-                                getattr(base_m, 'effect_dice_count', 1)))
-                            max_hp = base_m.base_hp + (m['stats']['con'] * 2)
-                            m['hp'] = min(max_hp, m['hp'] + heal)
-                            script.append({"second": current_second - 8, "type": "flavor",
-                                          "message": f"🦇 ¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
-                        else:
-                            adv_status_tracker[target.id].add(eff_m)
-                            script.append({"second": current_second - 8, "type": "flavor",
-                                          "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+                        adv_status_tracker[target.id].add(eff_m)
+                        script.append({"second": current_second - 8, "type": "flavor",
+                                      "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
 
-                    # --- PINCHOS (THORNS) DEL AVENTURERO ---
                     eff_adv = adv_mods.get('on_hit_effect', 'NON')
                     if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
                         thorns_dmg = random.randint(1, 4)
                         m['hp'] -= thorns_dmg
                         script.append({"second": current_second - 7, "type": "flavor",
-                                      "message": f"La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
+                                      "message": f"🦔 La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
 
-                    final_dmg = max(1, m_dmg - adv_mods['armor'])
+                    # --- Mitigación por Constitución y Daño Mínimo 1 ---
+                    final_dmg = max(1, m_dmg - adv_mods['con'])
+
+                    crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if m_raw_roll == 20 else ""
                     script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
-                                  "message": f"[bold red]{m['name']}[/bold red] golpea a {target.name} ({final_dmg} daño)."})
+                                  "message": f"{crit_msg}[bold red]{m['name']}[/bold red] golpea a {target.name} ({final_dmg} daño)."})
                 else:
+                    fail_msg = "falla estrepitosamente" if m_raw_roll == 1 else "falla su ataque"
                     script.append({"second": current_second - 8, "type": "flavor",
-                                  "message": f"{target.name} esquivó el ataque de [bold red]{m['name']}[/bold red]."})
+                                  "message": f"[bold red]{m['name']}[/bold red] {fail_msg} contra {target.name}."})
             # --- TURNO DE LOS AVENTUREROS ---
             for i, adv in enumerate(adventurers):
                 if not active_monsters_group:
@@ -524,17 +529,36 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         adv_on_attack = 'BLINDED' in target_m['status'] or 'RECKLESS' in adv_status_tracker[adv.id]
                         disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
 
-                        a_roll = roll_d20(
-                            advantage=adv_on_attack, disadvantage=disadv_on_attack) + attack_stat
-                        m_evasion = 10 + target_m['stats']['dex']
+                        # --- 8 + Mayor entre Destreza o Armadura ---
+                        m_evasion = 8 + \
+                            max(target_m['stats']['dex'],
+                                target_m['stats'].get('armor', 0))
 
-                        if a_roll >= m_evasion:
+                        a_raw_roll = roll_d20(
+                            advantage=adv_on_attack, disadvantage=disadv_on_attack)
+                        a_roll_total = a_raw_roll + attack_stat
+
+                        if 'INSPIRED' in adv_status_tracker[adv.id]:
+                            bard_dice = random.randint(1, 6)
+                            a_roll_total += bard_dice
+                            adv_status_tracker[adv.id].remove('INSPIRED')
+                            script.append({"second": current_second - 5, "type": "flavor",
+                                          "message": f"🎵 ¡La música del Bardo guía el golpe! (+{bard_dice})"})
+
+                        is_hit = False
+                        if a_raw_roll == 20:
+                            is_hit = True  # Éxito Crítico
+                        elif a_raw_roll == 1:
+                            is_hit = False  # Fallo Crítico
+                        else:
+                            is_hit = (a_roll_total >= m_evasion)
+
+                        if is_hit:
                             sides = adv_mods.get('weapon_dice_sides', 4) or 4
                             count = adv_mods.get('weapon_dice_count', 1) or 1
                             a_dmg = sum(random.randint(1, sides) for _ in range(
                                 count)) + adv_mods['damage'] + adv_mods['str']
 
-                            # --- DADOS EXTRA DINÁMICOS ---
                             extra_count = adv_mods.get(
                                 'bonus_dmg_dice_count', 0)
                             if extra_count > 0:
@@ -543,55 +567,46 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                 a_dmg += sum(random.randint(1, extra_sides)
                                              for _ in range(extra_count))
 
-                            # --- PASIVAS OFENSIVAS ---
-                            # Ataque Furtivo del Pícaro
                             if adv.adv_class == 'ROG' and adv_on_attack:
                                 sneak_dice = (adv.level + 1) // 2
                                 sneak_dmg = sum(random.randint(1, 6)
                                                 for _ in range(sneak_dice))
                                 a_dmg += sneak_dmg
                                 script.append({"second": current_second - 5, "type": "flavor",
-                                               "message": f"🗡️ ¡Ataque Furtivo brutal de {adv.name}! (+{sneak_dmg} daño extra)"})
+                                              "message": f"🗡️ ¡Ataque Furtivo de {adv.name}! (+{sneak_dmg})"})
 
-                            # Bono de Furia
                             if 'RAGING' in adv_status_tracker[adv.id]:
                                 a_dmg += 2
-
-                            # Arma Infundida del Artificiero
                             if 'INFUSED_WEAPON' in adv_status_tracker[adv.id]:
                                 a_dmg += 1
 
-                            # Inspiración Bárdica (Suma 1d6 al ataque y luego se gasta)
-                            if 'INSPIRED' in adv_status_tracker[adv.id]:
-                                bard_dice = random.randint(1, 6)
-                                a_roll += bard_dice  # Modifica el dado que tiró para asegurar que golpee
-                                adv_status_tracker[adv.id].remove('INSPIRED')
-                                script.append({"second": current_second - 5, "type": "flavor",
-                                               "message": f"🎵 ¡La música del Bardo guía el golpe de {adv.name}! (+{bard_dice} precisión)"})
-
-                            # --- EFECTOS AL IMPACTAR (PROCS AVENTURERO) ---
                             eff = adv_mods.get('on_hit_effect', 'NON')
                             if eff != 'NON' and eff != 'THN':
                                 if random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
                                     if eff == 'LFS':
-                                        # Usa el dado de efecto asignado
                                         heal = sum(random.randint(1, adv_mods['effect_dice_sides']) for _ in range(
                                             adv_mods['effect_dice_count']))
                                         script.append({"second": current_second - 4, "type": "damage", "adventurer_id": adv.id,
-                                                      "amount": -heal, "message": f"🦇 {adv.name} drena {heal} HP de su enemigo."})
+                                                      "amount": -heal, "message": f"🦇 {adv.name} drena {heal} HP."})
                                     else:
                                         target_m['status'].add(eff)
                                         eff_names = {
                                             'PSN': 'Veneno', 'BLD': 'Sangrado', 'BRN': 'Quemaduras', 'STN': 'Aturdimiento', 'BLN': 'Ceguera'}
                                         script.append({"second": current_second - 4, "type": "flavor",
-                                                      "message": f"🦠 ¡{adv.name} inflige {eff_names.get(eff, eff)} a [bold red]{target_m['name']}[/bold red]!"})
+                                                      "message": f"🦠 ¡{adv.name} inflige {eff_names.get(eff, eff)}!"})
 
-                            target_m['hp'] -= a_dmg
+                            # --- Mitigación por Constitución y Daño Mínimo 1 ---
+                            final_dmg = max(
+                                1, a_dmg - target_m['stats']['con'])
+                            target_m['hp'] -= final_dmg
+
+                            crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if a_raw_roll == 20 else ""
                             script.append({"second": current_second - 4, "type": "flavor",
-                                          "message": f"{adv.name} asesta un golpe de {a_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
+                                          "message": f"{crit_msg}{adv.name} asesta un golpe de {final_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
                         else:
+                            fail_msg = "falla catastróficamente" if a_raw_roll == 1 else "falla su ataque"
                             script.append({"second": current_second - 4, "type": "flavor",
-                                          "message": f"{adv.name} falla su ataque contra [bold red]{target_m['name']}[/bold red]."})
+                                          "message": f"{adv.name} {fail_msg} contra [bold red]{target_m['name']}[/bold red]."})
                 else:
                     # --- EJECUCIÓN DE HABILIDAD ---
                     success = best_action["execute"](context)
