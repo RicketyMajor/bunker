@@ -2737,6 +2737,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_iota": 5,
             },
             {
                 "name": "Odre de Cuero",
@@ -2748,6 +2749,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "LTH",
+                "cost_iota": 2,
             },
             {
                 "name": "Cuerda de Cáñamo (15m)",
@@ -2759,6 +2761,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_talento": 1,
             },
             {
                 "name": "Antorcha",
@@ -2770,6 +2773,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "WOD",
+                "cost_drabin": 1,
             },
             {
                 "name": "Yesquero (Mechero)",
@@ -2781,6 +2785,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_iota": 5,
             },
             {
                 "name": "Saco de Dormir",
@@ -2792,6 +2797,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "CLT",
+                "cost_talento": 1,
             },
             {
                 "name": "Mochila de Lona",
@@ -2803,6 +2809,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "CLT",
+                "cost_talento": 2,
             },
             {
                 "name": "Alforjas de Cuero",
@@ -2814,6 +2821,9 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "LTH",
+                "cost_real": 1,
+                "cost_talento": 1,
+                "cost_iota": 5,
             },
             {
                 "name": "Saco de Tela",
@@ -2825,6 +2835,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "CLT",
+                "cost_drabin": 1,
             },
             {
                 "name": "Tiza (Pedazo)",
@@ -2836,6 +2847,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_drabin": 1,
             },
             {
                 "name": "Espejo de Acero Pequeño",
@@ -2847,6 +2859,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_real": 2,
             },
             {
                 "name": "Barra de Jabón",
@@ -2858,6 +2871,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_drabin": 2,
             },
             {
                 "name": "Garfio de Escalada",
@@ -2869,6 +2883,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_talento": 2,
             },
             {
                 "name": "Linterna Sorda",
@@ -2880,6 +2895,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_real": 2,
             },
             {
                 "name": "Frasco de Aceite",
@@ -2891,6 +2907,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_iota": 1,
             },
             {
                 "name": "Palanca de Hierro (Pata de cabra)",
@@ -2902,6 +2919,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_talento": 2,
             },
             {
                 "name": "Pitones de Hierro (10)",
@@ -2913,6 +2931,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_iota": 5,
             },
             {
                 "name": "Martillo Pequeño",
@@ -2924,6 +2943,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_talento": 1,
             },
             {
                 "name": "Juego de Dados de Hueso",
@@ -2933,6 +2953,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "BNE",
+                "cost_iota": 1,
             },
             {
                 "name": "Baraja de Cartas",
@@ -2942,6 +2963,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_iota": 5,
             },
             {
                 "name": "Anillo de Madera Tallada",
@@ -2951,6 +2973,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "WOD",
+                "cost_iota": 1,
             },
             {
                 "name": "Collar de Cuentas de Vidrio",
@@ -2960,6 +2983,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_iota": 5,
             },
             {
                 "name": "Brazalete de Cobre",
@@ -2969,6 +2993,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_talento": 1,
             },
             {
                 "name": "Amuleto de Hueso",
@@ -2978,6 +3003,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "BNE",
+                "cost_iota": 2,
             },
             {
                 "name": "Pipa de Arcilla",
@@ -2987,6 +3013,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_drabin": 5,
             },
             {
                 "name": "Jarra de Estaño",
@@ -2996,6 +3023,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_drabin": 2,
             },
             {
                 "name": "Pluma de Tinta",
@@ -3007,6 +3035,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_drabin": 2,
             },
             {
                 "name": "Frasco de Tinta",
@@ -3018,6 +3047,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Pergamino en Blanco",
@@ -3029,6 +3059,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_iota": 1,
             },
             {
                 "name": "Campana Pequeña",
@@ -3040,6 +3071,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MTL",
+                "cost_talento": 1,
             },
             {
                 "name": "Ágata (Gema)",
@@ -3049,6 +3081,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Cuarzo Transparente",
@@ -3058,6 +3091,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Malaquita",
@@ -3067,6 +3101,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Lapislázuli",
@@ -3076,6 +3111,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Ojo de Tigre",
@@ -3085,6 +3121,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Hematita",
@@ -3094,6 +3131,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Obsidiana (Fragmento)",
@@ -3103,6 +3141,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Azurita",
@@ -3112,6 +3151,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Rodocrosita",
@@ -3121,6 +3161,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
             {
                 "name": "Turquesa",
@@ -3130,6 +3171,7 @@ class Command(BaseCommand):
                 "armor_weight": "NON",
                 "weapon_type": "NON",
                 "material": "MIX",
+                "cost_marco": 1,
             },
         ]
 
