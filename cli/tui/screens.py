@@ -325,7 +325,7 @@ class BunkerLauncherScreen(Screen):
                 # Módulo 2: Videoclub
                 with Vertical(classes="module_panel"):
                     yield Label("MÓDULO 2: VIDEOCLUB", classes="module_title")
-                    yield Button("INICIAR ENLACE", id="btn_movie", classes="launcher_btn", variant="warning")
+                    yield Button("INICIAR ENLACE", id="btn_movie", classes="launcher_btn", variant="primary")
 
                 # Módulo 3: La Disquera
                 with Vertical(classes="module_panel"):
@@ -350,7 +350,7 @@ class BunkerLauncherScreen(Screen):
             # Protocolo de Evacuación
                 with Vertical(classes="module_panel"):
                     yield Label("SISTEMA DE SEGURIDAD", classes="module_title")
-                    yield Button("PROTOCOLO DE EVACUACIÓN", id="btn_evac", classes="launcher_btn", variant="error")
+                    yield Button("PROTOCOLO DE EVACUACIÓN", id="btn_evac", classes="launcher_btn", variant="success")
 
             yield Button("DESCONECTAR SISTEMA", id="btn_quit", variant="error")
 

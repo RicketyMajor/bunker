@@ -39,7 +39,6 @@ class Command(BaseCommand):
             {
                 "name": "Goblin",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 5, "max_hp": 12,
                 "min_str": -1, "max_str": 0, "min_dex": 1, "max_dex": 3,
@@ -52,7 +51,6 @@ class Command(BaseCommand):
             {
                 "name": "Kobold",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 3, "max_spawn": 6,
                 "min_hp": 3, "max_hp": 8,
                 "min_str": -2, "max_str": -1, "min_dex": 1, "max_dex": 3,
@@ -65,7 +63,6 @@ class Command(BaseCommand):
             {
                 "name": "Rata Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 5,
                 "min_hp": 4, "max_hp": 9,
                 "min_str": -1, "max_str": 0, "min_dex": 1, "max_dex": 3,
@@ -79,7 +76,6 @@ class Command(BaseCommand):
             {
                 "name": "Bandido Novato",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 9, "max_hp": 15,
                 "min_str": 0, "max_str": 1, "min_dex": 0, "max_dex": 2,
@@ -92,7 +88,6 @@ class Command(BaseCommand):
             {
                 "name": "Esqueleto",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 10, "max_hp": 16,
                 "min_str": 0, "max_str": 1, "min_dex": 1, "max_dex": 2,
@@ -105,7 +100,6 @@ class Command(BaseCommand):
             {
                 "name": "Zombi",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 15, "max_hp": 25,
                 "min_str": 1, "max_str": 2, "min_dex": -2, "max_dex": -1,
@@ -118,7 +112,6 @@ class Command(BaseCommand):
             {
                 "name": "Lobo",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 8, "max_hp": 15,
                 "min_str": 0, "max_str": 1, "min_dex": 1, "max_dex": 2,
@@ -132,7 +125,6 @@ class Command(BaseCommand):
             {
                 "name": "Araña Lobo Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 9, "max_hp": 16,
                 "min_str": 0, "max_str": 1, "min_dex": 2, "max_dex": 3,
@@ -146,7 +138,6 @@ class Command(BaseCommand):
             {
                 "name": "Imp",
                 "category": "SML",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 10, "max_hp": 15,
                 "min_str": -2, "max_str": -1, "min_dex": 2, "max_dex": 3,
@@ -160,7 +151,6 @@ class Command(BaseCommand):
             {
                 "name": "Duende (Sprite)",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 2, "max_hp": 5,
                 "min_str": -3, "max_str": -2, "min_dex": 3, "max_dex": 4,
@@ -173,7 +163,6 @@ class Command(BaseCommand):
             {
                 "name": "Pseudodragón",
                 "category": "SML",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 5, "max_hp": 10,
                 "min_str": -2, "max_str": -1, "min_dex": 2, "max_dex": 3,
@@ -187,7 +176,6 @@ class Command(BaseCommand):
             {
                 "name": "Lémure",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 10, "max_hp": 18,
                 "min_str": 0, "max_str": 1, "min_dex": -3, "max_dex": -2,
@@ -200,7 +188,6 @@ class Command(BaseCommand):
             {
                 "name": "Ciempiés Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 3, "max_hp": 7,
                 "min_str": -3, "max_str": -2, "min_dex": 1, "max_dex": 2,
@@ -214,7 +201,6 @@ class Command(BaseCommand):
             {
                 "name": "Cangrejo Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 8, "max_hp": 15,
                 "min_str": 0, "max_str": 1, "min_dex": 0, "max_dex": 1,
@@ -228,7 +214,6 @@ class Command(BaseCommand):
             {
                 "name": "Rana Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 12, "max_hp": 25,
                 "min_str": 0, "max_str": 1, "min_dex": 1, "max_dex": 2,
@@ -241,7 +226,6 @@ class Command(BaseCommand):
             {
                 "name": "Serpiente Venenosa",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 2, "max_hp": 5,
                 "min_str": -4, "max_str": -3, "min_dex": 2, "max_dex": 3,
@@ -255,7 +239,6 @@ class Command(BaseCommand):
             {
                 "name": "Murciélago Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 10, "max_hp": 22,
                 "min_str": 1, "max_str": 2, "min_dex": 2, "max_dex": 3,
@@ -269,7 +252,6 @@ class Command(BaseCommand):
             {
                 "name": "Tejón Gigante",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 10, "max_hp": 18,
                 "min_str": 1, "max_str": 2, "min_dex": 0, "max_dex": 1,
@@ -283,7 +265,6 @@ class Command(BaseCommand):
             {
                 "name": "Limo Gris",
                 "category": "SML",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 18, "max_hp": 28,
                 "min_str": 1, "max_str": 2, "min_dex": -3, "max_dex": -2,
@@ -297,7 +278,6 @@ class Command(BaseCommand):
             {
                 "name": "Pixie",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 1, "max_hp": 4,
                 "min_str": -4, "max_str": -3, "min_dex": 3, "max_dex": 5,
@@ -310,7 +290,6 @@ class Command(BaseCommand):
             {
                 "name": "Enjambre de Ratas",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 20, "max_hp": 30,
                 "min_str": -1, "max_str": 0, "min_dex": 1, "max_dex": 2,
@@ -324,7 +303,6 @@ class Command(BaseCommand):
             {
                 "name": "Cultista Raso",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 7, "max_hp": 12,
                 "min_str": 0, "max_str": 1, "min_dex": 0, "max_dex": 1,
@@ -337,7 +315,6 @@ class Command(BaseCommand):
             {
                 "name": "Svirfneblin (Gnomo de las Profundidades)",
                 "category": "SML",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 12, "max_hp": 20,
                 "min_str": 1, "max_str": 2, "min_dex": 1, "max_dex": 2,
@@ -350,7 +327,6 @@ class Command(BaseCommand):
             {
                 "name": "Guardia de la Ciudad",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 9, "max_hp": 15,
                 "min_str": 1, "max_str": 2, "min_dex": 0, "max_dex": 1,
@@ -363,7 +339,6 @@ class Command(BaseCommand):
             {
                 "name": "Homúnculo",
                 "category": "SML",
-                "rarity": "COM",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 3, "max_hp": 8,
                 "min_str": -3, "max_str": -2, "min_dex": 2, "max_dex": 3,
@@ -381,7 +356,6 @@ class Command(BaseCommand):
             {
                 "name": "Orco",
                 "category": "MED",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 4,
                 "min_hp": 12, "max_hp": 22,
                 "min_str": 2, "max_str": 4, "min_dex": 0, "max_dex": 2,
@@ -394,7 +368,6 @@ class Command(BaseCommand):
             {
                 "name": "Hobgoblin",
                 "category": "MED",
-                "rarity": "UNC",
                 "min_spawn": 2, "max_spawn": 6,
                 "min_hp": 9, "max_hp": 18,
                 "min_str": 1, "max_str": 3, "min_dex": 1, "max_dex": 3,
@@ -407,7 +380,6 @@ class Command(BaseCommand):
             {
                 "name": "Gnoll",
                 "category": "MED",
-                "rarity": "UNC",
                 "min_spawn": 2, "max_spawn": 5,
                 "min_hp": 15, "max_hp": 25,
                 "min_str": 2, "max_str": 4, "min_dex": 1, "max_dex": 3,
@@ -421,7 +393,6 @@ class Command(BaseCommand):
             {
                 "name": "Bugbear",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 20, "max_hp": 35,
                 "min_str": 3, "max_str": 5, "min_dex": 1, "max_dex": 3,
@@ -435,7 +406,6 @@ class Command(BaseCommand):
             {
                 "name": "Hombre Lobo",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 45, "max_hp": 70,
                 "min_str": 4, "max_str": 6, "min_dex": 2, "max_dex": 4,
@@ -449,7 +419,6 @@ class Command(BaseCommand):
             {
                 "name": "Doppelganger",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 40, "max_hp": 60,
                 "min_str": 1, "max_str": 3, "min_dex": 3, "max_dex": 5,
@@ -462,7 +431,6 @@ class Command(BaseCommand):
             {
                 "name": "Ghoul",
                 "category": "MED",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 15, "max_hp": 30,
                 "min_str": 2, "max_str": 4, "min_dex": 2, "max_dex": 4,
@@ -476,7 +444,6 @@ class Command(BaseCommand):
             {
                 "name": "Sombra",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 12, "max_hp": 22,
                 "min_str": -2, "max_str": 0, "min_dex": 2, "max_dex": 4,
@@ -490,7 +457,6 @@ class Command(BaseCommand):
             {
                 "name": "Espectro",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 18, "max_hp": 30,
                 "min_str": -2, "max_str": 0, "min_dex": 2, "max_dex": 4,
@@ -504,7 +470,6 @@ class Command(BaseCommand):
             {
                 "name": "Arpía",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 2, "max_spawn": 4,
                 "min_hp": 30, "max_hp": 45,
                 "min_str": 1, "max_str": 3, "min_dex": 2, "max_dex": 4,
@@ -518,7 +483,6 @@ class Command(BaseCommand):
             {
                 "name": "Gárgola",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 40, "max_hp": 60,
                 "min_str": 3, "max_str": 5, "min_dex": 1, "max_dex": 3,
@@ -531,7 +495,6 @@ class Command(BaseCommand):
             {
                 "name": "Perro del Infierno",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 35, "max_hp": 55,
                 "min_str": 3, "max_str": 5, "min_dex": 2, "max_dex": 4,
@@ -545,7 +508,6 @@ class Command(BaseCommand):
             {
                 "name": "Engendro Vampírico",
                 "category": "MED",
-                "rarity": "EPC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 60, "max_hp": 90,
                 "min_str": 4, "max_str": 6, "min_dex": 4, "max_dex": 6,
@@ -559,7 +521,6 @@ class Command(BaseCommand):
             {
                 "name": "Medusa",
                 "category": "MED",
-                "rarity": "EPC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 60, "max_hp": 85,
                 "min_str": 1, "max_str": 3, "min_dex": 2, "max_dex": 4,
@@ -573,7 +534,6 @@ class Command(BaseCommand):
             {
                 "name": "Cambion",
                 "category": "MED",
-                "rarity": "EPC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 60, "max_hp": 85,
                 "min_str": 4, "max_str": 6, "min_dex": 3, "max_dex": 5,
@@ -586,7 +546,6 @@ class Command(BaseCommand):
             {
                 "name": "Súcubo / Íncubo",
                 "category": "MED",
-                "rarity": "EPC",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 50, "max_hp": 75,
                 "min_str": 1, "max_str": 3, "min_dex": 3, "max_dex": 5,
@@ -600,7 +559,6 @@ class Command(BaseCommand):
             {
                 "name": "Veterano Mercenario",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 3,
                 "min_hp": 45, "max_hp": 65,
                 "min_str": 3, "max_str": 5, "min_dex": 2, "max_dex": 4,
@@ -613,7 +571,6 @@ class Command(BaseCommand):
             {
                 "name": "Ghast",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 2,
                 "min_hp": 25, "max_hp": 45,
                 "min_str": 3, "max_str": 5, "min_dex": 3, "max_dex": 5,
@@ -627,7 +584,6 @@ class Command(BaseCommand):
             {
                 "name": "Mefito de Fuego",
                 "category": "MED",
-                "rarity": "UNC",
                 "min_spawn": 1, "max_spawn": 4,
                 "min_hp": 15, "max_hp": 25,
                 "min_str": 0, "max_str": 2, "min_dex": 1, "max_dex": 3,
@@ -641,7 +597,6 @@ class Command(BaseCommand):
             {
                 "name": "Capataz Orco",
                 "category": "MED",
-                "rarity": "RAR",
                 "min_spawn": 1, "max_spawn": 1,
                 "min_hp": 50, "max_hp": 75,
                 "min_str": 4, "max_str": 6, "min_dex": 1, "max_dex": 3,
@@ -650,6 +605,337 @@ class Command(BaseCommand):
                 "min_armor": 4, "max_armor": 6,
                 "damage_dice_count": 2, "damage_dice_sides": 4, "bonus_damage": 12,
                 "loot_multiplier": 3.0, "xp_reward": 450
+            },
+
+            # ==========================================
+            # 🔴 ENEMIGOS GRANDES (TIER 3 / RANGO LRG)
+            # ==========================================
+            {
+                "name": "Ogro",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 2,
+                "min_hp": 50, "max_hp": 70,
+                "min_str": 4, "max_str": 6, "min_dex": -1, "max_dex": 1,
+                "min_con": 4, "max_con": 6, "min_int": -3, "max_int": -1,
+                "min_wis": -2, "max_wis": 0, "min_cha": -2, "max_cha": 0,
+                "min_armor": 2, "max_armor": 4,
+                "damage_dice_count": 2, "damage_dice_sides": 8, "bonus_damage": 6,
+                "loot_multiplier": 4.0, "xp_reward": 450
+            },
+            {
+                "name": "Troll",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 70, "max_hp": 95,
+                "min_str": 4, "max_str": 6, "min_dex": 1, "max_dex": 3,
+                "min_con": 5, "max_con": 8, "min_int": -2, "max_int": 0,
+                "min_wis": -1, "max_wis": 1, "min_cha": -2, "max_cha": 0,
+                "min_armor": 3, "max_armor": 5,
+                "damage_dice_count": 2, "damage_dice_sides": 10, "bonus_damage": 5,
+                "on_hit_effect": "LFS", "effect_chance": 40, "effect_dice_count": 2, "effect_dice_sides": 6,
+                "loot_multiplier": 5.0, "xp_reward": 700
+            },
+            {
+                "name": "Gigante de las Colinas",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 90, "max_hp": 120,
+                "min_str": 6, "max_str": 9, "min_dex": -1, "max_dex": 1,
+                "min_con": 5, "max_con": 7, "min_int": -3, "max_int": -1,
+                "min_wis": -1, "max_wis": 1, "min_cha": -2, "max_cha": 0,
+                "min_armor": 4, "max_armor": 6,
+                "damage_dice_count": 3, "damage_dice_sides": 8, "bonus_damage": 8,
+                "on_hit_effect": "STN", "effect_chance": 15,
+                "loot_multiplier": 6.0, "xp_reward": 1100
+            },
+            {
+                "name": "Owlbear",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 50, "max_hp": 75,
+                "min_str": 5, "max_str": 7, "min_dex": 1, "max_dex": 2,
+                "min_con": 4, "max_con": 6, "min_int": -4, "max_int": -2,
+                "min_wis": 1, "max_wis": 3, "min_cha": -2, "max_cha": 0,
+                "min_armor": 3, "max_armor": 5,
+                "damage_dice_count": 2, "damage_dice_sides": 8, "bonus_damage": 6,
+                "on_hit_effect": "BLD", "effect_chance": 20, "effect_dice_count": 1, "effect_dice_sides": 6,
+                "loot_multiplier": 4.5, "xp_reward": 700
+            },
+            {
+                "name": "Mantícora",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 55, "max_hp": 80,
+                "min_str": 3, "max_str": 5, "min_dex": 2, "max_dex": 4,
+                "min_con": 3, "max_con": 5, "min_int": -1, "max_int": 1,
+                "min_wis": 1, "max_wis": 2, "min_cha": -1, "max_cha": 1,
+                "min_armor": 4, "max_armor": 6,
+                "damage_dice_count": 2, "damage_dice_sides": 6, "bonus_damage": 5,
+                "on_hit_effect": "PSN", "effect_chance": 10, "effect_dice_count": 1, "effect_dice_sides": 6,
+                "loot_multiplier": 5.0, "xp_reward": 700
+            },
+            {
+                "name": "Quimera",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 100, "max_hp": 130,
+                "min_str": 4, "max_str": 6, "min_dex": 1, "max_dex": 2,
+                "min_con": 4, "max_con": 7, "min_int": -2, "max_int": 0,
+                "min_wis": 1, "max_wis": 3, "min_cha": 0, "max_cha": 2,
+                "min_armor": 5, "max_armor": 8,
+                "damage_dice_count": 3, "damage_dice_sides": 10, "bonus_damage": 5,
+                "on_hit_effect": "BRN", "effect_chance": 15, "effect_dice_count": 2, "effect_dice_sides": 6,
+                "loot_multiplier": 7.0, "xp_reward": 1800
+            },
+            {
+                "name": "Cubo Gelatinoso",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 70, "max_hp": 100,
+                "min_str": 2, "max_str": 4, "min_dex": -4, "max_dex": -2,
+                "min_con": 6, "max_con": 9, "min_int": -5, "max_int": -5,
+                "min_wis": -2, "max_wis": 0, "min_cha": -5, "max_cha": -5,
+                "min_armor": 0, "max_armor": 2,
+                "damage_dice_count": 3, "damage_dice_sides": 6, "bonus_damage": 4,
+                "on_hit_effect": "STN", "effect_chance": 25,
+                "loot_multiplier": 4.0, "xp_reward": 450
+            },
+            {
+                "name": "Dríder",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 100, "max_hp": 140,
+                "min_str": 3, "max_str": 5, "min_dex": 3, "max_dex": 5,
+                "min_con": 4, "max_con": 6, "min_int": 1, "max_int": 3,
+                "min_wis": 1, "max_wis": 3, "min_cha": 1, "max_cha": 3,
+                "min_armor": 6, "max_armor": 9,
+                "damage_dice_count": 2, "damage_dice_sides": 8, "bonus_damage": 4,
+                "on_hit_effect": "STN", "effect_chance": 20,
+                "loot_multiplier": 8.0, "xp_reward": 2300
+            },
+            {
+                "name": "Wyvern",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 90, "max_hp": 130,
+                "min_str": 4, "max_str": 6, "min_dex": 1, "max_dex": 3,
+                "min_con": 3, "max_con": 6, "min_int": -3, "max_int": -1,
+                "min_wis": 0, "max_wis": 2, "min_cha": -2, "max_cha": 0,
+                "min_armor": 5, "max_armor": 7,
+                "damage_dice_count": 2, "damage_dice_sides": 12, "bonus_damage": 6,
+                "on_hit_effect": "PSN", "effect_chance": 30, "effect_dice_count": 3, "effect_dice_sides": 6,
+                "loot_multiplier": 8.0, "xp_reward": 2300
+            },
+            {
+                "name": "Golem de Carne",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 80, "max_hp": 110,
+                "min_str": 4, "max_str": 7, "min_dex": -1, "max_dex": 1,
+                "min_con": 4, "max_con": 8, "min_int": -5, "max_int": -5,
+                "min_wis": 0, "max_wis": 1, "min_cha": -5, "max_cha": -5,
+                "min_armor": 1, "max_armor": 3,
+                "damage_dice_count": 2, "damage_dice_sides": 10, "bonus_damage": 8,
+                "loot_multiplier": 7.0, "xp_reward": 1800
+            },
+            {
+                "name": "Cíclope",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 120, "max_hp": 155,
+                "min_str": 6, "max_str": 8, "min_dex": 0, "max_dex": 2,
+                "min_con": 5, "max_con": 7, "min_int": -2, "max_int": 0,
+                "min_wis": 0, "max_wis": 1, "min_cha": 0, "max_cha": 1,
+                "min_armor": 4, "max_armor": 6,
+                "damage_dice_count": 3, "damage_dice_sides": 10, "bonus_damage": 6,
+                "on_hit_effect": "STN", "effect_chance": 10,
+                "loot_multiplier": 8.0, "xp_reward": 2300
+            },
+            {
+                "name": "Elemental de Fuego",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 80, "max_hp": 110,
+                "min_str": 0, "max_str": 2, "min_dex": 3, "max_dex": 5,
+                "min_con": 2, "max_con": 4, "min_int": -2, "max_int": 0,
+                "min_wis": 0, "max_wis": 1, "min_cha": -1, "max_cha": 1,
+                "min_armor": 3, "max_armor": 5,
+                "damage_dice_count": 2, "damage_dice_sides": 8, "bonus_damage": 4,
+                "on_hit_effect": "BRN", "effect_chance": 50, "effect_dice_count": 1, "effect_dice_sides": 8,
+                "loot_multiplier": 6.0, "xp_reward": 1100
+            },
+            {
+                "name": "Beholder",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 150, "max_hp": 200,
+                "min_str": 0, "max_str": 2, "min_dex": 2, "max_dex": 4,
+                "min_con": 4, "max_con": 6, "min_int": 4, "max_int": 6,
+                "min_wis": 3, "max_wis": 5, "min_cha": 3, "max_cha": 5,
+                "min_armor": 8, "max_armor": 12,
+                "damage_dice_count": 4, "damage_dice_sides": 10, "bonus_damage": 10,
+                "on_hit_effect": "BLN", "effect_chance": 60,
+                "loot_multiplier": 15.0, "xp_reward": 10000
+            },
+            {
+                "name": "Rinoceronte Lanudo",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 2,
+                "min_hp": 60, "max_hp": 90,
+                "min_str": 5, "max_str": 7, "min_dex": -1, "max_dex": 1,
+                "min_con": 4, "max_con": 6, "min_int": -4, "max_int": -2,
+                "min_wis": 0, "max_wis": 2, "min_cha": -2, "max_cha": 0,
+                "min_armor": 4, "max_armor": 6,
+                "damage_dice_count": 2, "damage_dice_sides": 8, "bonus_damage": 6,
+                "on_hit_effect": "STN", "effect_chance": 25,
+                "loot_multiplier": 4.0, "xp_reward": 450
+            },
+            {
+                "name": "Behir",
+                "category": "LRG",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 150, "max_hp": 180,
+                "min_str": 6, "max_str": 8, "min_dex": 3, "max_dex": 5,
+                "min_con": 4, "max_con": 6, "min_int": -1, "max_int": 1,
+                "min_wis": 1, "max_wis": 3, "min_cha": 1, "max_cha": 3,
+                "min_armor": 7, "max_armor": 10,
+                "damage_dice_count": 4, "damage_dice_sides": 8, "bonus_damage": 8,
+                "on_hit_effect": "STN", "effect_chance": 20,
+                "loot_multiplier": 12.0, "xp_reward": 7200
+            },
+
+            # ==========================================
+            # ⭐ ENEMIGOS ÉPICOS (TIER 4 / RANGO EPC)
+            # ==========================================
+            {
+                "name": "Tarrasque",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 600, "max_hp": 750,
+                "min_str": 8, "max_str": 10, "min_dex": -1, "max_dex": 1,
+                "min_con": 8, "max_con": 10, "min_int": -4, "max_int": -2,
+                "min_wis": 1, "max_wis": 3, "min_cha": -2, "max_cha": 0,
+                "min_armor": 12, "max_armor": 16,
+                "damage_dice_count": 5, "damage_dice_sides": 20, "bonus_damage": 30,
+                "on_hit_effect": "BLD", "effect_chance": 40, "effect_dice_count": 3, "effect_dice_sides": 12,
+                "loot_multiplier": 50.0, "xp_reward": 50000
+            },
+            {
+                "name": "Dragón Rojo Antiguo",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 450, "max_hp": 600,
+                "min_str": 7, "max_str": 9, "min_dex": 2, "max_dex": 4,
+                "min_con": 7, "max_con": 9, "min_int": 2, "max_int": 4,
+                "min_wis": 1, "max_wis": 3, "min_cha": 2, "max_cha": 4,
+                "min_armor": 10, "max_armor": 14,
+                "damage_dice_count": 4, "damage_dice_sides": 20, "bonus_damage": 20,
+                "on_hit_effect": "BRN", "effect_chance": 50, "effect_dice_count": 4, "effect_dice_sides": 10,
+                "loot_multiplier": 40.0, "xp_reward": 40000
+            },
+            {
+                "name": "Liche",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 100, "max_hp": 180,
+                "min_str": 0, "max_str": 2, "min_dex": 2, "max_dex": 4,
+                "min_con": 4, "max_con": 6, "min_int": 6, "max_int": 8,
+                "min_wis": 4, "max_wis": 6, "min_cha": 2, "max_cha": 4,
+                "min_armor": 8, "max_armor": 12,
+                "damage_dice_count": 3, "damage_dice_sides": 20, "bonus_damage": 10,
+                "on_hit_effect": "STN", "effect_chance": 35, "effect_dice_count": 2, "effect_dice_sides": 8,
+                "loot_multiplier": 30.0, "xp_reward": 25000
+            },
+            {
+                "name": "Kraken",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 400, "max_hp": 550,
+                "min_str": 8, "max_str": 10, "min_dex": 1, "max_dex": 3,
+                "min_con": 7, "max_con": 9, "min_int": 1, "max_int": 3,
+                "min_wis": 2, "max_wis": 4, "min_cha": 0, "max_cha": 2,
+                "min_armor": 11, "max_armor": 15,
+                "damage_dice_count": 4, "damage_dice_sides": 20, "bonus_damage": 30,
+                "on_hit_effect": "STN", "effect_chance": 45, "effect_dice_count": 3, "effect_dice_sides": 10,
+                "loot_multiplier": 45.0, "xp_reward": 45000
+            },
+            {
+                "name": "Demogorgon (Príncipe Demonio)",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 450, "max_hp": 550,
+                "min_str": 7, "max_str": 9, "min_dex": 3, "max_dex": 5,
+                "min_con": 6, "max_con": 8, "min_int": 3, "max_int": 5,
+                "min_wis": 2, "max_wis": 4, "min_cha": 4, "max_cha": 6,
+                "min_armor": 9, "max_armor": 13,
+                "damage_dice_count": 4, "damage_dice_sides": 20, "bonus_damage": 15,
+                "on_hit_effect": "BRN", "effect_chance": 40, "effect_dice_count": 3, "effect_dice_sides": 12,
+                "loot_multiplier": 35.0, "xp_reward": 35000
+            },
+            {
+                "name": "Tiamat (Diosa de los Dragones)",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 550, "max_hp": 700,
+                "min_str": 8, "max_str": 10, "min_dex": 2, "max_dex": 4,
+                "min_con": 8, "max_con": 10, "min_int": 4, "max_int": 6,
+                "min_wis": 3, "max_wis": 5, "min_cha": 4, "max_cha": 6,
+                "min_armor": 12, "max_armor": 16,
+                "damage_dice_count": 5, "damage_dice_sides": 20, "bonus_damage": 40,
+                "on_hit_effect": "BRN", "effect_chance": 60, "effect_dice_count": 4, "effect_dice_sides": 12,
+                "loot_multiplier": 50.0, "xp_reward": 60000
+            },
+            {
+                "name": "Orcus (Señor de los No-Muertos)",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 400, "max_hp": 500,
+                "min_str": 6, "max_str": 8, "min_dex": 2, "max_dex": 4,
+                "min_con": 7, "max_con": 9, "min_int": 4, "max_int": 6,
+                "min_wis": 3, "max_wis": 5, "min_cha": 3, "max_cha": 5,
+                "min_armor": 10, "max_armor": 14,
+                "damage_dice_count": 4, "damage_dice_sides": 20, "bonus_damage": 20,
+                "on_hit_effect": "BLD", "effect_chance": 50, "effect_dice_count": 3, "effect_dice_sides": 10,
+                "loot_multiplier": 40.0, "xp_reward": 38000
+            },
+            {
+                "name": "Zariel (Archidiablesa)",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 500, "max_hp": 650,
+                "min_str": 7, "max_str": 9, "min_dex": 4, "max_dex": 6,
+                "min_con": 7, "max_con": 9, "min_int": 4, "max_int": 6,
+                "min_wis": 3, "max_wis": 5, "min_cha": 5, "max_cha": 7,
+                "min_armor": 11, "max_armor": 15,
+                "damage_dice_count": 4, "damage_dice_sides": 20, "bonus_damage": 30,
+                "on_hit_effect": "BRN", "effect_chance": 45, "effect_dice_count": 3, "effect_dice_sides": 12,
+                "loot_multiplier": 45.0, "xp_reward": 42000
+            },
+            {
+                "name": "Empíreo (Empyrean)",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 250, "max_hp": 350,
+                "min_str": 5, "max_str": 7, "min_dex": 4, "max_dex": 6,
+                "min_con": 5, "max_con": 7, "min_int": 4, "max_int": 6,
+                "min_wis": 5, "max_wis": 7, "min_cha": 5, "max_cha": 7,
+                "min_armor": 8, "max_armor": 12,
+                "damage_dice_count": 3, "damage_dice_sides": 20, "bonus_damage": 15,
+                "on_hit_effect": "LFS", "effect_chance": 30, "effect_dice_count": 2, "effect_dice_sides": 10,
+                "loot_multiplier": 25.0, "xp_reward": 20000
+            },
+            {
+                "name": "Dragón de Oro Antiguo",
+                "category": "EPC",
+                "min_spawn": 1, "max_spawn": 1,
+                "min_hp": 450, "max_hp": 600,
+                "min_str": 7, "max_str": 9, "min_dex": 3, "max_dex": 5,
+                "min_con": 7, "max_con": 9, "min_int": 3, "max_int": 5,
+                "min_wis": 3, "max_wis": 5, "min_cha": 4, "max_cha": 6,
+                "min_armor": 10, "max_armor": 14,
+                "damage_dice_count": 4, "damage_dice_sides": 20, "bonus_damage": 10,
+                "on_hit_effect": "BRN", "effect_chance": 50, "effect_dice_count": 4, "effect_dice_sides": 10,
+                "loot_multiplier": 40.0, "xp_reward": 38000
             },
         ]
 
