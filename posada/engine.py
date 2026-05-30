@@ -27,10 +27,54 @@ CATEGORY_SYNERGY = {
 }
 
 FLAVOR_MONSTER = {
-    'SML': ["ríe maliciosamente en la penumbra.", "se escabulle entre las sombras rápidamente.", "emite un chillido agudo y molesto."],
-    'MED': ["gruñe mostrando los colmillos.", "golpea su arma contra el suelo amenazantemente.", "te observa con ojos sedientos de sangre."],
-    'LRG': ["suelta un rugido que hace temblar la sala.", "toma aire pesadamente, preparándose para aplastar.", "destroza parte del escenario con su tamaño."],
-    'EPC': ["irradia un aura de terror insoportable.", "te mira como si fueras un simple insecto.", "levita levemente mientras el aire se distorsiona."]
+    'SML': [
+        "ríe maliciosamente en la penumbra.",
+        "se escabulle entre las sombras rápidamente.",
+        "emite un chillido agudo y molesto.",
+        "clava sus uñas en la tierra, listo para abalanzarse.",
+        "te lanza una mirada furtiva, buscando un punto débil.",
+        "se ríe a carcajadas con una voz rasposa.",
+        "babosea el suelo, mostrando sus dientes afilados.",
+        "salta nerviosamente de un pie al otro.",
+        "desaparece un instante y reaparece desde otro ángulo.",
+        "enseña los dientes y gruñe como un perro rabioso.",
+    ],
+    'MED': [
+        "gruñe mostrando los colmillos.",
+        "golpea su arma contra el suelo amenazantemente.",
+        "te observa con ojos sedientos de sangre.",
+        "lanza un alarido de guerra que hiela la sangre.",
+        "se golpea el pecho en señal de desafío.",
+        "analiza tus movimientos, ajustando su postura de combate.",
+        "escupe al suelo con desprecio.",
+        "blande su arma dibujando un círculo mortal en el aire.",
+        "maldice en una lengua incomprensible.",
+        "acorta la distancia con pasos pesados y decididos.",
+    ],
+    'LRG': [
+        "suelta un rugido que hace temblar la sala.",
+        "toma aire pesadamente, preparándose para aplastar.",
+        "destroza parte del escenario con su tamaño.",
+        "sacude la cabeza, rompiendo pilares cercanos.",
+        "suelta un resoplido que levanta nubes de polvo.",
+        "te observa desde arriba con absoluto desdén.",
+        "carga con todo su peso, haciendo vibrar el suelo.",
+        "barre todo a su alrededor con un movimiento colosal.",
+        "rompe la roca bajo sus pies al prepararse para atacar.",
+        "proyecta una sombra gigantesca que oscurece el lugar.",
+    ],
+    'EPC': [
+        "irradia un aura de terror insoportable.",
+        "te mira como si fueras un simple insecto.",
+        "levita levemente mientras el aire se distorsiona.",
+        "hace que la realidad misma parezca resquebrajarse a su alrededor.",
+        "habla directamente en tu mente con una voz atronadora.",
+        "desvía la luz a su alrededor, creando un aura de oscuridad absoluta.",
+        "hace que el tiempo parezca detenerse por un microsegundo.",
+        "exhala magia pura que calcina las paredes de la habitación.",
+        "te condena a la perdición con un simple ademán de su mano.",
+        "invoca la furia de fuerzas antiguas e incomprensibles.",
+    ]
 }
 
 # --- MAPEO DE HABILIDADES D&D 5E ---
@@ -86,7 +130,18 @@ FLAVOR_ADV = [
     "calcula la distancia exacta entre él y el enemigo.",
     "murmura una pequeña plegaria al destino.",
     "adopta una postura defensiva, esperando el impacto.",
-    "hace crujir sus nudillos con una sonrisa confiada."
+    "hace crujir sus nudillos con una sonrisa confiada.",
+    "agudiza la vista, buscando huecos en la armadura rival.",
+    "ajusta las correas de su armadura apresuradamente.",
+    "exhala largamente para calmar los latidos de su corazón.",
+    "se pasa la lengua por los labios secos, tenso.",
+    "brinda una mirada desafiante a su oponente.",
+    "murmura insultos entre dientes hacia los monstruos.",
+    "revisa el filo de su arma con el pulgar.",
+    "hace un gesto provocador para atraer la atención del rival.",
+    "susurra palabras mágicas para darse valor.",
+    "siente la adrenalina corriendo por sus venas a gran velocidad.",
+    "evalúa a sus compañeros, cerciorándose de que estén listos.",
 ]
 
 
@@ -196,21 +251,74 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 skills = get_derived_skills(event_adv)
 
                 event_texts = {
-                    "Atletismo": ("escalar un muro de roca suelta", "llega a la cima demostrando una fuerza bruta envidiable", "resbala y cae torpemente de espaldas"),
-                    "Sigilo": ("moverse sin hacer ruido entre la maleza", "pasa como una sombra indetectable", "pisa una rama seca que hace eco en toda la cueva"),
-                    "Percepción": ("agudizar sus sentidos buscando peligros", "nota unas tenues marcas de garras en la pared", "solo logra ver formas confusas en la oscuridad"),
-                    "Acrobacias": ("cruzar un abismo sobre un tronco húmedo", "mantiene un equilibrio perfecto como un felino", "casi cae al vacío, recuperándose a duras penas"),
-                    "Supervivencia": ("buscar rastros frescos en la tierra", "identifica claramente hacia dónde fueron los monstruos", "pierde el rastro en el fango denso"),
-                    "Arcano": ("intentar descifrar unas runas brillantes", "comprende el flujo de magia antigua", "le da dolor de cabeza al intentar leerlas"),
-                    "Juego de Manos": ("intentar forzar el cerrojo de un cofre viejo", "lo abre con un click maestro", "rompe su ganzúa dentro de la cerradura"),
-                    "Historia": ("recordar a qué dinastía pertenece una estatua", "recuerda exactamente el nombre del rey antiguo", "la estatua está demasiado desgastada para saberlo"),
-                    "Religión": ("identificar un altar profano", "reconoce los símbolos impíos de inmediato", "siente un escalofrío pero no logra descifrar nada"),
-                    "Medicina": ("evaluar unas extrañas plantas pálidas", "descubre que sus hojas son cicatrizantes", "cree que son venenosas y prefiere no tocarlas"),
+                    "Atletismo": [
+                        ("escalar un muro de roca suelta", "llega a la cima demostrando una fuerza bruta envidiable", "resbala y cae torpemente de espaldas"),
+                        ("mover una pesada columna caída", "la levanta con un rugido monumental de esfuerzo", "termina con un tirón muscular y la columna ni se mueve"),
+                        ("saltar sobre una profunda grieta", "cae firmemente al otro lado y sigue corriendo", "se queda corto y debe trepar agónicamente"),
+                    ],
+                    "Sigilo": [
+                        ("moverse sin hacer ruido entre la maleza", "pasa como una sombra indetectable", "pisa una rama seca que hace eco en toda la cueva"),
+                        ("pasar junto a unos guardias distraídos", "se desliza sin que ni siquiera sientan su presencia", "tira una jarra de metal por error"),
+                        ("esconderse detrás de unas cajas", "se funde perfectamente con las sombras del lugar", "deja medio cuerpo a la vista como un novato"),
+                    ],
+                    "Percepción": [
+                        ("agudizar sus sentidos buscando peligros", "nota unas tenues marcas de garras en la pared", "solo logra ver formas confusas en la oscuridad"),
+                        ("escuchar a través de una puerta de madera", "distingue los pasos pesados de una bestia del otro lado", "solo escucha su propio zumbido en los oídos"),
+                        ("revisar el techo en busca de amenazas", "avista a una criatura acechando entre estalactitas", "el polvo le entra a los ojos y no ve nada"),
+                    ],
+                    "Acrobacias": [
+                        ("cruzar un abismo sobre un tronco húmedo", "mantiene un equilibrio perfecto como un felino", "casi cae al vacío, recuperándose a duras penas"),
+                        ("deslizarse por debajo de una rampa", "pasa con elegancia rozando el suelo", "se atasca de hombros a la mitad del camino"),
+                        ("esquivar una trampa de cuchillas", "hace una voltereta grácil y sale ileso", "tropieza de boca y por suerte la cuchilla falla"),
+                    ],
+                    "Supervivencia": [
+                        ("buscar rastros frescos en la tierra", "identifica claramente hacia dónde fueron los monstruos", "pierde el rastro en el fango denso"),
+                        ("buscar bayas para recuperar energías", "encuentra frutos nutritivos en un arbusto", "se pincha con espinas tóxicas y no saca nada"),
+                        ("orientarse en la laberíntica cueva", "deduce correctamente el camino hacia el norte", "acaba dando un giro en círculos de 360 grados"),
+                    ],
+                    "Arcano": [
+                        ("intentar descifrar unas runas brillantes", "comprende el flujo de magia antigua", "le da dolor de cabeza al intentar leerlas"),
+                        ("identificar el origen de un aura mágica", "descubre la esencia evocadora del hechizo", "confunde la magia y siente pánico inútil"),
+                        ("detectar una ilusión en el pasillo", "parpadea y ve a través del engaño", "cree ciegamente en la falsa pared de ladrillos"),
+                    ],
+                    "Juego de Manos": [
+                        ("intentar forzar el cerrojo de un cofre viejo", "lo abre con un click maestro", "rompe su ganzúa dentro de la cerradura"),
+                        ("robar la llave del cinturón de un guardia dormido", "la obtiene suavemente con dos dedos", "hace tintinear las llaves despertando al guardia (casi)"),
+                        ("esconder un objeto valioso en su bota", "lo hace en un parpadeo mágico", "se le cae al suelo ruidosamente"),
+                    ],
+                    "Historia": [
+                        ("recordar a qué dinastía pertenece una estatua", "recuerda exactamente el nombre del rey antiguo", "la estatua está demasiado desgastada para saberlo"),
+                        ("hacer memoria sobre la guerra en este lugar", "deduce las tácticas que usaron los caídos", "mezcla leyendas con hechos y se confunde"),
+                        ("identificar un blasón en un escudo roto", "reconoce la noble familia extinta", "lo confunde con un garabato sin sentido"),
+                    ],
+                    "Religión": [
+                        ("identificar un altar profano", "reconoce los símbolos impíos de inmediato", "siente un escalofrío pero no logra descifrar nada"),
+                        ("rezar para apartar espíritus oscuros", "su deidad lo protege y el aire se purifica", "las deidades oscuras se ríen de su torpeza"),
+                        ("recordar el mito de creación del dios local", "recita un pasaje que revela un secreto de la cueva", "no puede recordar más allá de cantos de taberna"),
+                    ],
+                    "Medicina": [
+                        ("evaluar unas extrañas plantas pálidas", "descubre que sus hojas son cicatrizantes", "cree que son venenosas y prefiere no tocarlas"),
+                        ("examinar el cadáver de un aventurero", "determina con precisión cómo murió", "siente náuseas y tiene que apartar la vista"),
+                        ("vendar rápidamente un corte menor", "aplica presión y detiene el sangrado maravillosamente", "hace un nudo mal hecho que se deshace"),
+                    ],
+                    "Naturaleza": [
+                        ("identificar a una criatura subterránea", "reconoce sus debilidades y su hábitat", "no logra distinguirla de un animal común"),
+                        ("examinar el tipo de piedra de la cueva", "determina que la cueva es volcánica", "no tiene idea de geología"),
+                        ("predecir si habrá un sismo por los ruidos", "se siente seguro de que el túnel aguantará", "entra en pánico creyendo que colapsará"),
+                    ],
+                    "Intimidación": [
+                        ("amenazar a las sombras para que huyan", "gruñe y unas pequeñas ratas huyen despavoridas", "pega un grito que se quiebra en un gallo vergonzoso"),
+                        ("golpear su arma contra la pared", "las chispas asustan a los murciélagos", "rompe una parte de su empuñadura por bruto"),
+                    ],
+                    "Investigación": [
+                        ("buscar mecanismos ocultos en el suelo", "halla una baldosa que activa una trampa", "solo ve tierra y piedras inútiles"),
+                        ("deducir la combinación de un panel", "entiende el patrón lógico enseguida", "presiona botones al azar sin éxito"),
+                    ],
                 }
 
                 # Elegimos una habilidad que tenga narrativa
                 skill_name = random.choice(list(event_texts.keys()))
-                action, succ_msg, fail_msg = event_texts[skill_name]
+                action, succ_msg, fail_msg = random.choice(event_texts[skill_name])
 
                 skill_bonus = skills[skill_name]
                 dc = random.randint(10, 18)  # Dificultad Dinámica
@@ -244,23 +352,23 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     # El motor buscará si el nombre del objeto contiene alguna de estas llaves
                     flavor_database = {
                         "cuerda": [
-                            f"🧬 {adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan] para asegurar el descenso del grupo por una pendiente.",
-                            f"🧗 {adv.name} lanza su [bold cyan]{slot.item.name}[/bold cyan] hacia una saliente alta, trepando para explorar un nivel superior.",
-                            f"⛓️ {adv.name} usa una [bold cyan]{slot.item.name}[/bold cyan] para amarrar firmemente una puerta sospechosa y evitar emboscadas."
+                            f"{adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan] para asegurar el descenso del grupo por una pendiente.",
+                            f"{adv.name} lanza su [bold cyan]{slot.item.name}[/bold cyan] hacia una saliente alta, trepando para explorar un nivel superior.",
+                            f"{adv.name} usa una [bold cyan]{slot.item.name}[/bold cyan] para amarrar firmemente una puerta sospechosa y evitar emboscadas."
                         ],
                         "ración": [
-                            f"🍖 {adv.name} hace una pausa para consumir su [bold cyan]{slot.item.name}[/bold cyan], recuperando aliento.",
-                            f"🍞 {adv.name} comparte un pedazo de su [bold cyan]{slot.item.name}[/bold cyan] mientras revisa el mapa de la mazmorra."
+                            f"{adv.name} hace una pausa para consumir su [bold cyan]{slot.item.name}[/bold cyan], recuperando aliento.",
+                            f"{adv.name} comparte un pedazo de su [bold cyan]{slot.item.name}[/bold cyan] mientras revisa el mapa de la mazmorra."
                         ],
                         "antorcha": [
-                            f"🔥 {adv.name} enciende una [bold cyan]{slot.item.name}[/bold cyan], iluminando rincones oscuros y revelando un pasadizo.",
-                            f"🦇 {adv.name} blande su [bold cyan]{slot.item.name}[/bold cyan] encendida para ahuyentar a una bandada de murciélagos molestos."
+                            f"{adv.name} enciende una [bold cyan]{slot.item.name}[/bold cyan], iluminando rincones oscuros y revelando un pasadizo.",
+                            f"{adv.name} blande su [bold cyan]{slot.item.name}[/bold cyan] encendida para ahuyentar a una bandada de murciélagos molestos."
                         ],
                         "mapa": [
-                            f"📜 {adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] antiguo sobre una roca, tratando de orientar la marcha de la party."
+                            f"{adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] antiguo sobre una roca, tratando de orientar la marcha de la party."
                         ],
                         "pala": [
-                            f"⛏️ {adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para remover unos escombros del camino, buscando pasajes secretos."
+                            f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para remover unos escombros del camino, buscando pasajes secretos."
                         ]
                     }
 
@@ -273,7 +381,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                     # Fallback genérico por si creas un ítem flavor que no esté en el diccionario
                     if not message_chosen:
-                        message_chosen = f"🏕️ Durante la marcha, {adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
+                        message_chosen = f"Durante la marcha, {adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
 
                     script.append({"second": current_second - 35,
                                   "type": "flavor", "message": message_chosen})
