@@ -351,6 +351,10 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     # --- DICCIONARIO DE INFINITAS ACCIONES MAPPED ---
                     # El motor buscará si el nombre del objeto contiene alguna de estas llaves
                     flavor_database = {
+                        "cuerda de escalada mágica": [
+                            f"{adv.name} pronuncia una palabra de mando y la [bold cyan]{slot.item.name}[/bold cyan] se anuda sola en las alturas.",
+                            f"{adv.name} observa cómo la [bold cyan]{slot.item.name}[/bold cyan] trepa por la pared como si fuera una serpiente."
+                        ],
                         "cuerda": [
                             f"{adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan] para asegurar el descenso del grupo por una pendiente.",
                             f"{adv.name} lanza su [bold cyan]{slot.item.name}[/bold cyan] hacia una saliente alta, trepando para explorar un nivel superior.",
@@ -369,6 +373,148 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         ],
                         "pala": [
                             f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para remover unos escombros del camino, buscando pasajes secretos."
+                        ],
+                        "odre": [
+                            f"{adv.name} toma un largo trago de su [bold cyan]{slot.item.name}[/bold cyan], refrescando su reseca garganta.",
+                            f"{adv.name} vierte un poco de agua de su [bold cyan]{slot.item.name}[/bold cyan] para limpiar una vieja inscripción en la pared."
+                        ],
+                        "yesquero": [
+                            f"{adv.name} hace saltar chispas de su [bold cyan]{slot.item.name}[/bold cyan] tratando de encender una fogata improvisada."
+                        ],
+                        "saco de dormir": [
+                            f"{adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan], preparando un sitio cómodo para el próximo descanso largo."
+                        ],
+                        "mochila": [
+                            f"{adv.name} ajusta las correas de su [bold cyan]{slot.item.name}[/bold cyan] para distribuir mejor el peso del botín."
+                        ],
+                        "alforjas": [
+                            f"{adv.name} revisa el contenido de sus [bold cyan]{slot.item.name}[/bold cyan], organizando sus provisiones con cuidado."
+                        ],
+                        "saco": [
+                            f"{adv.name} abre su [bold cyan]{slot.item.name}[/bold cyan] preparándolo para guardar las riquezas que encuentren."
+                        ],
+                        "tiza": [
+                            f"{adv.name} marca una 'X' en la pared con su [bold cyan]{slot.item.name}[/bold cyan] para no perderse en el laberinto."
+                        ],
+                        "espejo": [
+                            f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para espiar por la esquina del pasillo sin exponerse."
+                        ],
+                        "jabón": [
+                            f"{adv.name} se frota un poco de [bold cyan]{slot.item.name}[/bold cyan] en las manos para quitarse la mugre de la mazmorra."
+                        ],
+                        "garfio": [
+                            f"{adv.name} lanza hábilmente el [bold cyan]{slot.item.name}[/bold cyan], enganchándolo en un balcón superior."
+                        ],
+                        "linterna": [
+                            f"{adv.name} enciende su [bold cyan]{slot.item.name}[/bold cyan], proyectando un cono de luz que perfora las tinieblas."
+                        ],
+                        "aceite": [
+                            f"{adv.name} vierte su [bold cyan]{slot.item.name}[/bold cyan] sobre unas bisagras oxidadas para abrir la puerta sin ruido."
+                        ],
+                        "palanca": [
+                            f"{adv.name} hace fuerza con su [bold cyan]{slot.item.name}[/bold cyan] para forzar la apertura de un cofre bloqueado."
+                        ],
+                        "pitones": [
+                            f"{adv.name} clava unos [bold cyan]{slot.item.name}[/bold cyan] en la pared, creando asideros seguros para escalar."
+                        ],
+                        "martillo": [
+                            f"{adv.name} da golpes precisos con su [bold cyan]{slot.item.name}[/bold cyan] comprobando la solidez del muro."
+                        ],
+                        "pluma": [
+                            f"{adv.name} saca su [bold cyan]{slot.item.name}[/bold cyan], preparándose para cartografiar el pasadizo."
+                        ],
+                        "tinta": [
+                            f"{adv.name} destapa un [bold cyan]{slot.item.name}[/bold cyan] con cuidado de no manchar sus ropas."
+                        ],
+                        "pergamino": [
+                            f"{adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] liso y comienza a trazar un esquema del lugar."
+                        ],
+                        "campana": [
+                            f"{adv.name} coloca una [bold cyan]{slot.item.name}[/bold cyan] atada a un hilo para alertar de cualquier movimiento nocturno."
+                        ],
+                        "catalejo": [
+                            f"{adv.name} despliega su [bold cyan]{slot.item.name}[/bold cyan] y observa con detalle una estructura a la distancia."
+                        ],
+                        "herramientas de ladrón": [
+                            f"{adv.name} saca sus [bold cyan]{slot.item.name}[/bold cyan] y se concentra en la compleja cerradura del portón."
+                        ],
+                        "disfraz": [
+                            f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para ponerse una barba falsa y pasar desapercibido."
+                        ],
+                        "falsificación": [
+                            f"{adv.name} revisa los sellos de cera en su [bold cyan]{slot.item.name}[/bold cyan] preparando un documento engañoso."
+                        ],
+                        "envenenador": [
+                            f"{adv.name} extrae una aguja de su [bold cyan]{slot.item.name}[/bold cyan], recubriéndola con una toxina mortal."
+                        ],
+                        "tienda": [
+                            f"{adv.name} arma rápidamente su [bold cyan]{slot.item.name}[/bold cyan], creando un refugio seguro para descansar."
+                        ],
+                        "poción de trepar": [
+                            f"{adv.name} bebe la [bold cyan]{slot.item.name}[/bold cyan] y sus manos se vuelven pegajosas, permitiéndole subir por la pared."
+                        ],
+                        "fuego de alquimista": [
+                            f"{adv.name} agita el [bold cyan]{slot.item.name}[/bold cyan], amenazando con desatar un infierno de llamas verdes."
+                        ],
+                        "agua bendita": [
+                            f"{adv.name} rocía un poco de [bold cyan]{slot.item.name}[/bold cyan] sobre un altar profano, purificando la zona."
+                        ],
+                        "piedra brillante": [
+                            f"{adv.name} saca su [bold cyan]{slot.item.name}[/bold cyan] que emite una luz perpetua, guiando al grupo."
+                        ],
+                        "bolso de trucos": [
+                            f"{adv.name} mete la mano en su [bold cyan]{slot.item.name}[/bold cyan] y extrae una pequeña bola peluda que pronto será un animal."
+                        ],
+                        "bolsa de contención": [
+                            f"{adv.name} guarda un pesado escudo dentro de su [bold cyan]{slot.item.name}[/bold cyan] sin esfuerzo alguno."
+                        ],
+                        "escoba voladora": [
+                            f"{adv.name} monta su [bold cyan]{slot.item.name}[/bold cyan], flotando a un par de metros del suelo con elegancia."
+                        ],
+                        "gema de visión": [
+                            f"{adv.name} mira a través de la [bold cyan]{slot.item.name}[/bold cyan], revelando auras invisibles y trucos mágicos."
+                        ],
+                        "zurrón": [
+                            f"{adv.name} piensa en un objeto y lo saca de inmediato de su [bold cyan]{slot.item.name}[/bold cyan] sin tener que buscar."
+                        ],
+                        "piedra de enviar": [
+                            f"{adv.name} susurra un mensaje secreto a la [bold cyan]{slot.item.name}[/bold cyan], esperando respuesta telepática."
+                        ],
+                        "manual de ganancia": [
+                            f"{adv.name} lee unas páginas del [bold cyan]{slot.item.name}[/bold cyan], sintiendo cómo sus músculos se tensan con nuevo vigor."
+                        ],
+                        "tomo de entendimiento": [
+                            f"{adv.name} hojea el [bold cyan]{slot.item.name}[/bold cyan], sus ojos brillando con una sabiduría celestial."
+                        ],
+                        "agujero portátil": [
+                            f"{adv.name} extiende el [bold cyan]{slot.item.name}[/bold cyan] en el suelo, creando un pozo oscuro instantáneo."
+                        ],
+                        "alfombra voladora": [
+                            f"{adv.name} se sienta cómodamente sobre su [bold cyan]{slot.item.name}[/bold cyan], planeando suavemente por el corredor."
+                        ],
+                        "gema de control": [
+                            f"{adv.name} sostiene en alto la [bold cyan]{slot.item.name}[/bold cyan], que palpita con la furia reprimida de un elemental."
+                        ],
+                        "grilletes": [
+                            f"{adv.name} hace sonar sus pesados [bold cyan]{slot.item.name}[/bold cyan], listos para apresar a un enemigo resbaladizo."
+                        ],
+                        "mazo de muchas cosas": [
+                            f"{adv.name} baraja el peligroso [bold cyan]{slot.item.name}[/bold cyan], tentando al destino con una leve sonrisa."
+                        ],
+                        "esfera de aniquilación": [
+                            f"{adv.name} manipula la [bold cyan]{slot.item.name}[/bold cyan] con sumo cuidado, temiendo que trague hasta la luz."
+                        ],
+                        "piedra filosofal": [
+                            f"{adv.name} contempla la [bold cyan]{slot.item.name}[/bold cyan], la joya definitiva que puede transmutar la realidad."
+                        ],
+                        "amuleto de los planos": [
+                            f"{adv.name} ajusta el [bold cyan]{slot.item.name}[/bold cyan], cuyo cristal parpadea con colores de otros mundos."
+                        ],
+                        "libro de la oscuridad vil": [
+                            f"{adv.name} pasa una página del [bold cyan]{slot.item.name}[/bold cyan], y las sombras de la habitación parecen susurrar."
+                        ],
+                        "elixir de inmortalidad": [
+                            f"{adv.name} observa el dorado [bold cyan]{slot.item.name}[/bold cyan], la promesa de una vida sin fin burbujeando dentro."
                         ]
                     }
 
@@ -533,18 +679,18 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             max_hp = base_m.base_hp + (m['stats']['con'] * 2)
                             m['hp'] = min(max_hp, m['hp'] + heal)
                             script.append({"second": current_second - 8, "type": "flavor",
-                                          "message": f"🦇 ¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
+                                          "message": f"¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
                         else:
                             adv_status_tracker[target.id].add(eff_m)
                             script.append({"second": current_second - 8, "type": "flavor",
-                                          "message": f"🦠 ¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+                                          "message": f"¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
 
                     eff_adv = adv_mods.get('on_hit_effect', 'NON')
                     if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
                         thorns_dmg = random.randint(1, 4)
                         m['hp'] -= thorns_dmg
                         script.append({"second": current_second - 7, "type": "flavor",
-                                      "message": f"🦔 La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
+                                      "message": f"La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
 
                     # --- Mitigación por Constitución y Daño Mínimo 1 ---
                     final_dmg = max(1, m_dmg - adv_mods['con'])
@@ -585,7 +731,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             adv.max_hp, adv.current_hp + heal_amount)
 
                         script.append({"second": current_second - 5, "type": "flavor",
-                                       "message": f"🧪 ¡Salud Crítica! {adv.name} bebe desesperadamente una [bold cyan]{slot.item.name}[/bold cyan] (+{heal_amount} HP)."})
+                                       "message": f"¡Salud Crítica! {adv.name} bebe desesperadamente una [bold cyan]{slot.item.name}[/bold cyan] (+{heal_amount} HP)."})
                         continue  # ¡Termina su turno inmediatamente, beber la poción fue su acción!
                 # --------------------------------------------------------
 
@@ -599,7 +745,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     dot_damage += random.randint(1, 4)
                 if dot_damage > 0:
                     script.append({"second": current_second - 6, "type": "damage", "adventurer_id": adv.id,
-                                  "amount": dot_damage, "message": f"🩸 {adv.name} sufre {dot_damage} de daño continuo."})
+                                  "amount": dot_damage, "message": f"{adv.name} sufre {dot_damage} de daño continuo."})
 
                 # 1. Identificar Habilidades Disponibles en el Grimorio
                 available_skills = []
@@ -720,7 +866,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                         eff_names = {
                                             'PSN': 'Veneno', 'BLD': 'Sangrado', 'BRN': 'Quemaduras', 'STN': 'Aturdimiento', 'BLN': 'Ceguera'}
                                         script.append({"second": current_second - 4, "type": "flavor",
-                                                      "message": f"🦠 ¡{adv.name} inflige {eff_names.get(eff, eff)}!"})
+                                                      "message": f"¡{adv.name} inflige {eff_names.get(eff, eff)}!"})
 
                             # --- Mitigación por Constitución y Daño Mínimo 1 ---
                             final_dmg = max(
