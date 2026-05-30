@@ -52,3 +52,5 @@ API_CHESS_PARSE = "http://localhost:8000/api/chess/parse-pgn/"
 API_CHESS_DIRS = "http://localhost:8000/api/chess/directories/"
 API_CHESS_EVALUATE = "http://localhost:8000/api/chess/evaluate/"
 API_CHESS_VALIDATE = "http://localhost:8000/api/chess/validate-move/"
+API_CHESS_VARIATIONS = "http://localhost:8000/api/chess/variations/"
+

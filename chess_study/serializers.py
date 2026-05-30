@@ -1,10 +1,16 @@
 from rest_framework import serializers
-from .models import ChessRoom, ChessNote, ChessDirectory
+from .models import ChessRoom, ChessNote, ChessDirectory, ChessVariation
 
 
 class ChessDirectorySerializer(serializers.ModelSerializer):
     class Meta:
         model = ChessDirectory
+        fields = '__all__'
+
+
+class ChessVariationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChessVariation
         fields = '__all__'
 
 
@@ -16,6 +22,7 @@ class ChessNoteSerializer(serializers.ModelSerializer):
 
 class ChessRoomSerializer(serializers.ModelSerializer):
     notes = ChessNoteSerializer(many=True, read_only=True)
+    variations = ChessVariationSerializer(many=True, read_only=True)
 
     class Meta:
         model = ChessRoom

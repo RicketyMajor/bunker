@@ -1,22 +1,50 @@
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Markdown, DataTable, Static, Tree, ProgressBar, Input
+from textual.widgets import Header, Footer, Markdown, DataTable, Static, Tree, Input
 from textual.containers import Vertical, Grid, Horizontal
 from textual import work
-from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS, API_CHESS_EVALUATE, API_CHESS_VALIDATE
+from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS, API_CHESS_EVALUATE, API_CHESS_VALIDATE, API_CHESS_VARIATIONS
 from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal, ConfirmModal
+
+
+def render_eval_bar(percentage: float, height: int = 26) -> str:
+    """Dibuja una barra de evaluación vertical estilo chess.com usando bloques sólidos.
+
+    Args:
+        percentage: 0-100, donde 100 = blancas ganan totalmente, 0 = negras ganan.
+        height: altura de la barra en líneas de texto.
+    """
+    percentage = max(0.0, min(100.0, percentage))
+    white_lines = round(height * percentage / 100.0)
+    black_lines = height - white_lines
+
+    bar = "█"  # Bloque sólido que llena el ancho completo
+
+    lines = []
+    for i in range(height):
+        if i < black_lines:
+            lines.append(f"[#1A1A1A]{bar * 3}[/]")
+        else:
+            lines.append(f"[#E0E0E0]{bar * 3}[/]")
+
+    return "\n".join(lines)
 
 
 def render_fen(fen: str) -> str:
     """Dibuja un tablero de alta fidelidad con proporciones geométricas perfectas."""
-    # Piezas blancas ajustadas a un tono beige/hueso (#E8D2A6) para máximo contraste
+    # TRUCO: Volvemos a las piezas rellenas para ambos bandos.
+    # Para que las piezas blancas (#FFFFFF) no se camuflen en las casillas claras,
+    # el truco está en oscurecer la paleta del tablero. Al usar un tono medio/oscuro
+    # para las casillas "claras", el blanco puro resalta con un contraste espectacular.
     solid_pieces = {
-        'r': ('♜', '#000000'), 'n': ('♞', '#000000'), 'b': ('♝', '#000000'), 'q': ('♛', '#000000'), 'k': ('♚', '#000000'), 'p': ('♟', '#000000'),
-        'R': ('♜', '#E8D2A6'), 'N': ('♞', '#E8D2A6'), 'B': ('♝', '#E8D2A6'), 'Q': ('♛', '#E8D2A6'), 'K': ('♚', '#E8D2A6'), 'P': ('♟', '#E8D2A6')
+        'r': ('♜', '#000000'), 'n': ('♞', '#000000'), 'b': ('♝', '#000000'),
+        'q': ('♛', '#000000'), 'k': ('♚', '#000000'), 'p': ('♟', '#000000'),
+        'R': ('♜', '#FFFFFF'), 'N': ('♞', '#FFFFFF'), 'B': ('♝', '#FFFFFF'),
+        'Q': ('♛', '#FFFFFF'), 'K': ('♚', '#FFFFFF'), 'P': ('♟', '#FFFFFF')
     }
-    light_bg = "on #EBECD0"
-    dark_bg = "on #779556"
+    light_bg = "on #999B7C"  # Verde crema oscuro (antes #EBECD0)
+    dark_bg = "on #52663A"   # Verde bosque oscuro (antes #779556)
 
     rows = fen.split()[0].split('/')
     out = "\n"
@@ -39,7 +67,7 @@ def render_fen(fen: str) -> str:
             line1 += f"[{bg}]       [/]"
             if piece:
                 char, color = solid_pieces[piece]
-                line2 += f"[{color} {bg}]   {char}   [/]"
+                line2 += f"[bold {color} {bg}]   {char}   [/]"
             else:
                 line2 += f"[{bg}]       [/]"
             line3 += f"[{bg}]       [/]"
@@ -61,6 +89,8 @@ class ChessMainScreen(Screen):
         ("delete, x", "delete_note", "Eliminar Nota"),
         ("backspace", "delete_node", "Destruir Nodo (Árbol)"),
         ("e", "evaluate_pos", "Oráculo (IA)"),
+        ("v", "show_variations", "Ver Bifurcaciones"),
+        ("b", "back_to_mainline", "Volver a Línea Principal"),
     ]
 
     CSS = """
@@ -93,10 +123,11 @@ class ChessMainScreen(Screen):
     
     #eval_bar {
         width: 3;
-        height: 90%;
-        margin-right: 2;
-        border: solid $warning;
-        /* La barra térmica irá aquí */
+        height: 26;
+        margin-right: 1;
+        padding: 0;
+        border: none;
+        overflow: hidden;
     }
     
     #board_view { text-align: left; width: auto; }
@@ -130,8 +161,8 @@ class ChessMainScreen(Screen):
             # EL NUEVO NÚCLEO CENTRAL
             with Vertical(id="center_panel"):
                 with Horizontal(id="board_container"):
-                    # Barra de Evaluación Vertical
-                    yield ProgressBar(total=100, show_eta=False, show_percentage=False, id="eval_bar")
+                    # Barra de Evaluación Vertical (Custom)
+                    yield Static(render_eval_bar(50.0), id="eval_bar")
                     # Tablero Geométrico
                     yield Static(render_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"), id="board_view")
 
@@ -156,6 +187,12 @@ class ChessMainScreen(Screen):
         self.current_notes = {}
         self.current_ply = 0
         self.raw_dirs = []
+
+        # --- Estado de Variaciones ---
+        self.variations = {}          # {parent_ply: [{"id": ..., "moves_san": [...], ...}, ...]}
+        self.active_variation = None  # Dict de la variación activa (o None = línea principal)
+        self.active_var_moves = []    # Jugadas expandidas de la variación activa
+        self.active_var_ply = 0       # Ply dentro de la variación activa
 
         table = self.query_one("#moves_table", DataTable)
         table.cursor_type = "cell"
@@ -293,19 +330,18 @@ class ChessMainScreen(Screen):
         self.current_notes = {}
         self.current_ply = 0
 
+        # Reset variaciones
+        self.variations = {}
+        self.active_variation = None
+        self.active_var_moves = []
+        self.active_var_ply = 0
+
+        self.refresh_moves_table()
+
         table = self.query_one("#moves_table", DataTable)
-        table.clear()
-
-        turn_number = 1
-        for i in range(1, len(moves), 2):
-            white_move = moves[i]["san"]
-            black_move = moves[i+1]["san"] if i+1 < len(moves) else ""
-            table.add_row(str(turn_number), white_move,
-                          black_move, key=str(turn_number))
-            turn_number += 1
-
         table.focus()
         self.fetch_notes()
+        self.fetch_variations()
         if self.current_moves:
             self.query_one("#board_view", Static).update(
                 render_fen(self.current_moves[0]["fen"]))
@@ -317,12 +353,22 @@ class ChessMainScreen(Screen):
         coord = event.coordinate
         ply = (coord.row * 2) + 1 if coord.column <= 1 else (coord.row * 2) + 2
 
-        if ply < len(self.current_moves):
-            self.current_ply = ply
+        if self.active_variation:
+            # Navegamos dentro de la variación
+            moves = self.active_var_moves
+            if ply < len(moves):
+                self.active_var_ply = ply
+            else:
+                self.active_var_ply = len(moves) - 1
+            fen = moves[self.active_var_ply]["fen"]
         else:
-            self.current_ply = len(self.current_moves) - 1
+            # Navegamos la línea principal
+            if ply < len(self.current_moves):
+                self.current_ply = ply
+            else:
+                self.current_ply = len(self.current_moves) - 1
+            fen = self.current_moves[self.current_ply]["fen"]
 
-        fen = self.current_moves[self.current_ply]["fen"]
         self.query_one("#board_view", Static).update(render_fen(fen))
         self.refresh_notes_panel()
 
@@ -335,8 +381,11 @@ class ChessMainScreen(Screen):
                 f"{API_CHESS_ROOMS}{self.current_room_id}/", timeout=5.0)
             if resp.status_code == 200:
                 notes_list = resp.json().get("notes", [])
-                notes_dict = {n["ply_number"]: {"id": n["id"],
-                                                "text": n["text"]} for n in notes_list}
+                # Clave compuesta: (ply_number, variation_id) para distinguir notas de variación
+                notes_dict = {}
+                for n in notes_list:
+                    key = (n["ply_number"], n.get("variation"))
+                    notes_dict[key] = {"id": n["id"], "text": n["text"]}
                 self.app.call_from_thread(self.update_notes_dict, notes_dict)
         except Exception:
             pass
@@ -345,27 +394,40 @@ class ChessMainScreen(Screen):
         self.current_notes = notes_dict
         self.refresh_notes_panel()
 
+    def _get_note_key(self) -> tuple:
+        """Devuelve la clave de nota para la posición actual (ply, variation_id)."""
+        var_id = self.active_variation.get("id") if self.active_variation else None
+        ply = self.active_var_ply if self.active_variation else self.current_ply
+        return (ply, var_id)
+
     def refresh_notes_panel(self) -> None:
         md = self.query_one("#notes_view", Markdown)
         if not self.current_moves:
             return
 
-        note_data = self.current_notes.get(self.current_ply, {})
+        key = self._get_note_key()
+        note_data = self.current_notes.get(key, {})
         note_text = note_data.get("text", "*Sin apuntes para esta posición.*")
-        current_san = self.current_moves[self.current_ply].get(
-            "san", "Inicial")
 
-        content = f"### Análisis de Jugada: `{current_san}`\n\n{note_text}"
+        if self.active_variation and self.active_var_moves:
+            current_san = self.active_var_moves[self.active_var_ply].get("san", "?")
+            header = f"### ⑂ Variación — Jugada: `{current_san}`"
+        else:
+            current_san = self.current_moves[self.current_ply].get("san", "Inicial")
+            header = f"### Análisis de Jugada: `{current_san}`"
+
+        content = f"{header}\n\n{note_text}"
         md.update(content)
 
     def action_edit_note(self) -> None:
-        if not self.current_room_id or self.current_ply == 0:
+        ply = self.active_var_ply if self.active_variation else self.current_ply
+        if not self.current_room_id or ply == 0:
             self.app.notify(
                 "Selecciona una jugada blanca o negra en la tabla.", severity="warning")
             return
 
-        existing_text = self.current_notes.get(
-            self.current_ply, {}).get("text", "")
+        key = self._get_note_key()
+        existing_text = self.current_notes.get(key, {}).get("text", "")
 
         def save_note(text: str | None) -> None:
             if text is not None:
@@ -375,17 +437,27 @@ class ChessMainScreen(Screen):
     @work(thread=True)
     def process_save_note(self, text: str) -> None:
         try:
-            existing_note = self.current_notes.get(self.current_ply)
+            key = self._get_note_key()
+            ply = key[0]
+            var_id = key[1]
+            existing_note = self.current_notes.get(key)
 
             if existing_note and "id" in existing_note:
                 resp = httpx.patch(
                     f"{API_CHESS_NOTES}{existing_note['id']}/", json={"text": text}, timeout=5.0)
             else:
+                # Determinar el SAN de la jugada actual
+                if self.active_variation and self.active_var_moves:
+                    move_san = self.active_var_moves[self.active_var_ply].get("san", "")
+                else:
+                    move_san = self.current_moves[self.current_ply].get("san", "")
+
                 payload = {
                     "room": self.current_room_id,
-                    "ply_number": self.current_ply,
-                    "move_san": self.current_moves[self.current_ply].get("san", ""),
-                    "text": text
+                    "ply_number": ply,
+                    "move_san": move_san,
+                    "text": text,
+                    "variation": var_id
                 }
                 resp = httpx.post(API_CHESS_NOTES, json=payload, timeout=5.0)
 
@@ -469,15 +541,19 @@ class ChessMainScreen(Screen):
 
     @work(thread=True)
     def process_manual_move(self, san_move: str) -> None:
-        # Si el tablero está vacío, inicia desde la posición cero
-        current_fen = self.current_moves[self.current_ply][
-            "fen"] if self.current_moves else "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        # Determinamos el FEN actual según contexto (variación o línea principal)
+        if self.active_variation and self.active_var_moves:
+            current_fen = self.active_var_moves[self.active_var_ply]["fen"]
+        elif self.current_moves:
+            current_fen = self.current_moves[self.current_ply]["fen"]
+        else:
+            current_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 
         try:
             resp = httpx.post(API_CHESS_VALIDATE, json={
                               "fen": current_fen, "san": san_move}, timeout=5.0)
             if resp.status_code == 200:
-                self.app.call_from_thread(self.apply_manual_move, resp.json())
+                self.app.call_from_thread(self.apply_manual_move, resp.json(), san_move)
             else:
                 err = resp.json().get("error", "Movimiento inválido")
                 self.app.call_from_thread(
@@ -486,49 +562,223 @@ class ChessMainScreen(Screen):
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")
 
-    def apply_manual_move(self, data: dict) -> None:
-        new_ply = self.current_ply + 1
+    def apply_manual_move(self, data: dict, san_move: str) -> None:
+        # --- Si estamos dentro de una variación activa, extendemos esa variación ---
+        if self.active_variation:
+            self.active_variation["moves_san"].append(san_move)
+            new_ply = self.active_var_ply + 1
+            self.active_var_moves.append({
+                "ply": new_ply, "san": san_move,
+                "fen": data["new_fen"], "turn": data["turn"]
+            })
+            self.active_var_ply = new_ply
+            self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
+            self.refresh_moves_table()
+            self.save_variation_to_db(self.active_variation)
+            return
 
-        # Si se está escribiendo en medio de una partida, corta el futuro
+        # --- Línea principal: detectar si es un FORK ---
+        next_ply = self.current_ply + 1
+        if next_ply < len(self.current_moves):
+            existing_san = self.current_moves[next_ply]["san"]
+            if san_move != existing_san:
+                # ¡FORK! Crear una nueva bifurcación
+                self.create_variation(self.current_ply, san_move, data)
+                return
+
+        # --- Jugada normal al final de la línea ---
+        new_ply = self.current_ply + 1
         if new_ply < len(self.current_moves):
             self.current_moves = self.current_moves[:new_ply]
 
         move_entry = {
-            "ply": new_ply,
-            "san": data["san"],
-            "fen": data["new_fen"],
-            "turn": data["turn"]
+            "ply": new_ply, "san": data["san"],
+            "fen": data["new_fen"], "turn": data["turn"]
         }
-
-        # Si es la primera jugada del estudio, inserta también la inicial
         if not self.current_moves:
             self.current_moves.append(
                 {"ply": 0, "san": "Inicial", "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", "turn": "white"})
 
         self.current_moves.append(move_entry)
         self.current_ply = new_ply
-
-        self.query_one("#board_view", Static).update(
-            render_fen(data["new_fen"]))
+        self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
         self.refresh_moves_table()
+
+    def create_variation(self, parent_ply: int, san_move: str, data: dict) -> None:
+        """Crea una bifurcación desde parent_ply con la nueva jugada."""
+        new_var = {
+            "id": None,  # Se asignará tras guardarse en la BD
+            "room": self.current_room_id,
+            "parent_ply": parent_ply,
+            "parent_variation": None,
+            "moves_san": [san_move]
+        }
+
+        # Agregar al diccionario local
+        if parent_ply not in self.variations:
+            self.variations[parent_ply] = []
+        self.variations[parent_ply].append(new_var)
+
+        # Entrar automáticamente en la variación recién creada
+        self.active_variation = new_var
+        self.active_var_moves = [
+            self.current_moves[parent_ply],  # Posición de partida (ply del padre)
+            {"ply": 1, "san": san_move, "fen": data["new_fen"], "turn": data["turn"]}
+        ]
+        self.active_var_ply = 1
+
+        self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
+        self.refresh_moves_table()
+        self.save_variation_to_db(new_var)
+        self.app.notify(f"⑂ Bifurcación creada: {san_move}", title="Fork")
+
+    @work(thread=True)
+    def save_variation_to_db(self, var_data: dict) -> None:
+        """Persiste o actualiza una variación en la base de datos."""
+        try:
+            if var_data.get("id"):
+                resp = httpx.patch(
+                    f"{API_CHESS_VARIATIONS}{var_data['id']}/",
+                    json={"moves_san": var_data["moves_san"]}, timeout=5.0)
+            else:
+                resp = httpx.post(API_CHESS_VARIATIONS, json={
+                    "room": var_data["room"],
+                    "parent_ply": var_data["parent_ply"],
+                    "parent_variation": var_data.get("parent_variation"),
+                    "moves_san": var_data["moves_san"]
+                }, timeout=5.0)
+                if resp.status_code == 201:
+                    var_data["id"] = resp.json()["id"]
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error guardando variación: {e}", severity="error")
+
+    @work(thread=True)
+    def fetch_variations(self) -> None:
+        """Carga todas las variaciones de la partida actual."""
+        if not self.current_room_id:
+            return
+        try:
+            resp = httpx.get(f"{API_CHESS_ROOMS}{self.current_room_id}/", timeout=5.0)
+            if resp.status_code == 200:
+                vars_list = resp.json().get("variations", [])
+                var_dict = {}
+                for v in vars_list:
+                    pp = v["parent_ply"]
+                    if pp not in var_dict:
+                        var_dict[pp] = []
+                    var_dict[pp].append(v)
+                self.app.call_from_thread(self.update_variations_dict, var_dict)
+        except Exception:
+            pass
+
+    def update_variations_dict(self, var_dict: dict) -> None:
+        self.variations = var_dict
+        self.refresh_moves_table()
+
+    def action_show_variations(self) -> None:
+        """Muestra las bifurcaciones disponibles en el ply actual."""
+        if not self.current_moves:
+            return
+
+        ply = self.current_ply
+        forks = self.variations.get(ply, [])
+
+        if not forks:
+            self.app.notify("No hay bifurcaciones en esta jugada.", severity="warning")
+            return
+
+        # Mostrar un selector de variaciones
+        fork_labels = [f"{i+1}. {v['moves_san'][0]} ({'..'.join(v['moves_san'][:3])})"
+                       for i, v in enumerate(forks)]
+        self.app.notify(
+            f"Variaciones en ply {ply}: {', '.join(fork_labels)}. "
+            f"Usa el input para seleccionar (ej: v1, v2...)", title="⑂ Forks")
+        self.enter_variation(forks[0])  # Auto-entra en la primera
+
+    def enter_variation(self, var_data: dict) -> None:
+        """Entra en modo variación, reconstruyendo las posiciones FEN."""
+        self.active_variation = var_data
+        parent_ply = var_data["parent_ply"]
+
+        # Reconstruimos las posiciones de la variación usando python-chess en el cliente
+        import chess
+        base_fen = self.current_moves[parent_ply]["fen"]
+        board = chess.Board(base_fen)
+
+        self.active_var_moves = [
+            {"ply": 0, "san": f"(desde ply {parent_ply})", "fen": base_fen,
+             "turn": "white" if board.turn == chess.WHITE else "black"}
+        ]
+
+        for i, san in enumerate(var_data["moves_san"]):
+            try:
+                move = board.parse_san(san)
+                board.push(move)
+                self.active_var_moves.append({
+                    "ply": i + 1, "san": san, "fen": board.fen(),
+                    "turn": "white" if board.turn == chess.WHITE else "black"
+                })
+            except Exception:
+                break
+
+        self.active_var_ply = min(1, len(self.active_var_moves) - 1)
+        if self.active_var_ply > 0:
+            self.query_one("#board_view", Static).update(
+                render_fen(self.active_var_moves[self.active_var_ply]["fen"]))
+        self.refresh_moves_table()
+        self.app.notify("Dentro de bifurcación. Presiona 'B' para volver.", title="⑂")
+
+    def action_back_to_mainline(self) -> None:
+        """Sale de la variación activa y vuelve a la línea principal."""
+        if not self.active_variation:
+            self.app.notify("Ya estás en la línea principal.", severity="warning")
+            return
+        self.active_variation = None
+        self.active_var_moves = []
+        self.active_var_ply = 0
+        self.query_one("#board_view", Static).update(
+            render_fen(self.current_moves[self.current_ply]["fen"]))
+        self.refresh_moves_table()
+        self.app.notify("Volviste a la línea principal.", title="♟")
 
     def refresh_moves_table(self) -> None:
         table = self.query_one("#moves_table", DataTable)
         table.clear()
+
+        # Decidimos qué lista de movimientos renderizar
+        if self.active_variation:
+            moves = self.active_var_moves
+            prefix = "⑂ "
+        else:
+            moves = self.current_moves
+            prefix = ""
+
         turn_number = 1
-        for i in range(1, len(self.current_moves), 2):
-            white_move = self.current_moves[i]["san"]
-            black_move = self.current_moves[i+1]["san"] if i + \
-                1 < len(self.current_moves) else ""
-            table.add_row(str(turn_number), white_move,
-                          black_move, key=str(turn_number))
+        for i in range(1, len(moves), 2):
+            white_san = moves[i]["san"]
+            black_san = moves[i+1]["san"] if i + 1 < len(moves) else ""
+
+            # Añadir indicador de fork si la jugada tiene variaciones
+            if not self.active_variation:
+                if i in self.variations:
+                    white_san = f"⑂ {white_san}"
+                if (i + 1) in self.variations:
+                    black_san = f"⑂ {black_san}"
+
+            table.add_row(str(turn_number), f"{prefix}{white_san}" if turn_number == 1 and self.active_variation else white_san,
+                          black_san, key=str(turn_number))
             turn_number += 1
 
-        # Despla el cursor automáticamente a la jugada recién hecha
-        if self.current_ply > 0:
-            row = (self.current_ply - 1) // 2
-            col = 1 if self.current_ply % 2 != 0 else 2
-            table.move_cursor(row=row, column=col)
+        # Desplaza el cursor automáticamente
+        active_ply = self.active_var_ply if self.active_variation else self.current_ply
+        if active_ply > 0:
+            row = (active_ply - 1) // 2
+            col = 1 if active_ply % 2 != 0 else 2
+            try:
+                table.move_cursor(row=row, column=col)
+            except Exception:
+                pass
 
     # --- ORÁCULO DE STOCKFISH ---
 
@@ -537,16 +787,23 @@ class ChessMainScreen(Screen):
         if not self.current_moves:
             return
 
+        # Extraemos el FEN actual, el inicial, y todo el historial de jugadas (SAN)
         fen = self.current_moves[self.current_ply]["fen"]
+        initial_fen = self.current_moves[0]["fen"]
+        history = [m["san"] for m in self.current_moves[1:self.current_ply+1]]
+
         self.query_one("#oracle_panel", Static).update(
-            "⏳ [italic text-muted]Oráculo calculando árboles de variantes...[/]")
-        self.process_evaluation(fen)
+            "⏳ [italic text-muted]Oráculo calculando árboles de variantes (contexto completo)...[/]")
+        self.process_evaluation(fen, initial_fen, history)
 
     @work(thread=True)
-    def process_evaluation(self, fen: str) -> None:
+    def process_evaluation(self, fen: str, initial_fen: str, history: list) -> None:
         try:
             resp = httpx.post(API_CHESS_EVALUATE, json={
-                              "fen": fen, "depth": 15}, timeout=15.0)
+                              "fen": fen,
+                              "initial_fen": initial_fen,
+                              "history": history,
+                              "depth": 15}, timeout=15.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(self.update_oracle_ui, resp.json())
             else:
@@ -561,13 +818,13 @@ class ChessMainScreen(Screen):
         best_move = data.get("best_move", "Ninguno")
 
         panel = self.query_one("#oracle_panel", Static)
-        bar = self.query_one("#eval_bar", ProgressBar)
+        bar = self.query_one("#eval_bar", Static)
 
         if eval_info.get("type") == "mate":
             mate_in = eval_info.get("value", 0)
             color = "Blancas" if mate_in > 0 else "Negras"
             text = f"[bold red]MATE INMINENTE[/]: {color} en {abs(mate_in)} | Sugerencia: [bold]{best_move}[/]"
-            bar.progress = 100 if mate_in > 0 else 0
+            percentage = 100.0 if mate_in > 0 else 0.0
         else:
             cp = eval_info.get("value", 0)
             score = cp / 100.0
@@ -576,7 +833,8 @@ class ChessMainScreen(Screen):
             text = f"[bold cyan]Análisis (Stockfish):[/] {sign}{score:.2f} | Mejor jugada: [bold]{best_move}[/]"
 
             # Matemática para la barra térmica: -5 a +5 puntos (500 centipeones) llenan o vacían la barra
-            percentage = 50 + (score * 10)
-            bar.progress = max(0, min(100, percentage))
+            percentage = 50.0 + (score * 10.0)
+            percentage = max(0.0, min(100.0, percentage))
 
+        bar.update(render_eval_bar(percentage))
         panel.update(text)
