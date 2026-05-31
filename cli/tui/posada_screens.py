@@ -755,6 +755,12 @@ class MissionsTab(TabPane):
         ("n", "new_chart", "Crear Nuevo Gráfico")
     ]
 
+class JournalTab(TabPane):
+    can_focus = True
+    BINDINGS = [
+        ("w", "write_journal", "Escribir Diario"),
+    ]
+
 # --- PANTALLA PRINCIPAL ---
 
 
@@ -850,7 +856,7 @@ class PosadaMainScreen(Screen):
         with Vertical(id="posada_root"):
             with TabbedContent(initial="tab_timer"):
 
-                with TabPane("Sala de Enfoque", id="tab_timer"):
+                with TimerTab("Sala de Enfoque", id="tab_timer"):
                     with Horizontal(id="focus_layout"):
 
                         # Columna Izquierda
@@ -874,7 +880,7 @@ class PosadaMainScreen(Screen):
                             yield Label("📜 Registro de Eventos")
                             yield Log(id="event_log", highlight=True)
 
-                with TabPane("El Gremio", id="tab_guild"):
+                with GuildTab("El Gremio", id="tab_guild"):
                     with Vertical(classes="guild_stats"):
                         yield Label("Cargando...", id="lbl_guild_level")
                         yield Label("Cargando bóveda...", id="lbl_guild_vault")
@@ -883,14 +889,14 @@ class PosadaMainScreen(Screen):
                     yield Label("Todos los Aventureros Reclutados:")
                     yield DataTable(id="all_adventurers_table")
 
-                with TabPane("La Taberna", id="tab_tavern"):
+                with TavernTab("La Taberna", id="tab_tavern"):
                     yield Label("Aventureros buscando un Gremio (Nivel 1):", classes="section_title")
                     yield DataTable(id="tavern_table")
                     with Horizontal(classes="timer_buttons"):
                         yield Button("Reclutar Seleccionado (r)", id="btn_recruit", variant="success")
                         yield Button("Invitar Rondas (f)", id="btn_refresh_tavern", variant="primary")
 
-                with TabPane("Tablón de Misiones", id="tab_missions"):
+                with MissionsTab("Tablón de Misiones", id="tab_missions"):
                     with Horizontal():
                         # Los Hábitos
                         with Vertical(id="habits_col", classes="half_width"):
@@ -901,7 +907,7 @@ class PosadaMainScreen(Screen):
                         with Vertical(id="stats_col", classes="half_width"):
                             yield Label("Cargando gráficos...", id="chart_title_label", classes="section_title")
                             yield PlotextPlot(id="productivity_plot")
-                with TabPane("Diario de Viaje", id="tab_journal"):
+                with JournalTab("Diario de Viaje", id="tab_journal"):
                     with Horizontal(id="journal_book"):
                         with Vertical(classes="journal_page page_left"):
                             yield Label("", id="page_left_date", classes="page_date")
