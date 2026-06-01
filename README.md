@@ -1,230 +1,190 @@
-# BUNKER (NeoLibrary 3.0)
-
-Bunker es un Centro de Operaciones Multimedia operado 100% desde la terminal (TUI). Diseñado con una arquitectura de microservicios, permite gestionar tu biblioteca de libros y colección de películas físicas, apoyado por Scrapers que vigilan nuevos lanzamientos en segundo plano.
+<div align="center">
+  <h1>BUNKER</h1>
+  <p><b>Centro de Operaciones de Vida en la Terminal</b></p>
+  <p>Gestión de Inventario • Productividad RPG • Estudio de Ajedrez • Sistema Kanban</p>
+</div>
 
 ---
 
-## Estructura del Proyecto
+**Bunker** es un ecosistema completo de microservicios diseñado para mejorar tu productividad y catalogar tus colecciones físicas desde la comodidad (y velocidad) de tu terminal. A través de una Interfaz de Usuario Textual (TUI) rica y asíncrona, conectada a un cerebro backend impulsado por Django, Bunker te permite catalogar colecciones físicas, organizar tu tiempo mediante metodologías RPG, analizar partidas de ajedrez y mucho más.
 
-```
-bunker/
-├── bunker_core/                          # Configuración central de Django
-│   ├── __init__.py
-│   ├── asgi.py                           # Configuración ASGI para servidor
-│   ├── settings.py                       # Configuración principal de Django
-│   ├── urls.py                           # Rutas principales
-│   ├── views.py                          # Vistas base
-│   └── wsgi.py                           # Configuración WSGI para servidor
-│
-├── catalog/                              # App Django: Gestión de libros
-│   ├── migrations/                       # Migraciones de BD (15 migraciones)
-│   │   ├── 0001_initial.py
-│   │   ├── 0002_remove_book_rating_...py
-│   │   ├── 0003_friend_loan.py
-│   │   ├── ... [12 más migraciones]
-│   │   └── 0015_scaninbox.py
-│   ├── templates/
-│   │   └── catalog/
-│   │       └── scanner.html              # Template para escaneo de códigos QR
-│   ├── __init__.py
-│   ├── admin.py                          # Configuración del panel admin
-│   ├── apps.py
-│   ├── models.py                         # Modelos de base de datos
-│   ├── serializers.py                    # Serializadores DRF
-│   ├── tests.py
-│   ├── urls.py                           # Rutas de la app
-│   └── views.py                          # Vistas de la app
-│
-├── movies/                               # App Django: Gestión de películas
-│   ├── migrations/                       # Migraciones de BD (7 migraciones)
-│   │   ├── 0001_initial.py
-│   │   ├── 0002_moviewatcher_moviewishlist.py
-│   │   ├── ... [5 más migraciones]
-│   │   └── 0007_movie_production_company_movie_writers.py
-│   ├── templates/
-│   │   └── movies/
-│   │       └── movie_scanner.html        # Template para escaneo de películas
-│   ├── __init__.py
-│   ├── admin.py                          # Configuración del panel admin
-│   ├── apps.py
-│   ├── commercial_oracle.py              # Integración con APIs comerciales
-│   ├── models.py                         # Modelos de películas
-│   ├── omdb_oracle.py                    # Integración OMDB
-│   ├── serializers.py                    # Serializadores DRF
-│   ├── tests.py
-│   ├── tmdb_oracle.py                    # Integración TMDB
-│   ├── urls.py                           # Rutas de la app
-│   └── views.py                          # Vistas de la app
-│
-├── cli/                                  # Cliente Terminal (CLI/TUI)
-│   ├── tui/                              # Interfaz de usuario textual
-│   │   ├── __init__.py
-│   │   ├── app.py                        # Aplicación Textual principal
-│   │   ├── constants.py                  # Constantes de la TUI
-│   │   ├── library_screen.py             # Pantalla de biblioteca
-│   │   ├── movie_screens.py              # Pantallas de películas
-│   │   ├── modals.py                     # Modales y diálogos
-│   │   ├── screens.py                    # Pantallas adicionales
-│   │   └── tabs.py                       # Gestión de pestañas
-│   ├── __init__.py
-│   ├── api.py                            # Cliente API (comunicación con backend)
-│   ├── books.py                          # Comandos CLI para libros
-│   ├── directories.py                    # Gestión de directorios
-│   ├── loans.py                          # Gestión de préstamos
-│   ├── main.py                           # Punto de entrada CLI
-│   ├── tracker.py                        # Seguimiento de actividades
-│   └── wishlist.py                       # Gestión de listas de deseos
-│
-├── scraper/                              # Scraper Node.js
-│   ├── strategies/
-│   │   ├── books/                        # Estrategias de scraping para libros
-│   │   │   ├── alfaguara.js
-│   │   │   ├── anagrama.js
-│   │   │   ├── antartica.js
-│   │   │   ├── buscalibre.js
-│   │   │   ├── distrito_manga.js
-│   │   │   ├── ecc.js
-│   │   │   ├── ivrea.js
-│   │   │   ├── minotauro.js
-│   │   │   ├── norma.js
-│   │   │   ├── panini.js
-│   │   │   ├── penguin.js
-│   │   │   └── planeta.js
-│   │   └── movies/                       # Estrategias de scraping para películas
-│   │       ├── amazon_usa.js
-│   │       ├── bluray_com.js
-│   │       └── buscalibre_usa.js
-│   ├── Dockerfile                        # Imagen Docker del scraper
-│   ├── book_radar.js                     # Scraper de libros
-│   ├── movie_radar.js                    # Scraper de películas
-│   ├── package.json                      # Dependencias Node.js
-│   └── package-lock.json
-│
-├── library_cli.egg-info/                 # Metadatos del paquete Python
-│   ├── PKG-INFO
-│   ├── SOURCES.txt
-│   ├── dependency_links.txt
-│   ├── entry_points.txt
-│   ├── requires.txt
-│   └── top_level.txt
-│
-├── docker-compose.yml                    # Orquestación de contenedores
-├── Dockerfile                            # Imagen Docker del backend
-├── .dockerignore                         # Archivos a ignorar en Docker
-├── .gitignore                            # Archivos a ignorar en Git
-├── .env                                  # Variables de entorno (local)
-├── manage.py                             # Herramienta de administración Django
-├── install.sh                            # Script de instalación
-├── requirements.txt                      # Dependencias Python (pip)
-├── pyproject.toml                        # Configuración del proyecto Python
-├── package.json                          # Dependencias Node.js del proyecto
-├── package-lock.json                     # Lock file de npm (árbol exacto de dependencias)
-└── README.md                             # Este archivo
+> **[PLACEHOLDER IMAGEN: DEMO GENERAL]**
+> *(Captura sugerida: Un GIF navegando por las distintas pestañas de Bunker: Gremio, Kanban, Ajedrez, Libros, mostrando la fluidez de Textual).*
+
+---
+
+## Arquitectura Global del Sistema
+
+Bunker no es un simple script, es una arquitectura orientada a servicios que separa la lógica de negocio, la recolección asíncrona de datos y la visualización.
+
+```mermaid
+graph TD
+    subgraph "Capa de Presentación (Frontend)"
+        TUI[Terminal UI<br/>Textual + Typer]
+        Scanner[Mobile QR Scanner<br/>vía SSH Tunnel]
+    end
+
+    subgraph "Capa Lógica (Backend Core)"
+        API[Django REST API<br/>Gunicorn/WSGI]
+        DB[(PostgreSQL)]
+        API <--> DB
+    end
+
+    subgraph "Capa de Recolección (Scrapers y Oráculos)"
+        Node[Scraper Engine<br/>Node.js + Puppeteer]
+        TMDB[API Externa<br/>TMDB / OMDB]
+        Books[Scrapers Editoriales<br/>Planeta, Ivrea, etc.]
+    end
+
+    TUI <--> |HTTP/REST JSON| API
+    Scanner -.-> |POST Data| API
+    Node -.-> |Inserta novedades| DB
+    Node --> Books
+    API --> TMDB
 ```
 
-````
+---
+
+## Stack Tecnológico
+
+| Componente | Tecnologías |
+| :--- | :--- |
+| **Backend / API** | Python 3.12, Django, Django REST Framework |
+| **Base de Datos** | PostgreSQL (Dockerizado) |
+| **Interfaz de Terminal**| Textual (Framework TUI asíncrono), Typer, Plotext (para gráficos ASCII) |
+| **Workers / Scrapers** | Node.js, Puppeteer (Web Scraping Headless) |
+| **Infraestructura** | Docker, Docker Compose, Bash Scripting |
 
 ---
 
-## Descripción por Módulo
+## Módulos Principales
 
-### `bunker_core/` - Núcleo de Django
-Contiene la configuración central de la aplicación Django, incluyendo rutas, configuraciones globales y vistas base.
+### 1. La Posada (Motor RPG y Productividad)
+El corazón de Bunker. Un sistema de productividad gamificado diseñado para premiar la constancia y castigar la pereza. Cada acción en Bunker impacta el progreso de tu "Gremio".
 
-### `catalog/` - Gestión de Libros
-App Django que implementa todo el CRUD para la biblioteca de libros, incluyendo modelos, serializadores API y migraciones de BD.
+```mermaid
+flowchart LR
+    A[Sesión Deep Work] -->|Otorga XP y Oro| B(Gremio de Aventureros)
+    C[Tareas Kanban] -->|Completar| B
+    D[Eventos Calendario] -->|Asistir| B
+    B -->|Sube Nivel| E{Desbloquea Mejoras}
+```
 
-### `movies/` - Gestión de Películas
-App Django para gestionar la colección de películas con integración a APIs de TMDB y OMDB para obtener información de películas.
+- **Gestión de Gremio:** Recluta avatares, mejora sus estadísticas (Fuerza, Inteligencia, etc.) en sesiones de trabajo y administra el prestigio del Gremio.
+- **Sala de Enfoque (Timer):** Un reloj Pomodoro / Deep Work que genera eventos narrativos estilo MUD mientras trabajas.
+- **Kanban y Calendario:** Tableros dinámicos (hasta 4 columnas personalizables) y agenda interactiva. Mover tareas a la columna final otorga prestigio automáticamente.
+- **Tracker de Hábitos (Gráficos Infinitos):** Mide cualquier métrica (horas de lectura, sueño, visitas al gimnasio) renderizando gráficos de líneas y barras 100% en ASCII dentro de la terminal.
 
-### `cli/` - Cliente de Terminal
-Aplicación terminal interactiva construida con **Textual** y **Typer**, con una TUI multi-pestaña que permite navegar e interactuar con la biblioteca y colección de películas desde la terminal.
+> **[PLACEHOLDER IMAGEN: LA POSADA - GRÁFICOS]**
+> *(Captura sugerida: La pestaña "Rutinas" mostrando un gráfico de Plotext dibujado con caracteres braille, junto con la lista de hábitos diarios).*
 
-### `scraper/` - Scraper de Novedades
-Servicio Node.js que scraatea múltiples editoriales y plataformas de películas en segundo plano para detectar nuevos lanzamientos, utilizando un sistema de estrategias extensible.
-
----
-
-## Características Principales
-
-- **Interfaz TUI:** Navegación por pestañas, modales flotantes, y un "Grid Cinematográfico" construidos con Textual y Typer.
-- **Scraper (Node.js):** Un scraper asíncrono que busca novedades literarias en Google Books y estrenos cinematográficos en The Movie Database (TMDB).
-- **Escáner Móvil:** Levanta un túnel SSH en background y renderiza un código QR en ASCII dentro de la terminal para escanear códigos de barras (ISBN/UPC) con la cámara de tu teléfono.
-- Sincronización automática entre el registro de hábitos anuales y el inventario principal.
+> **[PLACEHOLDER IMAGEN: LA POSADA - KANBAN]**
+> *(Captura sugerida: La pestaña "Kanban" mostrando las columnas de tareas y el calendario de eventos en la parte inferior).*
 
 ---
 
-## Requisitos
+### 2. Estudio de Ajedrez (Chess Study)
+Herramienta analítica para el jugador que busca mejorar, integrada sin salir de la terminal.
 
-Asegúrate de tener instalados los siguientes componentes en tu sistema operativo (Linux/macOS):
+```mermaid
+flowchart TD
+    A[Importar PGN] --> B[Visualizador ASCII]
+    B --> C[Motor Stockfish]
+    C --> D[Barra de Evaluación]
+    B --> E[Árbol de Variantes]
+    E --> F[Notas Persistentes]
+```
 
+- **Motor Interno:** Juega y analiza posiciones gracias a la integración en tiempo real con Stockfish.
+- **Árbol de Variantes Infinito:** Guarda líneas principales y bifurcaciones (sub-variantes) de tus partidas para explorar diferentes posibilidades estratégicas.
+- **Toma de Notas Contextual:** Escribe recordatorios persistentes para posiciones específicas en el tablero.
+
+> **[PLACEHOLDER IMAGEN: ESTUDIO DE AJEDREZ]**
+> *(Captura sugerida: El tablero de ajedrez renderizado en ASCII, la barra de evaluación de Stockfish calculando ventaja, y el árbol de variantes a la derecha).*
+
+---
+
+### 3. Biblioteca y Bóveda (Inventario Físico)
+Gestión para coleccionistas del formato físico (Libros, Blu-rays, 4K, DVDs).
+
+- **Tracking Absoluto:** Control exacto de tu inventario, registro de préstamos a amigos y *Wishlists*.
+- **Integración de Metadatos:** Conexión directa a The Movie Database (TMDB) y APIs de libros para autocompletar portadas, sinopsis y directores.
+- **Escáner Móvil Asíncrono:** Levanta un túnel de red que renderiza un código QR en tu terminal. Lo escaneas con tu móvil y usas la cámara del celular como lector de códigos de barras (ISBN/UPC) para ingresar ítems a Bunker en tiempo real.
+
+> **[PLACEHOLDER IMAGEN: INVENTARIO]**
+> *(Captura sugerida: La Data Table de películas o libros, mostrando filtros y metadatos detallados).*
+
+> **[PLACEHOLDER IMAGEN: ESCÁNER QR]**
+> *(Captura sugerida: El modal en la terminal mostrando un código QR gigante en blanco y negro).*
+
+---
+
+### 4. El Oráculo (Scraper de Novedades)
+Un demonio de Node.js que vive en segundo plano. Monitorea sitios de editoriales (Buscalibre, Planeta, Ivrea, etc.) y te notifica automáticamente en tu base de datos cuando un libro o manga de tu lista de deseos está en stock o en preventa.
+
+---
+
+## Guía de Instalación y Despliegue
+
+Bunker está diseñado para instalarse en cualquier entorno UNIX (Linux/macOS). El backend se ejecuta herméticamente en Docker, mientras que el cliente de terminal (TUI) corre nativamente para máxima fluidez.
+
+### Requisitos Previos
 - [Python 3.10+](https://www.python.org/downloads/)
 - [Docker](https://docs.docker.com/get-docker/) y [Docker Compose](https://docs.docker.com/compose/install/)
-- `git`
-- Una API Key gratuita de [The Movie Database (TMDB)](https://developer.themoviedb.org/docs/getting-started)
+- Clave API gratuita de [TMDB](https://developer.themoviedb.org/docs/getting-started)
 
----
-
-## Guía de Instalación
-
-Sigue estos pasos en orden para desplegar la arquitectura completa en tu máquina local.
-
-### 1. Clonar el Repositorio
-
+### Paso 1: Clonar y Configurar
+Descarga el código y prepara tus variables de entorno.
 ```bash
-git clone [https://github.com/RicketyMajor/library-manager.git](https://github.com/RicketyMajor/library-manager.git)
-cd library-manager
-````
-
-### 2. Configurar Variables de Entorno
-
-```bash
+git clone https://github.com/RicketyMajor/bunker.git
+cd bunker
 touch .env
 ```
-
+Añade dentro del `.env` tu clave de API de TMDB:
+```ini
+TMDB_API_KEY=tu_clave_aqui
 ```
-TMDB_API_KEY=...
-```
 
-### 3. Levantar Docker
-
+### Paso 2: Levantar el Servidor (Backend)
+Bunker utiliza Docker para levantar PostgreSQL y el servidor Django sin ensuciar tu sistema operativo.
 ```bash
 docker-compose up -d --build
 ```
+*Verifica que los contenedores estén corriendo:* `docker ps`.
 
-### 4. Ejecutar Migraciones de Base de Datos
-
+### Paso 3: Migraciones y Creación de Usuario
+Prepara las tablas de la base de datos y crea tu usuario administrador:
 ```bash
 docker-compose exec web python manage.py migrate
-```
-
-### 5. Crear Superusuario
-
-```bash
 docker-compose exec web python manage.py createsuperuser
 ```
 
-### 6. Instalar el Cliente de Terminal (entorno estándar: `.venv`)
-
+### Paso 4: Instalar el Cliente de Terminal (TUI)
+Para no romper las dependencias de tu sistema (PEP 668), Bunker TUI se instala en un entorno virtual aislado `.venv`. Hemos preparado un script que automatiza todo:
 ```bash
 chmod +x install.sh
 ./install.sh
 ```
 
-El instalador crea y utiliza de forma exclusiva el entorno virtual `.venv/` en la raíz del proyecto.
+---
 
-Para activar manualmente el entorno en una nueva terminal:
+## 🎮 Uso del Sistema
+
+La herramienta de línea de comandos principal de Bunker se denomina `bunker`. 
+Para usarla, **siempre debes activar primero el entorno virtual**:
 
 ```bash
+# Estando en el directorio del proyecto
 source .venv/bin/activate
 ```
 
-Para recrearlo desde cero en cualquier equipo:
+### Comandos Principales
 
+- **`bunker app`** o **`bunker enter`**: Lanza la interfaz gráfica de terminal (TUI). Es el comando principal que usarás el 99% del tiempo para acceder a La Posada, el Ajedrez, etc.
+- **`bunker books scan`**: Inicia el servidor puente temporal y muestra el código QR para escanear ISBNs desde tu móvil.
+- **`bunker movies scan`**: Igual que el anterior, pero optimizado para códigos UPC de Blu-rays y DVDs.
+
+*(Tip: Puedes crear un alias en tu `.bashrc` o `.zshrc` para entrar a Bunker desde cualquier parte)*:
 ```bash
-rm -rf .venv
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install -e .
+alias bunker-os="cd ~/ruta/a/bunker && source .venv/bin/activate && bunker app"
 ```
