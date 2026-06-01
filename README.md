@@ -180,11 +180,9 @@ source .venv/bin/activate
 
 ### Comandos Principales
 
-- **`bunker app`** o **`bunker enter`**: Lanza la interfaz gráfica de terminal (TUI). Es el comando principal que usarás el 99% del tiempo para acceder a La Posada, el Ajedrez, etc.
-- **`bunker books scan`**: Inicia el servidor puente temporal y muestra el código QR para escanear ISBNs desde tu móvil.
-- **`bunker movies scan`**: Igual que el anterior, pero optimizado para códigos UPC de Blu-rays y DVDs.
+- **`bunker enter`**: Lanza la interfaz gráfica de terminal (TUI). Es el comando principal que usarás el 99% del tiempo para acceder a La Posada, el Ajedrez, etc.
 
 *(Tip: Puedes crear un alias en tu `.bashrc` o `.zshrc` para entrar a Bunker desde cualquier parte)*:
 ```bash
-alias bunker-os="cd ~/ruta/a/bunker && source .venv/bin/activate && bunker app"
+alias bunker-os="cd ~/ruta/a/bunker && source .venv/bin/activate && bunker enter"
 ```
