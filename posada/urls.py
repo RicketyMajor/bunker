@@ -36,4 +36,17 @@ urlpatterns = [
          name='create_journal_entry'),
     path('api/guild/upgrades/', views.list_upgrades, name='list_upgrades'),
     path('api/guild/upgrades/buy/', views.buy_upgrade, name='buy_upgrade'),
+
+    # Kanban URLs
+    path('api/kanban/', views.list_kanban, name='list_kanban'),
+    path('api/kanban/column/create/', views.create_kanban_column, name='create_kanban_column'),
+    path('api/kanban/task/create/', views.create_kanban_task, name='create_kanban_task'),
+    path('api/kanban/task/move/', views.move_kanban_task, name='move_kanban_task'),
+    path('api/kanban/task/delete/<int:task_id>/', views.delete_kanban_task, name='delete_kanban_task'),
+    path('api/kanban/column/delete/<int:col_id>/', views.delete_kanban_column, name='delete_kanban_column'),
+
+    # Calendar URLs
+    path('api/calendar/<int:year>/<int:month>/', views.list_calendar_events, name='list_calendar_events'),
+    path('api/calendar/event/create/', views.create_calendar_event, name='create_calendar_event'),
+    path('api/calendar/event/delete/<int:event_id>/', views.delete_calendar_event, name='delete_calendar_event'),
 ]
