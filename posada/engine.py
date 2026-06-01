@@ -1639,14 +1639,44 @@ def consolidate_wealth(guild_id):
         return {"status": "error", "message": "Gremio no encontrado"}
 
 
+def get_chart_completion_status(chart):
+    """Analiza el progreso de un gráfico: qué puntos enteros del eje X están cubiertos y cuáles faltan."""
+    x_start = int(chart.x_min)
+    x_end = int(chart.goal_x_value)
+    expected = set(range(x_start, x_end + 1))
+
+    points = chart.data_points.all().order_by('x_value')
+    covered = set()
+    for p in points:
+        int_x = int(p.x_value)
+        if int_x in expected:
+            covered.add(int_x)
+
+    missing = sorted(expected - covered)
+    return {
+        "total_expected": len(expected),
+        "covered_count": len(covered),
+        "covered": sorted(covered),
+        "missing": missing,
+        "is_complete": len(missing) == 0
+    }
+
+
 def calculate_chart_reward(chart):
     """Calcula el Área bajo la curva usando proporciones sobre el área total del lienzo."""
     points = list(chart.data_points.all().order_by('x_value'))
     if not points:
         return {"status": "error", "message": "El gráfico está vacío."}
 
-    if points[-1].x_value < chart.goal_x_value:
-        return {"status": "warning", "message": f"Aún no llegas a la meta (Día {chart.goal_x_value})."}
+    # Verificar que TODOS los enteros del rango estén cubiertos
+    completion = get_chart_completion_status(chart)
+    if not completion["is_complete"]:
+        missing_str = ", ".join(str(d) for d in completion["missing"][:10])
+        suffix = f" (y {len(completion['missing']) - 10} más)" if len(completion["missing"]) > 10 else ""
+        return {
+            "status": "warning",
+            "message": f"Faltan {len(completion['missing'])} puntos: {missing_str}{suffix}. Progreso: {completion['covered_count']}/{completion['total_expected']}."
+        }
 
     # Área máxima teórica del rectángulo del gráfico
     total_area = (chart.goal_x_value - chart.x_min) * \
@@ -1701,5 +1731,10 @@ def calculate_chart_reward(chart):
 
     return {
         "status": "success",
+        "grade": grade,
+        "rendimiento": round(rendimiento * 100, 1),
+        "prestige_reward": prestige_reward,
+        "coin_type": coin_reward[0].title(),
+        "coin_amount": coin_reward[1],
         "message": f"¡Ciclo completado! Rango {grade} ({rendimiento*100:.1f}% del área). Gremio gana +{prestige_reward} Prestigio y {coin_reward[1]} {coin_reward[0].title()}."
     }

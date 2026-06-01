@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
 import random
-from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, is_class_allowed, get_derived_skills
+from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills
 from django.utils import timezone
 from datetime import timedelta
 from .skills import SkillRegistry
@@ -564,6 +564,7 @@ def list_charts(request):
     data = []
     for c in charts:
         points = c.data_points.all().order_by('x_value')
+        completion = get_chart_completion_status(c)
         data.append({
             "id": c.id, "title": c.title,
             "x_label": c.x_axis_label, "y_label": c.y_axis_label,
@@ -572,6 +573,10 @@ def list_charts(request):
             "polarity": c.get_polarity_display(),
             "x_data": [p.x_value for p in points],
             "y_data": [p.y_value for p in points],
+            "covered_count": completion["covered_count"],
+            "total_expected": completion["total_expected"],
+            "missing_points": completion["missing"],
+            "is_complete": completion["is_complete"],
         })
     return Response({"charts": data})
 
@@ -581,18 +586,44 @@ def add_chart_point(request):
     """Añade o actualiza una coordenada (X, Y) en un gráfico específico."""
     chart_id = request.data.get('chart_id')
     try:
-        x_val = float(request.data.get('x_value'))
+        x_raw = request.data.get('x_value')
         y_val = float(request.data.get('y_value'))
+
+        # Validar que X sea un número entero
+        x_val = float(x_raw)
+        if x_val != int(x_val):
+            return Response({"error": f"El valor del eje X debe ser un número entero (recibido: {x_raw})."}, status=400)
+        x_val = int(x_val)
 
         chart = CustomChart.objects.get(id=chart_id)
 
+        # Validar que X esté dentro del rango del gráfico
+        if x_val < int(chart.x_min) or x_val > chart.goal_x_value:
+            return Response(
+                {"error": f"El valor X={x_val} está fuera del rango [{int(chart.x_min)}, {chart.goal_x_value}]."},
+                status=400
+            )
+
         # update_or_create permite sobreescribir si te equivocaste de valor en un día
         point, created = ChartDataPoint.objects.update_or_create(
-            chart=chart, x_value=x_val,
+            chart=chart, x_value=float(x_val),
             defaults={'y_value': y_val}
         )
         msg = "Punto añadido." if created else "Punto actualizado."
-        return Response({"status": "success", "message": msg})
+
+        # Verificar si el gráfico quedó completo tras este punto
+        completion = get_chart_completion_status(chart)
+        return Response({
+            "status": "success",
+            "message": msg,
+            "chart_complete": completion["is_complete"],
+            "covered_count": completion["covered_count"],
+            "total_expected": completion["total_expected"]
+        })
+    except CustomChart.DoesNotExist:
+        return Response({"error": "Gráfico no encontrado."}, status=404)
+    except (ValueError, TypeError) as e:
+        return Response({"error": f"Valores numéricos inválidos: {e}"}, status=400)
     except Exception as e:
         return Response({"error": str(e)}, status=400)
 
@@ -815,3 +846,233 @@ def buy_upgrade(request):
     GuildUnlockedUpgrade.objects.create(guild=guild, upgrade=upgrade)
 
     return Response({"status": "success", "message": f"¡Mejora '{upgrade.name}' adquirida!"})
+
+
+# --- KANBAN ---
+
+@api_view(['GET'])
+def list_kanban(request):
+    """Lista el tablero Kanban con sus columnas y tareas. Crea uno por defecto si no existe."""
+    from .models import KanbanBoard, KanbanColumn, KanbanTask
+    board = KanbanBoard.objects.first()
+    if not board:
+        board = KanbanBoard.objects.create(name="Tablero Principal")
+        KanbanColumn.objects.create(board=board, title="Por Hacer", position=0, color="yellow")
+        KanbanColumn.objects.create(board=board, title="En Progreso", position=1, color="cyan")
+        KanbanColumn.objects.create(board=board, title="Completado", position=2, color="green")
+
+    columns = board.columns.all().order_by('position')
+    data = {
+        "board_id": board.id,
+        "board_name": board.name,
+        "columns": []
+    }
+    for col in columns:
+        tasks = col.tasks.all()
+        col_data = {
+            "id": col.id,
+            "title": col.title,
+            "position": col.position,
+            "color": col.color,
+            "tasks": [{
+                "id": t.id,
+                "title": t.title,
+                "description": t.description,
+                "priority": t.get_priority_display(),
+                "priority_code": t.priority,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
+                "prestige_reward": t.prestige_reward,
+            } for t in tasks]
+        }
+        data["columns"].append(col_data)
+
+    return Response(data)
+
+
+@api_view(['POST'])
+def create_kanban_column(request):
+    """Crea una nueva columna en el tablero."""
+    from .models import KanbanBoard, KanbanColumn
+    board = KanbanBoard.objects.first()
+    if not board:
+        return Response({"error": "No hay tablero."}, status=400)
+
+    title = request.data.get('title', 'Nueva Columna')
+    color = request.data.get('color', 'white')
+    max_pos = board.columns.count()
+    KanbanColumn.objects.create(board=board, title=title, position=max_pos, color=color)
+    return Response({"status": "success", "message": f"Columna '{title}' creada."})
+
+
+@api_view(['POST'])
+def create_kanban_task(request):
+    """Crea una tarea nueva en la primera columna (Por Hacer)."""
+    from .models import KanbanColumn, KanbanTask, TaskPriority
+    column_id = request.data.get('column_id')
+
+    try:
+        if column_id:
+            column = KanbanColumn.objects.get(id=column_id)
+        else:
+            column = KanbanColumn.objects.order_by('position').first()
+            if not column:
+                return Response({"error": "Crea al menos una columna primero."}, status=400)
+
+        priority = request.data.get('priority', 'MED')
+        prestige_map = {'CRT': 20, 'HGH': 10, 'MED': 5, 'LOW': 2}
+
+        due_date = request.data.get('due_date')
+        task = KanbanTask.objects.create(
+            column=column,
+            title=request.data.get('title', 'Nueva Tarea'),
+            description=request.data.get('description', ''),
+            priority=priority,
+            due_date=due_date if due_date else None,
+            prestige_reward=prestige_map.get(priority, 5)
+        )
+        return Response({"status": "success", "message": f"Tarea '{task.title}' creada."})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@api_view(['POST'])
+def move_kanban_task(request):
+    """Mueve una tarea a otra columna. Si llega a la última, otorga prestigio."""
+    from .models import KanbanTask, KanbanColumn
+    task_id = request.data.get('task_id')
+    direction = request.data.get('direction', 'right')  # 'right' o 'left'
+
+    try:
+        task = KanbanTask.objects.get(id=task_id)
+        current_col = task.column
+        board = current_col.board
+        columns = list(board.columns.all().order_by('position'))
+        current_idx = next(i for i, c in enumerate(columns) if c.id == current_col.id)
+
+        if direction == 'right':
+            if current_idx >= len(columns) - 1:
+                return Response({"status": "warning", "message": "Ya está en la última columna."})
+            new_col = columns[current_idx + 1]
+        else:
+            if current_idx <= 0:
+                return Response({"status": "warning", "message": "Ya está en la primera columna."})
+            new_col = columns[current_idx - 1]
+
+        task.column = new_col
+        msg = f"'{task.title}' movida a '{new_col.title}'."
+
+        # Si llega a la última columna, completar y dar prestigio
+        if new_col.id == columns[-1].id and not task.completed_at:
+            task.completed_at = timezone.now()
+            guild, _ = GuildProfile.objects.get_or_create(id=1)
+            guild.prestige += task.prestige_reward
+
+            old_level = guild.prestige_level
+            while True:
+                meta = guild.prestige_level * 100
+                if guild.prestige >= meta:
+                    guild.prestige -= meta
+                    guild.prestige_level += 1
+                else:
+                    break
+            guild.save()
+
+            lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if guild.prestige_level > old_level else ""
+            msg = f"¡Tarea '{task.title}' completada! +{task.prestige_reward} Prestigio.{lvl_msg}"
+
+        # Si se mueve de vuelta desde la última columna, quitar completado
+        elif new_col.id != columns[-1].id and task.completed_at:
+            task.completed_at = None
+
+        task.save()
+        return Response({"status": "success", "message": msg})
+    except KanbanTask.DoesNotExist:
+        return Response({"error": "Tarea no encontrada."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@api_view(['DELETE'])
+def delete_kanban_task(request, task_id):
+    """Elimina una tarea del tablero."""
+    from .models import KanbanTask
+    try:
+        task = KanbanTask.objects.get(id=task_id)
+        title = task.title
+        task.delete()
+        return Response({"status": "success", "message": f"Tarea '{title}' eliminada."})
+    except KanbanTask.DoesNotExist:
+        return Response({"error": "Tarea no encontrada."}, status=404)
+
+
+@api_view(['DELETE'])
+def delete_kanban_column(request, col_id):
+    """Elimina una columna y todas sus tareas."""
+    from .models import KanbanColumn
+    try:
+        col = KanbanColumn.objects.get(id=col_id)
+        if col.board.columns.count() <= 1:
+            return Response({"error": "No puedes borrar tu última columna."}, status=400)
+        title = col.title
+        col.delete()
+        return Response({"status": "success", "message": f"Columna '{title}' eliminada."})
+    except KanbanColumn.DoesNotExist:
+        return Response({"error": "Columna no encontrada."}, status=404)
+
+
+# --- CALENDARIO ---
+
+@api_view(['GET'])
+def list_calendar_events(request, year, month):
+    """Lista todos los eventos de un mes específico."""
+    from .models import CalendarEvent
+    events = CalendarEvent.objects.filter(date__year=year, date__month=month)
+    data = [{
+        "id": e.id,
+        "date": e.date.isoformat(),
+        "title": e.title,
+        "description": e.description,
+        "is_important": e.is_important,
+        "color": e.color,
+    } for e in events]
+    return Response({"events": data, "year": year, "month": month})
+
+
+@api_view(['POST'])
+def create_calendar_event(request):
+    """Crea un evento en el calendario. +1 Prestigio por organizar."""
+    from .models import CalendarEvent
+    try:
+        from datetime import date as dt_date
+        date_str = request.data.get('date')
+        event = CalendarEvent.objects.create(
+            date=dt_date.fromisoformat(date_str),
+            title=request.data.get('title', 'Evento'),
+            description=request.data.get('description', ''),
+            is_important=request.data.get('is_important', False),
+            color=request.data.get('color', 'white')
+        )
+
+        # Buff de prestigio por planificar
+        guild, _ = GuildProfile.objects.get_or_create(id=1)
+        prestige_gain = 3 if event.is_important else 1
+        guild.prestige += prestige_gain
+        guild.save()
+
+        return Response({"status": "success", "message": f"Evento '{event.title}' creado (+{prestige_gain} Prestigio)."})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@api_view(['DELETE'])
+def delete_calendar_event(request, event_id):
+    """Elimina un evento del calendario."""
+    from .models import CalendarEvent
+    try:
+        event = CalendarEvent.objects.get(id=event_id)
+        title = event.title
+        event.delete()
+        return Response({"status": "success", "message": f"Evento '{title}' eliminado."})
+    except CalendarEvent.DoesNotExist:
+        return Response({"error": "Evento no encontrado."}, status=404)
+

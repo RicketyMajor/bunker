@@ -676,7 +676,7 @@ class AddChartDataModal(ModalScreen[dict]):
     def compose(self) -> ComposeResult:
         with Vertical(id="add_data_dialog"):
             yield Label("Añadir Coordenada (X, Y)", classes="modal_title")
-            yield Input(placeholder="Valor Eje X (Ej: 14)", id="input_x")
+            yield Input(placeholder="Valor Eje X (Ej: 14)", id="input_x", type="integer")
             yield Input(placeholder="Valor Eje Y (Ej: 2.5)", id="input_y")
             with Horizontal(classes="btn_row"):
                 yield Button("Guardar", variant="success", id="btn_save_data")
@@ -689,11 +689,110 @@ class AddChartDataModal(ModalScreen[dict]):
             x_val = self.query_one("#input_x", Input).value
             y_val = self.query_one("#input_y", Input).value
             try:
-                # Plotext requiere números para graficar correctamente
-                self.dismiss({"x": float(x_val), "y": float(y_val)})
+                self.dismiss({"x": int(x_val), "y": float(y_val)})
             except ValueError:
                 self.app.notify(
-                    "Ambos valores deben ser numéricos (Ej: 2.5).", severity="error")
+                    "X debe ser entero, Y puede ser decimal (Ej: 2.5).", severity="error")
+
+
+class ChartDetailsModal(ModalScreen[None]):
+    """Modal que muestra el progreso detallado del gráfico: puntos cubiertos y faltantes."""
+
+    CSS = """
+    #chart_details_dialog { width: 65; height: auto; max-height: 80%; padding: 1 2; border: double $accent; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .detail_section { margin-top: 1; text-style: bold; color: $success; }
+    .detail_content { margin-bottom: 1; }
+    .progress_bar { color: $accent; text-style: bold; }
+    .missing_list { color: $error; }
+    .covered_list { color: $success; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    """
+
+    def __init__(self, chart_data: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.chart_data = chart_data
+
+    def compose(self) -> ComposeResult:
+        c = self.chart_data
+        covered = c.get("covered_count", 0)
+        total = c.get("total_expected", 0)
+        missing = c.get("missing_points", [])
+        pct = (covered / total * 100) if total > 0 else 0
+
+        # Barra visual de progreso
+        filled = int(pct / 5)  # 20 bloques
+        bar = "█" * filled + "░" * (20 - filled)
+
+        with Vertical(id="chart_details_dialog"):
+            yield Label(f"📊 Inspección: {c['title']}", classes="modal_title")
+
+            yield Label("Configuración:", classes="detail_section")
+            yield Label(f"  Eje X: {c['x_label']} — Rango [{int(c['x_min'])} → {c['goal_x']}]", classes="detail_content")
+            yield Label(f"  Eje Y: {c['y_label']} — Rango [{c['y_min']} → {c['y_max']}]", classes="detail_content")
+            yield Label(f"  Polaridad: {c['polarity']}", classes="detail_content")
+
+            yield Label("Progreso:", classes="detail_section")
+            yield Label(f"  [{bar}] {covered}/{total} ({pct:.0f}%)", classes="progress_bar")
+
+            if missing:
+                if len(missing) <= 30:
+                    missing_str = ", ".join(str(m) for m in missing)
+                else:
+                    missing_str = ", ".join(str(m) for m in missing[:30]) + f" ... (+{len(missing)-30} más)"
+                yield Label("Puntos Faltantes:", classes="detail_section")
+                yield Label(f"  {missing_str}", classes="missing_list")
+            else:
+                yield Label("¡COMPLETO! Todos los puntos cubiertos. Reclama tu recompensa (R).", classes="covered_list")
+
+            # Mostrar puntos ingresados
+            x_data = c.get("x_data", [])
+            y_data = c.get("y_data", [])
+            if x_data:
+                yield Label("Puntos Ingresados:", classes="detail_section")
+                with VerticalScroll():
+                    entries = [f"  X={int(x)} → Y={y}" for x, y in zip(x_data, y_data)]
+                    yield Label("\n".join(entries[-50:]), classes="detail_content")  # Últimos 50
+
+            with Horizontal(classes="btn_row"):
+                yield Button("Cerrar", variant="primary", id="btn_close_details")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_close_details":
+            self.dismiss(None)
+
+
+class ChartRewardModal(ModalScreen[None]):
+    """Modal que muestra la recompensa obtenida al completar un gráfico."""
+
+    CSS = """
+    #chart_reward_dialog { width: 55; height: auto; padding: 1 2; border: heavy $warning; background: $surface; }
+    .reward_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .reward_text { margin-bottom: 1; text-align: center; }
+    .reward_grade { text-style: bold; text-align: center; margin-bottom: 1; }
+    #btn_claim_reward { width: 100%; margin-top: 1; }
+    """
+
+    def __init__(self, reward_data: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.reward_data = reward_data
+
+    def compose(self) -> ComposeResult:
+        r = self.reward_data
+        grade = r.get("grade", "C")
+        grade_colors = {"S": "bold yellow", "A": "bold magenta", "B": "bold cyan", "C": "white"}
+        color = grade_colors.get(grade, "white")
+
+        with Vertical(id="chart_reward_dialog"):
+            yield Label("🏆 ¡MISIÓN DE TRACKING COMPLETADA!", classes="reward_title")
+            yield Label(f"[{color}]Rango Obtenido: {grade}[/] ({r.get('rendimiento', 0)}% del área)", classes="reward_grade")
+            yield Label(f"+{r.get('prestige_reward', 0)} Prestigio", classes="reward_text")
+            yield Label(f"+{r.get('coin_amount', 0)} {r.get('coin_type', '')}", classes="reward_text")
+            yield Button("Reclamar y Continuar", variant="success", id="btn_claim_reward")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_claim_reward":
+            self.dismiss(None)
 
 
 class WriteJournalModal(ModalScreen[str]):
@@ -747,12 +846,17 @@ class TavernTab(TabPane):
 class MissionsTab(TabPane):
     can_focus = True
     BINDINGS = [
-        ("m", "complete_habit", "Marcar Hecho"),
-        ("+", "add_habit", "Añadir Hábito"),
-        ("<", "prev_chart", "Gráfico Anterior"),
-        (">", "next_chart", "Siguiente Gráfico"),
-        ("a", "add_chart_data", "Añadir Dato al Gráfico"),
-        ("n", "new_chart", "Crear Nuevo Gráfico")
+        ("m", "complete_habit", "Marcar"),
+        ("+", "add_habit", "+ Hábito"),
+        ("-", "delete_habit", "- Hábito"),
+        ("u", "undo_habit", "Deshacer"),
+        ("<", "prev_chart", "◀ Gráfico"),
+        (">", "next_chart", "Gráfico ▶"),
+        ("a", "add_chart_data", "Dato"),
+        ("n", "new_chart", "Nuevo Gráf."),
+        ("D", "delete_chart", "Borrar Gráf."),
+        ("R", "claim_chart", "Reclamar"),
+        ("i", "inspect_chart", "Inspeccionar"),
     ]
 
 class JournalTab(TabPane):
@@ -772,14 +876,14 @@ class PosadaMainScreen(Screen):
     is_countdown = reactive(True)
 
     BINDINGS = [
-        # Globales
-        ("escape", "app.pop_screen", "Salir Posada"),
-        ("q", "app.quit", "Salir Bunker"),
-        ("1", "switch_tab('tab_timer')", "Enfoque"),
-        ("2", "switch_tab('tab_guild')", "Gremio"),
-        ("3", "switch_tab('tab_tavern')", "Taberna"),
-        ("4", "switch_tab('tab_missions')", "Misiones"),
-        ("5", "switch_tab('tab_journal')", "Diario"),
+        # Globales (funcionales pero ocultos del footer)
+        Binding("escape", "app.pop_screen", "Salir Posada", show=False),
+        Binding("q", "app.quit", "Salir Bunker", show=False),
+        Binding("1", "switch_tab('tab_timer')", "Enfoque", show=False),
+        Binding("2", "switch_tab('tab_guild')", "Gremio", show=False),
+        Binding("3", "switch_tab('tab_tavern')", "Taberna", show=False),
+        Binding("4", "switch_tab('tab_missions')", "Misiones", show=False),
+        Binding("5", "switch_tab('tab_journal')", "Diario", show=False),
 
         # Controles Ocultos
         Binding("c", "setup_timer", "Configurar", show=False),
@@ -799,8 +903,8 @@ class PosadaMainScreen(Screen):
         Binding("D", "delete_chart", "Borrar Gráfico", show=False),
         Binding("-", "delete_habit", "Borrar Hábito", show=False),
         Binding("u", "undo_habit", "Deshacer Hábito", show=False),
-        Binding("R", "claim_chart", "Reclamar Gráfico",
-                show=False),
+        Binding("R", "claim_chart", "Reclamar Gráfico", show=False),
+        Binding("i", "inspect_chart", "Inspeccionar", show=False),
         Binding("w", "write_journal", "Escribir Diario", show=False),
 
     ]
@@ -1477,11 +1581,15 @@ class PosadaMainScreen(Screen):
 
         chart_data = self.charts_cache[self.current_chart_index]
 
-        # Actualizar Título del Carrusel
+        # Actualizar Título del Carrusel con progreso
         total = len(self.charts_cache)
         curr = self.current_chart_index + 1
+        covered = chart_data.get('covered_count', 0)
+        expected = chart_data.get('total_expected', 0)
+        progress_str = f" [{covered}/{expected}]" if expected > 0 else ""
+        complete_flag = " ✅" if chart_data.get('is_complete') else ""
         lbl = self.query_one("#chart_title_label", Label)
-        lbl.update(f"◀ [{curr}/{total}] {chart_data['title']} ▶")
+        lbl.update(f"◀ [{curr}/{total}] {chart_data['title']}{progress_str}{complete_flag} ▶")
 
         plot_widget = self.query_one("#productivity_plot", PlotextPlot)
         plt = plot_widget.plt
@@ -1493,16 +1601,31 @@ class PosadaMainScreen(Screen):
         plt.theme("dark")
 
         # --- APLICAR LÍMITES ABSOLUTOS ---
-        plt.xlim(chart_data.get('x_min', 1.0), chart_data.get('goal_x', 30))
+        x_min = chart_data.get('x_min', 1.0)
+        goal_x = chart_data.get('goal_x', 30)
+        plt.xlim(x_min, goal_x)
         plt.ylim(chart_data.get('y_min', 0.0), chart_data.get('y_max', 10.0))
+
+        # --- XTICKS ENTEROS (elimina decimales como 23.5) ---
+        x_start = int(x_min)
+        x_end = int(goal_x)
+        x_range = x_end - x_start + 1
+        if x_range <= 15:
+            plt.xticks(list(range(x_start, x_end + 1)))
+        else:
+            # Para rangos grandes, mostrar cada N ticks
+            step = max(1, x_range // 15)
+            plt.xticks(list(range(x_start, x_end + 1, step)))
 
         if x and y:
             plt.plot(x, y, marker="braille", color="cyan")
         else:
             plt.title("Presiona 'a' para añadir el primer dato.")
 
-        plt.title(
-            f"Meta: Día {chart_data['goal_x']} | {chart_data['polarity']}")
+        title_text = f"Meta: {chart_data['x_label']} {goal_x} | {chart_data['polarity']}"
+        if chart_data.get('is_complete'):
+            title_text += " | ¡LISTO! (R)"
+        plt.title(title_text)
         plt.xlabel(chart_data['x_label'])
         plt.ylabel(chart_data['y_label'])
 
@@ -1577,12 +1700,40 @@ class PosadaMainScreen(Screen):
             resp = httpx.post(
                 f"{API_POSADA_BASE}charts/add_point/", json=payload, timeout=5.0)
             if resp.status_code == 200:
+                data = resp.json()
                 self.app.call_from_thread(
-                    self.app.notify, resp.json().get("message"), severity="success")
+                    self.app.notify, data.get("message"), severity="success")
+
+                # Si el gráfico quedó completo, auto-claim
+                if data.get("chart_complete"):
+                    self.app.call_from_thread(self._auto_claim_chart, current_chart["id"])
+                else:
+                    self.app.call_from_thread(self.fetch_missions_data)
+            else:
+                err = resp.json().get("error", "Error al guardar la coordenada.")
+                self.app.call_from_thread(
+                    self.app.notify, err, severity="error")
+        except Exception:
+            pass
+
+    def _auto_claim_chart(self, chart_id: int) -> None:
+        """Reclama automáticamente un gráfico completado y muestra modal de recompensa."""
+        self._request_chart_claim(chart_id)
+
+    @work(thread=True)
+    def _request_chart_claim(self, chart_id: int) -> None:
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}charts/claim/",
+                              json={"chart_id": chart_id}, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.app.call_from_thread(
+                    self.app.push_screen, ChartRewardModal(data))
                 self.app.call_from_thread(self.fetch_missions_data)
+                self.app.call_from_thread(self.sync_guild_status)
             else:
                 self.app.call_from_thread(
-                    self.app.notify, "Error al guardar la coordenada.", severity="error")
+                    self.app.notify, resp.json().get("message", "Error"), severity="warning")
         except Exception:
             pass
 
@@ -1732,17 +1883,17 @@ class PosadaMainScreen(Screen):
             return
 
         current_chart = self.charts_cache[self.current_chart_index]
-        try:
-            resp = httpx.post(f"{API_POSADA_BASE}charts/claim/",
-                              json={"chart_id": current_chart["id"]}, timeout=5.0)
-            if resp.status_code == 200:
-                self.app.notify(resp.json().get("message"), severity="success")
-                self.fetch_missions_data()
-                self.sync_guild_status()
-            else:
-                self.app.notify(resp.json().get("message"), severity="warning")
-        except Exception:
-            pass
+        self._request_chart_claim(current_chart["id"])
+
+    def action_inspect_chart(self) -> None:
+        """Abre el modal de inspección del gráfico actual."""
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        if not hasattr(self, 'charts_cache') or not self.charts_cache:
+            self.app.notify("No hay gráficos para inspeccionar.", severity="warning")
+            return
+        current_chart = self.charts_cache[self.current_chart_index]
+        self.app.push_screen(ChartDetailsModal(current_chart))
 
     # --- DIARIO DE VIAJE ---
     @work(thread=True)

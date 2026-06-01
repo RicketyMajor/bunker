@@ -678,3 +678,77 @@ class GuildUnlockedUpgrade(models.Model):
 
     def __str__(self):
         return f"{self.guild} -> {self.upgrade.name}"
+
+
+# --- SISTEMA KANBAN ---
+
+class KanbanBoard(models.Model):
+    """Un tablero Kanban personalizable."""
+    name = models.CharField(max_length=100, default="Mi Tablero")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class KanbanColumn(models.Model):
+    """Una columna del tablero (Por Hacer, Haciendo, Listo, etc.)."""
+    board = models.ForeignKey(
+        KanbanBoard, on_delete=models.CASCADE, related_name='columns')
+    title = models.CharField(max_length=50)
+    position = models.PositiveIntegerField(default=0)
+    color = models.CharField(max_length=20, default="cyan")
+
+    class Meta:
+        ordering = ['position']
+
+    def __str__(self):
+        return f"{self.board.name} / {self.title}"
+
+
+class TaskPriority(models.TextChoices):
+    LOW = 'LOW', 'Baja'
+    MEDIUM = 'MED', 'Media'
+    HIGH = 'HGH', 'Alta'
+    CRITICAL = 'CRT', 'Crítica'
+
+
+class KanbanTask(models.Model):
+    """Una tarea individual dentro de una columna."""
+    column = models.ForeignKey(
+        KanbanColumn, on_delete=models.CASCADE, related_name='tasks')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    priority = models.CharField(
+        max_length=3, choices=TaskPriority.choices, default=TaskPriority.MEDIUM)
+    due_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Integración RPG
+    prestige_reward = models.PositiveIntegerField(default=5)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"[{self.get_priority_display()}] {self.title}"
+
+
+# --- SISTEMA DE CALENDARIO ---
+
+class CalendarEvent(models.Model):
+    """Un evento o nota en el calendario."""
+    date = models.DateField()
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_important = models.BooleanField(default=False)
+    color = models.CharField(max_length=20, default="white")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['date', 'created_at']
+
+    def __str__(self):
+        return f"{self.date} - {self.title}"
+
