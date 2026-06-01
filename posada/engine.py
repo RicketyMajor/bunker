@@ -1773,6 +1773,31 @@ def calculate_chart_reward(chart):
     guild.save()
     universal_consolidate(guild)
 
+    # --- Drops de Cofre por Gráfico ---
+    import random
+    from .models import Item, InventorySlot, ItemRarity
+    
+    rarity = 'COM'
+    if grade == 'S':
+        rarity = 'LEG' if random.random() < 0.2 else 'EPC'
+    elif grade == 'A':
+        rarity = 'RAR'
+    elif grade == 'B':
+        rarity = 'UNC'
+        
+    pool = Item.objects.filter(rarity=rarity)
+    if not pool.exists() and rarity in ['EPC', 'LEG']:
+        pool = Item.objects.filter(rarity='RAR')
+        
+    drop_msg = ""
+    if pool.exists():
+        drop = random.choice(pool)
+        g_slot, _ = InventorySlot.objects.get_or_create(guild=guild, item=drop, adventurer=None, defaults={'quantity': 0})
+        g_slot.quantity += 1
+        g_slot.save()
+        color = ItemRarity.get_color(drop.rarity)
+        drop_msg = f"\n🎁 Además, encontraste un cofre: [[{color}]{drop.name}[/]]."
+
     chart.data_points.all().delete()  # Reinicia el gráfico
 
     return {
@@ -1782,5 +1807,5 @@ def calculate_chart_reward(chart):
         "prestige_reward": prestige_reward,
         "coin_type": coin_reward[0].title(),
         "coin_amount": coin_reward[1],
-        "message": f"¡Ciclo completado! Rango {grade} ({rendimiento*100:.1f}% del área). Gremio gana +{prestige_reward} Prestigio y {coin_reward[1]} {coin_reward[0].title()}."
+        "message": f"¡Ciclo completado! Rango {grade} ({rendimiento*100:.1f}% del área). Gremio gana +{prestige_reward} Prestigio y {coin_reward[1]} {coin_reward[0].title()}.{drop_msg}"
     }

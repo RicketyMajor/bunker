@@ -330,10 +330,10 @@ def complete_habit(request):
 
         guild, _ = GuildProfile.objects.get_or_create(id=1)
         rewards = {
-            'S': {'prestige': 100, 'coin': 'talento', 'amt': 1},
-            'A': {'prestige': 50,  'coin': 'real', 'amt': 3},
-            'B': {'prestige': 25,  'coin': 'real', 'amt': 1},
-            'C': {'prestige': 10,  'coin': 'sueldo', 'amt': 2},
+            'S': {'prestige': 25, 'coin': 'iota', 'amt': 2, 'coin2': 'drabin', 'amt2': 5},
+            'A': {'prestige': 10, 'coin': 'ardite', 'amt': 10, 'coin2': 'copper_penny', 'amt2': 1},
+            'B': {'prestige': 5,  'coin': 'iron_penny', 'amt': 5, 'coin2': 'ardite', 'amt2': 2},
+            'C': {'prestige': 2,  'coin': 'iron_half_penny', 'amt': 5, 'coin2': None, 'amt2': 0},
         }
         r = rewards.get(habit.difficulty)
 
@@ -360,6 +360,8 @@ def complete_habit(request):
             habit.current_streak += 1
 
             setattr(guild, r['coin'], getattr(guild, r['coin']) + r['amt'])
+            if r['coin2']:
+                setattr(guild, r['coin2'], getattr(guild, r['coin2']) + r['amt2'])
 
             leveled_up = guild.add_prestige(r['prestige'])
 
@@ -368,9 +370,37 @@ def complete_habit(request):
 
             lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
 
+            # --- LÓGICA DE HITOS DE RACHAS (COFRES) ---
+            drop_msg = ""
+            if habit.current_streak in [7, 14, 30, 60, 90, 180, 365]:
+                diff_weight = {'C': 0, 'B': 1, 'A': 2, 'S': 3}[habit.difficulty]
+                streak_weight = {7: 0, 14: 1, 30: 2, 60: 3, 90: 3, 180: 4, 365: 5}[habit.current_streak]
+                
+                total_weight = diff_weight + streak_weight
+                
+                rarity = 'COM'
+                if total_weight >= 6:
+                    rarity = 'LEG' if random.random() < 0.3 else 'EPC'
+                elif total_weight >= 4:
+                    rarity = 'EPC' if random.random() < 0.4 else 'RAR'
+                elif total_weight >= 2:
+                    rarity = 'RAR' if random.random() < 0.5 else 'UNC'
+                elif total_weight >= 1:
+                    rarity = 'UNC'
+                    
+                pool = Item.objects.filter(rarity=rarity)
+                if not pool.exists() and rarity in ['EPC', 'LEG']:
+                    pool = Item.objects.filter(rarity='RAR')
+                    
+                if pool.exists():
+                    drop = random.choice(pool)
+                    g_slot, _ = InventorySlot.objects.get_or_create(guild=guild, item=drop, adventurer=None, defaults={'quantity': 0})
+                    g_slot.quantity += 1
+                    g_slot.save()
+                    color = ItemRarity.get_color(drop.rarity)
+                    drop_msg += f"\n🎁 ¡Racha de {habit.current_streak} días! Cofre: [[{color}]{drop.name}[/]]"
 
             # --- LÓGICA DEL TABLÓN PATROCINADO ---
-            drop_msg = ""
             if habit.difficulty == 'S':
                 has_patroc = GuildUnlockedUpgrade.objects.filter(
                     guild=guild, upgrade__key='tablon_patroc').exists()
@@ -897,7 +927,7 @@ def create_kanban_task(request):
                 return Response({"error": "Crea al menos una columna primero."}, status=400)
 
         priority = request.data.get('priority', 'MED')
-        prestige_map = {'CRT': 120, 'HGH': 120, 'MED': 50, 'LOW': 20}
+        prestige_map = {'CRT': 75, 'HGH': 35, 'MED': 15, 'LOW': 5}
 
         due_date = request.data.get('due_date')
         task = KanbanTask.objects.create(
@@ -946,16 +976,20 @@ def move_kanban_task(request):
             
             reward_msg = f"+{task.prestige_reward} Prestigio"
             if task.priority == 'LOW':
-                guild.sueldo += 5
-                reward_msg += ", +5 Sueldos"
+                guild.silver_penny += 1
+                reward_msg += ", +1 Penique de Plata"
             elif task.priority == 'MED':
+                guild.sueldo += 2
+                guild.silver_penny += 1
+                reward_msg += ", +2 Sueldos, +1 Penique de Plata"
+            elif task.priority == 'HGH':
+                guild.real += 1
                 guild.sueldo += 5
-                guild.real += 1
                 reward_msg += ", +1 Real, +5 Sueldos"
-            elif task.priority in ['HGH', 'CRT']:
+            elif task.priority == 'CRT':
                 guild.talento += 1
-                guild.real += 1
-                reward_msg += ", +1 Talento, +1 Real"
+                guild.real += 2
+                reward_msg += ", +1 Talento, +2 Reales"
 
             leveled_up = guild.add_prestige(task.prestige_reward)
             lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
