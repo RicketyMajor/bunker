@@ -11,9 +11,9 @@ console = Console()
 loan_app = typer.Typer(
     help="Gestiona los préstamos de tus libros a amigos.", no_args_is_help=True)
 
-API_LIBRARY = "http://localhost:8000/api/books/library/"
-API_FRIENDS = "http://localhost:8000/api/books/friends/"
-API_LOANS = "http://localhost:8000/api/books/loans/"
+API_LIBRARY = "http://localhost:8008/api/books/library/"
+API_FRIENDS = "http://localhost:8008/api/books/friends/"
+API_LOANS = "http://localhost:8008/api/books/loans/"
 
 
 @loan_app.command(name="lend")

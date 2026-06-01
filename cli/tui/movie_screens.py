@@ -7,7 +7,7 @@ from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedCo
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
-from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
+from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
 from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
 from .tabs import MovieWishlistTab
 
@@ -454,7 +454,7 @@ class MovieMainScreen(Screen):
     def process_movie_scan(self, title: str) -> None:
         try:
             resp = httpx.post(
-                "http://localhost:8000/api/movies/scan/", json={"title": title}, timeout=10.0)
+                f"{API_MOVIE_SCAN}", json={"title": title}, timeout=10.0)
             if resp.status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, "¡Cinta archivada exitosamente!", title="Éxito")

@@ -8,7 +8,7 @@ from textual import work
 import httpx
 from textual_plotext import PlotextPlot
 
-API_POSADA_BASE = "http://127.0.0.1:8000/posada/api/"
+API_POSADA_BASE = "http://127.0.0.1:8008/posada/api/"
 
 # --- GENERADOR DE RELOJ ASCII ---
 ASCII_NUMS = {

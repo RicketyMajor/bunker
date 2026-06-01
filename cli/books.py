@@ -35,9 +35,9 @@ console = Console()
 book_app = typer.Typer(
     help="Manage your library books, comics, and mangas.", no_args_is_help=True)
 
-API_LIBRARY = "http://localhost:8000/api/books/library/"
-API_SCAN = "http://localhost:8000/api/books/scan/"
-API_INBOX = "http://localhost:8000/api/books/inbox/"
+API_LIBRARY = "http://localhost:8008/api/books/library/"
+API_SCAN = "http://localhost:8008/api/books/scan/"
+API_INBOX = "http://localhost:8008/api/books/inbox/"
 
 
 def parse_manga_title(raw_title: str):
@@ -102,7 +102,7 @@ def list_books(
         # Fetch de los directorios para pintarlos en la tabla
         dir_map = {}
         dir_resp = httpx.get(
-            "http://localhost:8000/api/books/directories/", timeout=2.0)
+            "http://localhost:8008/api/books/directories/", timeout=2.0)
         if dir_resp.status_code == 200:
             dir_map = {d['id']: d for d in dir_resp.json()}
 
@@ -236,7 +236,7 @@ def add_book_wizard():
 
             tunnel_process = subprocess.Popen(
                 ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                 "ServerAliveInterval=60", "-R", "80:localhost:8000", "nokey@localhost.run"],
+                 "ServerAliveInterval=60", "-R", "80:localhost:8008", "nokey@localhost.run"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,

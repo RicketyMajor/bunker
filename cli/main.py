@@ -53,7 +53,7 @@ def ensure_infrastructure_up():
 
     try:
         # Sube el timeout a 2.0s para evitar "falsos positivos" de caída
-        httpx.get("http://localhost:8000/api/books/library/", timeout=2.0)
+        httpx.get("http://localhost:8008/api/books/library/", timeout=2.0)
         _infrastructure_checked = True  # Sellamos la verificación exitosa
 
     except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError):
@@ -73,7 +73,7 @@ def ensure_infrastructure_up():
         for _ in range(20):
             try:
                 httpx.get(
-                    "http://localhost:8000/api/books/library/", timeout=2.0)
+                    "http://localhost:8008/api/books/library/", timeout=2.0)
                 console.print(
                     "\n[bold green]¡Sistemas en línea![/bold green]\n")
                 _infrastructure_checked = True  # Sellamos la verificación tras encender
@@ -138,22 +138,22 @@ def get_dashboard_stats():
     stats = {"books": 0, "loans": 0, "wishlist": 0}
     try:
         books_resp = httpx.get(
-            "http://localhost:8000/api/books/library/", timeout=1.0)
+            "http://localhost:8008/api/books/library/", timeout=1.0)
         if books_resp.status_code == 200:
             stats["books"] = len(books_resp.json())
 
         loans_resp = httpx.get(
-            "http://localhost:8000/api/books/loans/", timeout=1.0)
+            "http://localhost:8008/api/books/loans/", timeout=1.0)
         if loans_resp.status_code == 200:
             stats["loans"] = len(loans_resp.json())
 
         wish_resp = httpx.get(
-            "http://localhost:8000/api/books/wishlist-crud/", timeout=1.0)
+            "http://localhost:8008/api/books/wishlist-crud/", timeout=1.0)
         if wish_resp.status_code == 200:
             stats["wishlist"] = len(wish_resp.json())
 
         tracker_resp = httpx.get(
-            "http://localhost:8000/api/books/tracker/stats/", timeout=1.0)
+            "http://localhost:8008/api/books/tracker/stats/", timeout=1.0)
         if tracker_resp.status_code == 200:
             stats["tracker"] = tracker_resp.json()
     except Exception:
@@ -240,7 +240,7 @@ def show_scanner_qr():
         tunnel_process = subprocess.Popen(
             # Heartbeat cada 60 segundos para evitar que el túnel muera por inactividad
             ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                "ServerAliveInterval=60", "-R", "80:localhost:8000", "nokey@localhost.run"],
+                "ServerAliveInterval=60", "-R", "80:localhost:8008", "nokey@localhost.run"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
@@ -296,8 +296,8 @@ def show_scanner_qr():
 def list_structure():
     """Muestra la estructura unificada de la raíz (Directorios + Libros Huérfanos)."""
     try:
-        books_resp = httpx.get("http://localhost:8000/api/books/library/")
-        dirs_resp = httpx.get("http://localhost:8000/api/books/directories/")
+        books_resp = httpx.get("http://localhost:8008/api/books/library/")
+        dirs_resp = httpx.get("http://localhost:8008/api/books/directories/")
         books_resp.raise_for_status()
         dirs_resp.raise_for_status()
 
@@ -368,8 +368,8 @@ def show_tree():
     """Explorador visual del Sistema de Archivos (Directorios y Libros)."""
     console.print("\n[bold cyan]ÁRBOL DE DIRECTORIOS[/bold cyan]\n")
     try:
-        books = httpx.get("http://localhost:8000/api/books/library/").json()
-        dirs = httpx.get("http://localhost:8000/api/books/directories/").json()
+        books = httpx.get("http://localhost:8008/api/books/library/").json()
+        dirs = httpx.get("http://localhost:8008/api/books/directories/").json()
     except Exception as e:
         console.print(f"[bold red]Error de red: {e}[/bold red]")
         return
