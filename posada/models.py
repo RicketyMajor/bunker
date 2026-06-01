@@ -439,8 +439,27 @@ class GuildProfile(WealthMixin):
             (self.sueldo / 32.0) + (self.iota / 10.0)
         return round(total, 2)
 
+    @property
+    def prestige_meta(self):
+        return int(500 * (self.prestige_level ** 1.5))
+
+    def add_prestige(self, amount):
+        """Añade prestigio y calcula si el gremio sube de nivel (curva exponencial). Retorna True si subió."""
+        self.prestige += amount
+        leveled_up = False
+        while True:
+            meta = self.prestige_meta
+            if self.prestige >= meta:
+                self.prestige -= meta
+                self.prestige_level += 1
+                leveled_up = True
+            else:
+                break
+        self.save()
+        return leveled_up
+
     def __str__(self):
-        return f"Gremio Nivel {self.prestige_level} - Prestigio: {self.prestige}"
+        return f"Gremio Nivel {self.prestige_level} - Prestigio: {self.prestige}/{self.prestige_meta}"
 
 
 class DeepWorkSession(models.Model):

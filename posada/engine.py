@@ -989,14 +989,32 @@ def _seed_items_if_empty():
 
 
 def _seed_guild_upgrades():
-    """Forja los planos de las mejoras de Gremio si no existen."""
-    if not GuildUpgrade.objects.exists():
-        GuildUpgrade.objects.create(key='mensajeria_arcana', name='Mensajería Arcana',
-                                    description='Envía el excedente de botín al cofre por 1 Drabín.', cost_coin='sueldo', cost_amount=5, req_prestige_level=1)
-        GuildUpgrade.objects.create(key='mochila_lv2', name='Mochilas de Contención',
-                                    description='Aumenta la mochila de los aventureros a 15 ranuras.', cost_coin='talento', cost_amount=2, req_prestige_level=2)
-        GuildUpgrade.objects.create(key='tablon_patroc', name='Tablón Patrocinado',
-                                    description='5% prob. de ítem épico al completar hábitos Rango S.', cost_coin='marco', cost_amount=1, req_prestige_level=3)
+    """Forja los planos de las mejoras de Gremio (Niveles 1 al 10)."""
+    upgrades = [
+        {'key': 'mensajeria_arcana', 'name': 'Mensajería Arcana', 'description': 'Envía el excedente de botín al cofre por 1 Drabín.', 'cost_coin': 'sueldo', 'cost_amount': 5, 'req_prestige_level': 1},
+        {'key': 'taberna_ampliada', 'name': 'Taberna Ampliada', 'description': 'Mayor afluencia de reclutas (Inmersión).', 'cost_coin': 'talento', 'cost_amount': 1, 'req_prestige_level': 2},
+        {'key': 'mochila_lv2', 'name': 'Mochilas de Contención', 'description': 'Aumenta la mochila de los aventureros a 15 ranuras.', 'cost_coin': 'talento', 'cost_amount': 2, 'req_prestige_level': 2},
+        {'key': 'tablon_patroc', 'name': 'Tablón Patrocinado', 'description': '5% prob. de ítem épico al completar hábitos Rango S.', 'cost_coin': 'marco', 'cost_amount': 1, 'req_prestige_level': 3},
+        {'key': 'herreria_basica', 'name': 'Herrería Básica', 'description': 'Los aventureros sufren menos daño pasivo (Inmersión/Defensa).', 'cost_coin': 'talento', 'cost_amount': 5, 'req_prestige_level': 3},
+        {'key': 'salon_cartografia', 'name': 'Salón de Cartografía', 'description': '+10% de ganancia de experiencia en Deep Work.', 'cost_coin': 'talento', 'cost_amount': 3, 'req_prestige_level': 4},
+        {'key': 'guardia_gremio', 'name': 'Guardia del Gremio', 'description': 'La Posada está protegida contra asaltos nocturnos.', 'cost_coin': 'marco', 'cost_amount': 1, 'req_prestige_level': 5},
+        {'key': 'capilla_recuperacion', 'name': 'Capilla de Recuperación', 'description': 'Aumenta la curación pasiva de los aventureros.', 'cost_coin': 'talento', 'cost_amount': 5, 'req_prestige_level': 6},
+        {'key': 'red_informantes', 'name': 'Red de Informantes', 'description': 'Otorga ventajas al reclutar.', 'cost_coin': 'marco', 'cost_amount': 2, 'req_prestige_level': 7},
+        {'key': 'torreon_mago', 'name': 'Torreón del Mago', 'description': 'Aumenta la regeneración de maná global.', 'cost_coin': 'marco', 'cost_amount': 3, 'req_prestige_level': 8},
+        {'key': 'boveda_gremio', 'name': 'Bóveda de Gremio', 'description': 'Permite amasar grandes riquezas sin penalización.', 'cost_coin': 'talento', 'cost_amount': 10, 'req_prestige_level': 9},
+        {'key': 'ciudadela', 'name': 'Ciudadela del Gremio', 'description': 'El gremio se convierte en el gobernante de la región.', 'cost_coin': 'marco', 'cost_amount': 5, 'req_prestige_level': 10},
+    ]
+    for up in upgrades:
+        GuildUpgrade.objects.update_or_create(
+            key=up['key'],
+            defaults={
+                'name': up['name'],
+                'description': up['description'],
+                'cost_coin': up['cost_coin'],
+                'cost_amount': up['cost_amount'],
+                'req_prestige_level': up['req_prestige_level']
+            }
+        )
 
 
 def get_item_score(item):
@@ -1227,18 +1245,8 @@ def evaluate_daily_penalties():
             habit.save()
 
     if total_prestige_change != 0:
-        guild.prestige += total_prestige_change
-
-        # Verifica si las resistencias silenciosas suben de nivel al gremio
-        while True:
-            meta = guild.prestige_level * 100
-            if guild.prestige >= meta:
-                guild.prestige -= meta
-                guild.prestige_level += 1
-            else:
-                break
-
-        guild.save()
+        guild.add_prestige(total_prestige_change)
+        
         if total_prestige_change < 0:
             penalty_log.append(
                 f"El Gremio pierde influencia. (Impacto Neto: {total_prestige_change})")
@@ -1318,8 +1326,16 @@ def process_session_completion(session_id, survived_seconds=None):
     base_xp = survived_minutes * XP_PER_MINUTE
     cat_lower = session.category.lower()
 
+    # --- Mejoras del Gremio ---
+    from .models import GuildUnlockedUpgrade
+    has_cartography = GuildUnlockedUpgrade.objects.filter(
+        guild=guild, upgrade__key='salon_cartografia').exists()
+
     for adv in adventurers:
         multiplier = 1.0
+        if has_cartography:
+            multiplier += 0.10
+            
         for key, classes in CATEGORY_SYNERGY.items():
             if key in cat_lower and adv.adv_class in classes:
                 multiplier += 0.5
@@ -1348,6 +1364,27 @@ def process_session_completion(session_id, survived_seconds=None):
 
         adv.save()
         check_level_up(adv, event_log)
+
+    # --- RECUPERACIÓN PASIVA Y CAPILLA ---
+    has_capilla = GuildUnlockedUpgrade.objects.filter(
+        guild=guild, upgrade__key='capilla_recuperacion').exists()
+    all_guild_advs = Adventurer.objects.all()
+    for resting_adv in all_guild_advs:
+        if resting_adv not in adventurers:
+            base_heal = 15 if has_capilla else 5
+            heal_amount = (survived_minutes / 60.0) * base_heal
+            if heal_amount > 0 and resting_adv.current_hp < resting_adv.max_hp:
+                resting_adv.current_hp = min(resting_adv.max_hp, resting_adv.current_hp + int(heal_amount))
+                
+            if resting_adv.is_recovering:
+                # Si recovery_time_left cae a 0 o negativo
+                new_time = max(0, resting_adv.recovery_time_left - survived_minutes)
+                resting_adv.recovery_time_left = new_time
+                if new_time == 0:
+                    resting_adv.is_recovering = False
+                    resting_adv.current_hp = resting_adv.max_hp
+                    
+            resting_adv.save()
 
     guild.save()
     session.event_log = event_log
@@ -1716,14 +1753,23 @@ def calculate_chart_reward(chart):
     # --- Recompensas de Gráfico ---
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
-    # da prestigio masivo
-    prestige_reward = {'S': 200, 'A': 100, 'B': 50, 'C': 10}[grade]
-    coin_reward = {'S': ('marco', 1), 'A': ('talento', 2), 'B': (
-        'sueldo', 5), 'C': ('silver_penny', 10)}[grade]
+    # Recompensa base por duración
+    base_prestige = chart.goal_x_value * 15
+    prestige_reward = {
+        'S': base_prestige * 2,
+        'A': base_prestige,
+        'B': int(base_prestige * 0.5),
+        'C': int(base_prestige * 0.2)
+    }[grade]
 
-    guild.prestige += prestige_reward
-    setattr(guild, coin_reward[0], getattr(
-        guild, coin_reward[0]) + coin_reward[1])
+    # Monedas dinámicas según duración de la meta
+    if chart.goal_x_value >= 30:
+        coin_reward = {'S': ('marco', 2), 'A': ('marco', 1), 'B': ('talento', 2), 'C': ('real', 1)}[grade]
+    else:
+        coin_reward = {'S': ('talento', 1), 'A': ('real', 2), 'B': ('sueldo', 5), 'C': ('sueldo', 1)}[grade]
+
+    leveled_up = guild.add_prestige(prestige_reward)
+    setattr(guild, coin_reward[0], getattr(guild, coin_reward[0]) + coin_reward[1])
     guild.save()
     universal_consolidate(guild)
 

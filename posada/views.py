@@ -121,7 +121,7 @@ def guild_status(request):
     guild_data = {
         "prestige_level": guild.prestige_level,
         "prestige": guild.prestige,
-        "prestige_meta": guild.prestige_level * 100,
+        "prestige_meta": guild.prestige_meta,
         "net_worth_talents": guild.net_worth_in_talents,
         "inventory": {
             "iron_half_penny": guild.iron_half_penny, "iron_penny": guild.iron_penny,
@@ -330,10 +330,10 @@ def complete_habit(request):
 
         guild, _ = GuildProfile.objects.get_or_create(id=1)
         rewards = {
-            'S': {'prestige': 50, 'coin': 'iota', 'amt': 1},
-            'A': {'prestige': 25, 'coin': 'copper_penny', 'amt': 5},
-            'B': {'prestige': 10, 'coin': 'copper_penny', 'amt': 2},
-            'C': {'prestige': 5,  'coin': 'ardite', 'amt': 5},
+            'S': {'prestige': 100, 'coin': 'talento', 'amt': 1},
+            'A': {'prestige': 50,  'coin': 'real', 'amt': 3},
+            'B': {'prestige': 25,  'coin': 'real', 'amt': 1},
+            'C': {'prestige': 10,  'coin': 'sueldo', 'amt': 2},
         }
         r = rewards.get(habit.difficulty)
 
@@ -359,23 +359,15 @@ def complete_habit(request):
             habit.previous_streak = habit.current_streak
             habit.current_streak += 1
 
-            old_level = guild.prestige_level
-            guild.prestige += r['prestige']
             setattr(guild, r['coin'], getattr(guild, r['coin']) + r['amt'])
 
-            while True:
-                meta = guild.prestige_level * 100
-                if guild.prestige >= meta:
-                    guild.prestige -= meta
-                    guild.prestige_level += 1
-                else:
-                    break
+            leveled_up = guild.add_prestige(r['prestige'])
 
-            guild.save()
             habit.last_completed_date = today
             habit.save()
 
-            lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if guild.prestige_level > old_level else ""
+            lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
+
 
             # --- LÓGICA DEL TABLÓN PATROCINADO ---
             drop_msg = ""
@@ -685,10 +677,10 @@ def undo_habit(request):
 
         if habit.is_bad_habit:
             # Devuelve el prestigio restado por error
-            guild.prestige += habit.last_prestige_reward
+            guild.add_prestige(habit.last_prestige_reward)
         else:
             # Quita el prestigio y monedas ganadas por error
-            guild.prestige -= habit.last_prestige_reward
+            guild.add_prestige(-habit.last_prestige_reward)
             if habit.last_coin_type:
                 curr_coin = getattr(guild, habit.last_coin_type)
                 setattr(guild, habit.last_coin_type, max(
@@ -765,22 +757,8 @@ def create_journal_entry(request):
 
     # --- Buff de Claridad Mental ---
     guild, _ = GuildProfile.objects.get_or_create(id=1)
-    guild.prestige += 2
-
-    # Verifica si la claridad mental subió de nivel al gremio
-    lvl_msg = ""
-    old_level = guild.prestige_level
-    while True:
-        meta = guild.prestige_level * 100
-        if guild.prestige >= meta:
-            guild.prestige -= meta
-            guild.prestige_level += 1
-        else:
-            break
-
-    guild.save()
-    if guild.prestige_level > old_level:
-        lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!"
+    leveled_up = guild.add_prestige(2)
+    lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
 
     JournalEntry.objects.create(content=content)
     return Response({
@@ -919,7 +897,7 @@ def create_kanban_task(request):
                 return Response({"error": "Crea al menos una columna primero."}, status=400)
 
         priority = request.data.get('priority', 'MED')
-        prestige_map = {'CRT': 20, 'HGH': 10, 'MED': 5, 'LOW': 2}
+        prestige_map = {'CRT': 120, 'HGH': 120, 'MED': 50, 'LOW': 20}
 
         due_date = request.data.get('due_date')
         task = KanbanTask.objects.create(
@@ -965,20 +943,23 @@ def move_kanban_task(request):
         if new_col.id == columns[-1].id and not task.completed_at:
             task.completed_at = timezone.now()
             guild, _ = GuildProfile.objects.get_or_create(id=1)
-            guild.prestige += task.prestige_reward
+            
+            reward_msg = f"+{task.prestige_reward} Prestigio"
+            if task.priority == 'LOW':
+                guild.sueldo += 5
+                reward_msg += ", +5 Sueldos"
+            elif task.priority == 'MED':
+                guild.sueldo += 5
+                guild.real += 1
+                reward_msg += ", +1 Real, +5 Sueldos"
+            elif task.priority in ['HGH', 'CRT']:
+                guild.talento += 1
+                guild.real += 1
+                reward_msg += ", +1 Talento, +1 Real"
 
-            old_level = guild.prestige_level
-            while True:
-                meta = guild.prestige_level * 100
-                if guild.prestige >= meta:
-                    guild.prestige -= meta
-                    guild.prestige_level += 1
-                else:
-                    break
-            guild.save()
-
-            lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if guild.prestige_level > old_level else ""
-            msg = f"¡Tarea '{task.title}' completada! +{task.prestige_reward} Prestigio.{lvl_msg}"
+            leveled_up = guild.add_prestige(task.prestige_reward)
+            lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
+            msg = f"¡Tarea '{task.title}' completada! {reward_msg}.{lvl_msg}"
 
         # Si se mueve de vuelta desde la última columna, quitar completado
         elif new_col.id != columns[-1].id and task.completed_at:
@@ -1056,8 +1037,7 @@ def create_calendar_event(request):
         # Buff de prestigio por planificar
         guild, _ = GuildProfile.objects.get_or_create(id=1)
         prestige_gain = 3 if event.is_important else 1
-        guild.prestige += prestige_gain
-        guild.save()
+        guild.add_prestige(prestige_gain)
 
         return Response({"status": "success", "message": f"Evento '{event.title}' creado (+{prestige_gain} Prestigio)."})
     except Exception as e:
