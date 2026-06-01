@@ -822,6 +822,110 @@ class WriteJournalModal(ModalScreen[str]):
             else:
                 self.app.notify("La página está en blanco.", severity="error")
 
+# --- MODALES KANBAN Y CALENDARIO ---
+
+class NewKanbanTaskModal(ModalScreen[dict]):
+    CSS = """
+    #new_task_dialog { width: 50; height: auto; padding: 1 2; border: solid $accent; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    """
+    def compose(self) -> ComposeResult:
+        with Vertical(id="new_task_dialog"):
+            yield Label("Nueva Tarea", classes="modal_title")
+            yield Input(placeholder="Título de la tarea", id="task_title")
+            yield Label("Prioridad:")
+            yield Select((("Baja", "LOW"), ("Media", "MED"), ("Alta", "HGH"), ("Crítica", "CRT")), id="task_priority", value="MED")
+            yield Input(placeholder="Descripción (Opcional)", id="task_desc")
+            yield Input(placeholder="Fecha Límite YYYY-MM-DD (Opcional)", id="task_due")
+            with Horizontal(classes="btn_row"):
+                yield Button("Crear", variant="success", id="btn_save_task")
+                yield Button("Cancelar", variant="error", id="btn_cancel_task")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_task":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_task":
+            title = self.query_one("#task_title", Input).value
+            if not title:
+                self.app.notify("La tarea necesita un título.", severity="error")
+                return
+            self.dismiss({
+                "title": title,
+                "priority": self.query_one("#task_priority", Select).value,
+                "description": self.query_one("#task_desc", Input).value,
+                "due_date": self.query_one("#task_due", Input).value
+            })
+
+
+class NewKanbanColumnModal(ModalScreen[dict]):
+    CSS = """
+    #new_col_dialog { width: 40; height: auto; padding: 1 2; border: solid $success; background: $surface; }
+    .modal_title { text-style: bold; color: $success; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    """
+    def compose(self) -> ComposeResult:
+        with Vertical(id="new_col_dialog"):
+            yield Label("Nueva Columna Kanban", classes="modal_title")
+            yield Input(placeholder="Título de columna", id="col_title")
+            yield Label("Color:")
+            yield Select((("Blanco", "white"), ("Cyan", "cyan"), ("Amarillo", "yellow"), ("Verde", "green"), ("Rojo", "red"), ("Magenta", "magenta")), id="col_color", value="white")
+            with Horizontal(classes="btn_row"):
+                yield Button("Crear", variant="success", id="btn_save_col")
+                yield Button("Cancelar", variant="error", id="btn_cancel_col")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_col":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_col":
+            title = self.query_one("#col_title", Input).value
+            if not title:
+                self.app.notify("La columna necesita un título.", severity="error")
+                return
+            self.dismiss({
+                "title": title,
+                "color": self.query_one("#col_color", Select).value
+            })
+
+
+class NewCalendarEventModal(ModalScreen[dict]):
+    CSS = """
+    #new_event_dialog { width: 50; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    .modal_title { text-style: bold; color: $primary; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    """
+    def compose(self) -> ComposeResult:
+        with Vertical(id="new_event_dialog"):
+            yield Label("Anotar en el Calendario", classes="modal_title")
+            yield Input(placeholder="YYYY-MM-DD", id="event_date")
+            yield Input(placeholder="Evento o Nota", id="event_title")
+            yield Input(placeholder="Detalles (Opcional)", id="event_desc")
+            with Horizontal():
+                yield Label("¿Importante? ")
+                yield Select((("No", "False"), ("Sí", "True")), id="event_important", value="False")
+            with Horizontal(classes="btn_row"):
+                yield Button("Anotar", variant="success", id="btn_save_event")
+                yield Button("Cancelar", variant="error", id="btn_cancel_event")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_event":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_event":
+            date = self.query_one("#event_date", Input).value
+            title = self.query_one("#event_title", Input).value
+            if not date or not title:
+                self.app.notify("Fecha y Título son obligatorios.", severity="error")
+                return
+            self.dismiss({
+                "date": date,
+                "title": title,
+                "description": self.query_one("#event_desc", Input).value,
+                "is_important": self.query_one("#event_important", Select).value == "True"
+            })
+
 # --- PESTAÑAS ---
 
 
@@ -859,6 +963,17 @@ class MissionsTab(TabPane):
         ("i", "inspect_chart", "Inspeccionar"),
     ]
 
+class KanbanTab(TabPane):
+    can_focus = True
+    BINDINGS = [
+        ("t", "new_task", "Nueva Tarea"),
+        ("left", "move_left", "Mover a Izq"),
+        ("right", "move_right", "Mover a Der"),
+        ("d", "delete_task", "Borrar Tarea"),
+        ("c", "new_col", "Nueva Columna"),
+        ("e", "new_event", "Nuevo Evento"),
+    ]
+
 class JournalTab(TabPane):
     can_focus = True
     BINDINGS = [
@@ -882,31 +997,9 @@ class PosadaMainScreen(Screen):
         Binding("1", "switch_tab('tab_timer')", "Enfoque", show=False),
         Binding("2", "switch_tab('tab_guild')", "Gremio", show=False),
         Binding("3", "switch_tab('tab_tavern')", "Taberna", show=False),
-        Binding("4", "switch_tab('tab_missions')", "Misiones", show=False),
-        Binding("5", "switch_tab('tab_journal')", "Diario", show=False),
-
-        # Controles Ocultos
-        Binding("c", "setup_timer", "Configurar", show=False),
-        Binding("p", "pause_timer", "Pausar", show=False),
-        Binding("s", "stop_timer", "Detener", show=False),
-        Binding("d", "show_details", "Detalles", show=False),
-        Binding("x", "delete_adventurer", "Eliminar", show=False),
-        Binding("n", "new_adventurer", "Nuevo Avatar", show=False),
-        Binding("r", "recruit", "Reclutar", show=False),
-        Binding("f", "refresh_tavern", "Invitar", show=False),
-        Binding("m", "complete_habit", "Marcar Hecho", show=False),
-        Binding("+", "add_habit", "Añadir Hábito", show=False),
-        Binding("<", "prev_chart", "Gráfico Anterior", show=False),
-        Binding(">", "next_chart", "Siguiente Gráfico", show=False),
-        Binding("a", "add_chart_data", "Añadir Dato", show=False),
-        Binding("g", "new_chart", "Crear Gráfico", show=False),
-        Binding("D", "delete_chart", "Borrar Gráfico", show=False),
-        Binding("-", "delete_habit", "Borrar Hábito", show=False),
-        Binding("u", "undo_habit", "Deshacer Hábito", show=False),
-        Binding("R", "claim_chart", "Reclamar Gráfico", show=False),
-        Binding("i", "inspect_chart", "Inspeccionar", show=False),
-        Binding("w", "write_journal", "Escribir Diario", show=False),
-
+        Binding("4", "switch_tab('tab_missions')", "Rutinas", show=False),
+        Binding("5", "switch_tab('tab_kanban')", "Kanban", show=False),
+        Binding("6", "switch_tab('tab_journal')", "Diario", show=False),
     ]
 
     CSS = """
@@ -952,6 +1045,10 @@ class PosadaMainScreen(Screen):
     .page_content { height: 1fr; color: #e6d8ad; }
     #journal_controls { height: 3; align: center middle; }
     #journal_controls Button { margin: 0 2; }
+    
+    .kanban_table { width: 1fr; height: 1fr; margin: 0 1; border: round $accent; }
+    #kanban_columns_container { height: 60%; margin-bottom: 1; }
+    .calendar_table { height: 1fr; margin: 0 1; }
     
     """
 
@@ -1000,7 +1097,7 @@ class PosadaMainScreen(Screen):
                         yield Button("Reclutar Seleccionado (r)", id="btn_recruit", variant="success")
                         yield Button("Invitar Rondas (f)", id="btn_refresh_tavern", variant="primary")
 
-                with MissionsTab("Tablón de Misiones", id="tab_missions"):
+                with MissionsTab("Rutinas del Gremio", id="tab_missions"):
                     with Horizontal():
                         # Los Hábitos
                         with Vertical(id="habits_col", classes="half_width"):
@@ -1011,6 +1108,18 @@ class PosadaMainScreen(Screen):
                         with Vertical(id="stats_col", classes="half_width"):
                             yield Label("Cargando gráficos...", id="chart_title_label", classes="section_title")
                             yield PlotextPlot(id="productivity_plot")
+
+                with KanbanTab("Tablón de Misiones", id="tab_kanban"):
+                    with Vertical():
+                        yield Label("Kanban (Cargando...)", id="lbl_kanban_title", classes="section_title")
+                        with Horizontal(id="kanban_columns_container"):
+                            yield DataTable(id="kanban_col_0", classes="kanban_table")
+                            yield DataTable(id="kanban_col_1", classes="kanban_table")
+                            yield DataTable(id="kanban_col_2", classes="kanban_table")
+                            yield DataTable(id="kanban_col_3", classes="kanban_table")
+                        yield Label("Calendario de Eventos (e Nuevo | Supr Borrar)", id="lbl_calendar_title", classes="section_title")
+                        yield DataTable(id="calendar_table", classes="calendar_table")
+
                 with JournalTab("Diario de Viaje", id="tab_journal"):
                     with Horizontal(id="journal_book"):
                         with Vertical(classes="journal_page page_left"):
@@ -1047,6 +1156,8 @@ class PosadaMainScreen(Screen):
         self.sync_guild_status()
         self.fetch_missions_data()
         self.fetch_journal()
+        self.fetch_kanban_data()
+        self.fetch_calendar_data()
         self.set_timer_ui_state("idle")
         self.query_one("#tab_timer").focus()
         self.query_one("#tab_controls", Label).update(
@@ -1983,3 +2094,153 @@ class PosadaMainScreen(Screen):
         except Exception:
             self.app.call_from_thread(
                 self.app.notify, "El Gremio no responde.", severity="error")
+
+    # --- KANBAN LOGIC ---
+    @work(thread=True)
+    def fetch_kanban_data(self):
+        try:
+            resp = httpx.get(f"{API_POSADA_BASE}kanban/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.render_kanban, resp.json())
+        except Exception:
+            pass
+
+    def render_kanban(self, data: dict):
+        self.kanban_data = data
+        board_name = data.get("board_name", "Mi Tablero")
+        self.query_one("#lbl_kanban_title", Label).update(f"Kanban: {board_name}")
+        columns = data.get("columns", [])
+
+        # Tenemos 4 DataTables estáticos
+        for i in range(4):
+            try:
+                table = self.query_one(f"#kanban_col_{i}", DataTable)
+                table.clear(columns=True)
+                if i < len(columns):
+                    table.display = True
+                    col = columns[i]
+                    table.add_column(f"[{col['color']}]{col['title']}[/]", width=40)
+                    for task in col['tasks']:
+                        table.add_row(f"[{task['priority_code']}] {task['title']}", key=f"{task['id']}_col{col['id']}")
+                else:
+                    table.display = False
+            except Exception:
+                pass
+
+    def action_new_kanban_task(self):
+        if self.query_one(TabbedContent).active != "tab_kanban":
+            return
+        self.app.push_screen(NewKanbanTaskModal(), self.submit_kanban_task)
+
+    @work(thread=True)
+    def submit_kanban_task(self, task_data: dict | None):
+        if not task_data: return
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}kanban/task/create/", json=task_data, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="success")
+                self.app.call_from_thread(self.fetch_kanban_data)
+        except Exception:
+            pass
+
+    def action_new_kanban_col(self):
+        if self.query_one(TabbedContent).active != "tab_kanban":
+            return
+        self.app.push_screen(NewKanbanColumnModal(), self.submit_kanban_col)
+
+    @work(thread=True)
+    def submit_kanban_col(self, col_data: dict | None):
+        if not col_data: return
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}kanban/column/create/", json=col_data, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="success")
+                self.app.call_from_thread(self.fetch_kanban_data)
+        except Exception:
+            pass
+
+    def _get_focused_kanban_task(self):
+        """Busca cuál tabla tiene foco y qué fila está seleccionada."""
+        for i in range(4):
+            try:
+                table = self.query_one(f"#kanban_col_{i}", DataTable)
+                if table.has_focus:
+                    row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                    if row_key:
+                        task_id = int(row_key.value.split("_")[0])
+                        return task_id
+            except Exception:
+                continue
+        return None
+
+    @work(thread=True)
+    def _move_task(self, task_id, direction):
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}kanban/task/move/", json={"task_id": task_id, "direction": direction}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="success")
+                self.app.call_from_thread(self.fetch_kanban_data)
+                self.app.call_from_thread(self.sync_guild_status)
+        except Exception:
+            pass
+
+    def action_move_kanban_left(self):
+        if self.query_one(TabbedContent).active != "tab_kanban": return
+        task_id = self._get_focused_kanban_task()
+        if task_id: self._move_task(task_id, "left")
+
+    def action_move_kanban_right(self):
+        if self.query_one(TabbedContent).active != "tab_kanban": return
+        task_id = self._get_focused_kanban_task()
+        if task_id: self._move_task(task_id, "right")
+
+    @work(thread=True)
+    def action_delete_kanban_task(self):
+        if self.query_one(TabbedContent).active != "tab_kanban": return
+        task_id = self._get_focused_kanban_task()
+        if task_id:
+            try:
+                resp = httpx.delete(f"{API_POSADA_BASE}kanban/task/delete/{task_id}/", timeout=5.0)
+                if resp.status_code == 200:
+                    self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="warning")
+                    self.app.call_from_thread(self.fetch_kanban_data)
+            except Exception:
+                pass
+
+    # --- CALENDAR LOGIC ---
+    @work(thread=True)
+    def fetch_calendar_data(self):
+        import datetime
+        now = datetime.datetime.now()
+        try:
+            resp = httpx.get(f"{API_POSADA_BASE}calendar/{now.year}/{now.month}/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.render_calendar, resp.json())
+        except Exception:
+            pass
+
+    def render_calendar(self, data: dict):
+        events = data.get("events", [])
+        table = self.query_one("#calendar_table", DataTable)
+        table.clear(columns=True)
+        table.add_columns("Fecha", "Evento", "Descripción")
+        for e in events:
+            date_col = f"[{e['color']}]{e['date']}[/]"
+            title_col = f"[bold yellow]★ {e['title']}[/]" if e['is_important'] else e['title']
+            table.add_row(date_col, title_col, e['description'], key=str(e['id']))
+
+    def action_new_calendar_event(self):
+        if self.query_one(TabbedContent).active != "tab_kanban": return
+        self.app.push_screen(NewCalendarEventModal(), self.submit_calendar_event)
+
+    @work(thread=True)
+    def submit_calendar_event(self, event_data: dict | None):
+        if not event_data: return
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}calendar/event/create/", json=event_data, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="success")
+                self.app.call_from_thread(self.fetch_calendar_data)
+                self.app.call_from_thread(self.sync_guild_status)
+        except Exception:
+            pass
