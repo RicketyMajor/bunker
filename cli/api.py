@@ -12,7 +12,7 @@ load_dotenv()
 
 console = Console()
 
-COMIC_VINE_KEY = "8db1d3de48158f3b4b5c2faadbb572818fddf245"
+COMIC_VINE_KEY = os.getenv("COMIC_VINE_KEY", "")
 HEADERS_CV = {"User-Agent": "LibraryManagerCLI/1.0 (Comic Scanner)"}
 GOOGLE_BOOKS_KEY = os.getenv("GOOGLE_BOOKS_KEY", "")
 
