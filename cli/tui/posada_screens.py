@@ -1000,6 +1000,35 @@ class PosadaMainScreen(Screen):
         Binding("4", "switch_tab('tab_missions')", "Rutinas", show=False),
         Binding("5", "switch_tab('tab_kanban')", "Kanban", show=False),
         Binding("6", "switch_tab('tab_journal')", "Diario", show=False),
+
+        # Controles Ocultos Directos
+        Binding("p", "pause_timer", "Pausar", show=False),
+        Binding("s", "stop_timer", "Detener", show=False),
+        Binding("d", "show_details", "Detalles", show=False),
+        Binding("x", "delete_adventurer", "Eliminar", show=False),
+        Binding("r", "recruit", "Reclutar", show=False),
+        Binding("f", "refresh_tavern", "Invitar", show=False),
+        Binding("m", "complete_habit", "Marcar Hecho", show=False),
+        Binding("+", "add_habit", "Añadir Hábito", show=False),
+        Binding("<", "prev_chart", "Gráfico Anterior", show=False),
+        Binding(">", "next_chart", "Siguiente Gráfico", show=False),
+        Binding("a", "add_chart_data", "Añadir Dato", show=False),
+        Binding("g", "new_chart", "Crear Gráfico", show=False),
+        Binding("D", "delete_chart", "Borrar Gráfico", show=False),
+        Binding("-", "delete_habit", "Borrar Hábito", show=False),
+        Binding("u", "undo_habit", "Deshacer Hábito", show=False),
+        Binding("R", "claim_chart", "Reclamar Gráfico", show=False),
+        Binding("i", "inspect_chart", "Inspeccionar", show=False),
+        Binding("t", "new_kanban_task", "Nueva Tarea", show=False),
+        Binding("delete", "delete_kanban_task", "Borrar Tarea", show=False),
+        Binding("e", "new_calendar_event", "Nuevo Evento", show=False),
+        Binding("w", "write_journal", "Escribir Diario", show=False),
+        
+        # Conflict Resolution Bindings
+        Binding("n", "handle_n", "Nuevo", show=False),
+        Binding("c", "handle_c", "Config/Columna", show=False),
+        Binding("left", "handle_left", "Izquierda", show=False),
+        Binding("right", "handle_right", "Derecha", show=False),
     ]
 
     CSS = """
@@ -2094,6 +2123,27 @@ class PosadaMainScreen(Screen):
         except Exception:
             self.app.call_from_thread(
                 self.app.notify, "El Gremio no responde.", severity="error")
+
+    # --- MANEJADORES DE TECLAS COMPARTIDAS (CONFLICT RESOLUTION) ---
+    def action_handle_n(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_guild": self.action_new_adventurer()
+        elif active_tab == "tab_missions": self.action_new_chart()
+        
+    def action_handle_c(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_timer": self.action_setup_timer()
+        elif active_tab == "tab_kanban": self.action_new_kanban_col()
+        
+    def action_handle_left(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_kanban": self.action_move_kanban_left()
+        elif active_tab == "tab_journal": self.action_prev_journal_page()
+        
+    def action_handle_right(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_kanban": self.action_move_kanban_right()
+        elif active_tab == "tab_journal": self.action_next_journal_page()
 
     # --- KANBAN LOGIC ---
     @work(thread=True)
