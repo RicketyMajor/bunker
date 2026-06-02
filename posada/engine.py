@@ -1238,8 +1238,30 @@ def evaluate_daily_penalties():
                     prestige_loss = missed_valid_days * 15
                     total_prestige_change -= prestige_loss
                     habit.current_streak = 0
-                    penalty_log.append(
-                        f"Hábito roto: '{habit.name}' (-{prestige_loss} Prestigio).")
+                    
+                    coin_hierarchy = [
+                        'marco', 'real', 'talento', 'iota', 'sueldo', 'drabin', 
+                        'silver_penny', 'ardite', 'copper_penny', 'iron_penny', 'iron_half_penny'
+                    ]
+                    
+                    coins_lost = []
+                    for _ in range(missed_valid_days):
+                        # Descontar la moneda más alta disponible (secuencialmente)
+                        for coin in coin_hierarchy:
+                            if getattr(guild, coin) > 0:
+                                setattr(guild, coin, getattr(guild, coin) - 1)
+                                coins_lost.append(coin)
+                                break
+                    
+                    if coins_lost:
+                        from collections import Counter
+                        lost_counts = Counter(coins_lost)
+                        lost_str = ", ".join(f"{count} {c.replace('_', ' ').title()}" for c, count in lost_counts.items())
+                        penalty_log.append(
+                            f"Hábito roto: '{habit.name}' (-{prestige_loss} Prestigio, -{lost_str}).")
+                    else:
+                        penalty_log.append(
+                            f"Hábito roto: '{habit.name}' (-{prestige_loss} Prestigio).")
 
             habit.last_completed_date = today - timedelta(days=1)
             habit.save()
