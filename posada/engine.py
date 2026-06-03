@@ -5,6 +5,11 @@ from django.db.models import Sum
 from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade, JournalEntry
 from .skills import SkillRegistry
 
+
+def safe_randint(a, b):
+    """randint seguro que no falla si los rangos están invertidos."""
+    return random.randint(min(a, b), max(a, b))
+
 XP_PER_MINUTE = 10
 # Bono si la clase del aventurero hace sinergia con la tarea
 XP_MULTIPLIER_CLASS_MATCH = 1.5
@@ -322,7 +327,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 skill_bonus = skills[skill_name]
                 dc = random.randint(10, 18)  # Dificultad Dinámica
-                roll = roll_d20()
+                roll = roll_d20()["value"]
                 total = roll + skill_bonus
 
                 script.append({"second": current_second - 45, "type": "flavor",
@@ -551,18 +556,18 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 for i in range(spawn_count):
                     # Generación dentro de los rangos definidos
                     m_stats = {
-                        'str': random.randint(base_monster.min_str, base_monster.max_str),
-                        'dex': random.randint(base_monster.min_dex, base_monster.max_dex),
-                        'con': random.randint(base_monster.min_con, base_monster.max_con),
-                        'int': random.randint(base_monster.min_int, base_monster.max_int),
-                        'wis': random.randint(base_monster.min_wis, base_monster.max_wis),
-                        'cha': random.randint(base_monster.min_cha, base_monster.max_cha),
-                        'armor': random.randint(base_monster.min_armor, base_monster.max_armor),
+                        'str': safe_randint(base_monster.min_str, base_monster.max_str),
+                        'dex': safe_randint(base_monster.min_dex, base_monster.max_dex),
+                        'con': safe_randint(base_monster.min_con, base_monster.max_con),
+                        'int': safe_randint(base_monster.min_int, base_monster.max_int),
+                        'wis': safe_randint(base_monster.min_wis, base_monster.max_wis),
+                        'cha': safe_randint(base_monster.min_cha, base_monster.max_cha),
+                        'armor': safe_randint(base_monster.min_armor, base_monster.max_armor),
                         'luk': 0
                     }
 
                     # La salud se calcula desde el rango base + bonificador de constitución
-                    base_hp_roll = random.randint(
+                    base_hp_roll = safe_randint(
                         base_monster.min_hp, base_monster.max_hp)
                     hp = base_hp_roll + (m_stats['con'] * 2)
 
@@ -570,7 +575,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     name = f"{base_monster.name} {'ABCDEF'[i]}" if spawn_count > 1 else base_monster.name
 
                     active_monsters_group.append({
-                        'name': name, 'hp': hp, 'stats': m_stats, 'base': base_monster,
+                        'name': name, 'hp': hp, 'max_hp': hp, 'stats': m_stats, 'base': base_monster,
                         'status': set()
                     })
 
@@ -676,7 +681,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         if eff_m == 'LFS':
                             heal = sum(random.randint(1, getattr(base_m, 'effect_dice_sides', 4)) for _ in range(
                                 getattr(base_m, 'effect_dice_count', 1)))
-                            max_hp = base_m.base_hp + (m['stats']['con'] * 2)
+                            max_hp = m['max_hp']
                             m['hp'] = min(max_hp, m['hp'] + heal)
                             script.append({"second": current_second - 8, "type": "flavor",
                                           "message": f"¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
