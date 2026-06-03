@@ -179,7 +179,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
     if not adventurers:
         random.seed()
-        return script
+        return script, session_monster_xp
 
     # --- INICIALIZACIÓN DINÁMICA DE RECURSOS ---
     for adv in adventurers:
