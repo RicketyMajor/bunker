@@ -941,6 +941,8 @@ class Command(BaseCommand):
 
         self.stdout.write("Engendrando monstruos en el mundo...")
         creados = 0
+        nombres_bestiario = [data["name"] for data in BESTIARIO]
+        
         for data in BESTIARIO:
             obj, created = Monster.objects.update_or_create(
                 name=data["name"],
@@ -948,6 +950,13 @@ class Command(BaseCommand):
             )
             if created:
                 creados += 1
+
+        # Eliminar monstruos huérfanos (que ya no están en el bestiario)
+        huerfanos = Monster.objects.exclude(name__in=nombres_bestiario)
+        borrados = huerfanos.count()
+        if borrados > 0:
+            huerfanos.delete()
+            self.stdout.write(self.style.WARNING(f'Se eliminaron {borrados} monstruos huérfanos obsoletos.'))
 
         self.stdout.write(self.style.SUCCESS(
             f'¡Se engendraron {creados} monstruos nuevos!'))
