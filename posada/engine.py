@@ -1062,7 +1062,7 @@ def add_item_to_inventory(adv, item, event_log=None):
             return
 
         # Verificar Buff "Claridad Mental" (Escribir en el diario hoy)
-        today = timezone.now().date()
+        today = timezone.localdate()
         claridad_mental = JournalEntry.objects.filter(
             created_at__date=today).exists()
 
@@ -1205,7 +1205,7 @@ def _auto_equip(adv, item, event_log, pull_type):
 
 def evaluate_daily_penalties():
     """Resta prestigio por pereza o PREMIA por evitar malos hábitos."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     habits = DailyHabit.objects.all()
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 

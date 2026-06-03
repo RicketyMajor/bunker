@@ -289,7 +289,7 @@ def list_habits(request):
     # Al consultar el tablón, el motor revisa si hay deudas de días pasados
     penalties = evaluate_daily_penalties()
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     habits = DailyHabit.objects.all()
 
     habit_list = []
@@ -320,7 +320,7 @@ def create_habit(request):
 
 @api_view(['POST'])
 def complete_habit(request):
-    today = timezone.now().date()
+    today = timezone.localdate()
     habit_id = request.data.get('habit_id')
 
     try:
@@ -424,7 +424,7 @@ def complete_habit(request):
 @api_view(['GET'])
 def get_stats_data(request):
     """Extrae los últimos 30 días de actividad para el gráfico."""
-    thirty_days_ago = timezone.now().date() - timedelta(days=30)
+    thirty_days_ago = timezone.localdate() - timedelta(days=30)
     stats = DailyStatistic.objects.filter(
         date__gte=thirty_days_ago).order_order_by('date')
 
@@ -697,7 +697,7 @@ def delete_habit(request, habit_id):
 @api_view(['POST'])
 def undo_habit(request):
     habit_id = request.data.get('habit_id')
-    today = timezone.now().date()
+    today = timezone.localdate()
     try:
         habit = DailyHabit.objects.get(id=habit_id)
         if habit.last_completed_date != today:
