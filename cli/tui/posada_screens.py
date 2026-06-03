@@ -1005,7 +1005,8 @@ class PosadaMainScreen(Screen):
         Binding("p", "pause_timer", "Pausar", show=False),
         Binding("s", "stop_timer", "Detener", show=False),
         Binding("d", "show_details", "Detalles", show=False),
-        Binding("x", "delete_adventurer", "Eliminar", show=False),
+        Binding("x", "handle_x", "Eliminar", show=False),
+        Binding("backspace", "handle_x", "Borrar", show=False),
         Binding("r", "recruit", "Reclutar", show=False),
         Binding("f", "refresh_tavern", "Invitar", show=False),
         Binding("m", "complete_habit", "Marcar Hecho", show=False),
@@ -1020,13 +1021,15 @@ class PosadaMainScreen(Screen):
         Binding("R", "claim_chart", "Reclamar Gráfico", show=False),
         Binding("i", "inspect_chart", "Inspeccionar", show=False),
         Binding("t", "new_kanban_task", "Nueva Tarea", show=False),
-        Binding("delete", "delete_kanban_task", "Borrar Tarea", show=False),
+        Binding("delete", "handle_x", "Borrar Tarea", show=False),
         Binding("e", "new_calendar_event", "Nuevo Evento", show=False),
         Binding("w", "write_journal", "Escribir Diario", show=False),
         
         # Conflict Resolution Bindings
         Binding("n", "handle_n", "Nuevo", show=False),
         Binding("c", "handle_c", "Config/Columna", show=False),
+        Binding("shift+left", "handle_left", "Izquierda (Shift)", show=False),
+        Binding("shift+right", "handle_right", "Derecha (Shift)", show=False),
         Binding("left", "handle_left", "Izquierda", show=False),
         Binding("right", "handle_right", "Derecha", show=False),
     ]
@@ -1458,6 +1461,9 @@ class PosadaMainScreen(Screen):
         elif pane_id == "tab_journal":
             lbl.update(
                 "Diario de Viaje -> [w] Escribir Pensamiento  |  [◀] Página Anterior  |  [▶] Página Siguiente")
+        elif pane_id == "tab_kanban":
+            lbl.update(
+                "Kanban -> [t] Nueva Tarea | [c] Nueva Columna | [Shift+◀/▶] Mover Tarea | [x/Supr] Borrar Tarea")
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Permite navegar súper rápido entre pestañas presionando 1, 2, 3 o 4."""
@@ -2134,6 +2140,11 @@ class PosadaMainScreen(Screen):
         active_tab = self.query_one(TabbedContent).active
         if active_tab == "tab_timer": self.action_setup_timer()
         elif active_tab == "tab_kanban": self.action_new_kanban_col()
+
+    def action_handle_x(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_guild": self.action_delete_adventurer()
+        elif active_tab == "tab_kanban": self.action_delete_kanban_task()
         
     def action_handle_left(self):
         active_tab = self.query_one(TabbedContent).active
