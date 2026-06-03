@@ -927,7 +927,6 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                         "message": f"¡BOTÍN RARO! {winner.name} obtuvo [[{color}]{drop_item.name}[/]]."
                                     })
 
-                        active_monsters_group.remove(m)
 
             if not active_monsters_group:
                 # Reseteo del enfriamiento de habilidades de combate
