@@ -213,6 +213,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
     session_skills_tracker = {adv.id: set() for adv in adventurers}
     combat_skills_tracker = {adv.id: set() for adv in adventurers}
     adv_status_tracker = {adv.id: set() for adv in adventurers}
+    temp_hp = {adv.id: adv.current_hp for adv in adventurers}
 
     # --- Tablas de Botín por Categoría ---
     # (moneda, cant_max, probabilidad)
@@ -634,7 +635,10 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                   "message": f"💫 [bold red]{m['name']}[/bold red] está aturdido y no puede moverse."})
                     continue
 
-                target = random.choice(adventurers)
+                valid_targets = [a for a in adventurers if temp_hp[a.id] > 0]
+                if not valid_targets:
+                    break  # Todos los aventureros han caído
+                target = random.choice(valid_targets)
                 adv_mods = target.get_stat_modifiers()
 
                 # --- CA AVENTURERO: 8 + Mayor entre Destreza o Armadura ---
@@ -699,10 +703,14 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                     # --- Mitigación por Constitución y Daño Mínimo 1 ---
                     final_dmg = max(1, m_dmg - adv_mods['con'])
+                    temp_hp[target.id] -= final_dmg
 
                     crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if m_raw_roll == 20 else ""
                     script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
                                   "message": f"{crit_msg}[bold red]{m['name']}[/bold red] golpea a {target.name} ({final_dmg} daño)."})
+                    
+                    if temp_hp[target.id] <= 0:
+                        script.append({"second": current_second - 7, "type": "flavor", "message": f"⚠️ [bold yellow]{target.name}[/bold yellow] ha caído inconsciente en combate."})
                 else:
                     fail_msg = "falla estrepitosamente" if m_raw_roll == 1 else "falla su ataque"
                     script.append({"second": current_second - 8, "type": "flavor",
@@ -710,6 +718,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
             # --- TURNO DE LOS AVENTUREROS ---
             for i, adv in enumerate(adventurers):
+                if temp_hp[adv.id] <= 0:
+                    continue  # Si el aventurero está inconsciente, salta su turno
+
                 if not active_monsters_group:
                     break  # Si murieron todos, paran de atacar
 
@@ -717,7 +728,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 # --- IA DE CONSUMIBLES TÁCTICOS (POCIONES DE SALUD) ---
                 # Si la salud está por debajo del 30% (Crítico)
-                if adv.current_hp < (adv.max_hp * 0.3):
+                if temp_hp[adv.id] < (adv.max_hp * 0.3):
                     heal_slots = list(InventorySlot.objects.filter(
                         adventurer=adv, item__consumable_type='HEL', quantity__gt=0))
                     if heal_slots:
@@ -732,10 +743,10 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         # Si el ítem no tiene una curación base, asume 15 por defecto
                         heal_amount = slot.item.consumable_amount if slot.item.consumable_amount > 0 else random.randint(
                             10, 20)
-                        adv.current_hp = min(
-                            adv.max_hp, adv.current_hp + heal_amount)
+                        temp_hp[adv.id] = min(
+                            adv.max_hp, temp_hp[adv.id] + heal_amount)
 
-                        script.append({"second": current_second - 5, "type": "flavor",
+                        script.append({"second": current_second - 5, "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
                                        "message": f"¡Salud Crítica! {adv.name} bebe desesperadamente una [bold cyan]{slot.item.name}[/bold cyan] (+{heal_amount} HP)."})
                         continue  # ¡Termina su turno inmediatamente, beber la poción fue su acción!
                 # --------------------------------------------------------
@@ -749,8 +760,11 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 if 'BLD' in adv_status_tracker[adv.id]:
                     dot_damage += random.randint(1, 4)
                 if dot_damage > 0:
+                    temp_hp[adv.id] -= dot_damage
                     script.append({"second": current_second - 6, "type": "damage", "adventurer_id": adv.id,
                                   "amount": dot_damage, "message": f"{adv.name} sufre {dot_damage} de daño continuo."})
+                    if temp_hp[adv.id] <= 0:
+                        script.append({"second": current_second - 5, "type": "flavor", "message": f"⚠️ [bold yellow]{adv.name}[/bold yellow] ha caído inconsciente por sus heridas."})
 
                 # 1. Identificar Habilidades Disponibles en el Grimorio
                 available_skills = []
@@ -864,8 +878,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                     if eff == 'LFS':
                                         heal = sum(random.randint(1, adv_mods['effect_dice_sides']) for _ in range(
                                             adv_mods['effect_dice_count']))
-                                        script.append({"second": current_second - 4, "type": "damage", "adventurer_id": adv.id,
-                                                      "amount": -heal, "message": f"🦇 {adv.name} drena {heal} HP."})
+                                        temp_hp[adv.id] = min(adv.max_hp, temp_hp[adv.id] + heal)
+                                        script.append({"second": current_second - 4, "type": "heal", "adventurer_id": adv.id,
+                                                      "amount": heal, "message": f"🦇 {adv.name} drena {heal} HP."})
                                     else:
                                         target_m['status'].add(eff)
                                         eff_names = {
@@ -933,15 +948,41 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                     })
 
 
-            if not active_monsters_group:
+            # --- RESOLUCIÓN DEL COMBATE ---
+            all_dead = all(temp_hp[a.id] <= 0 for a in adventurers)
+            if not active_monsters_group or all_dead:
                 # Reseteo del enfriamiento de habilidades de combate
                 for adv_id in combat_skills_tracker:
                     combat_skills_tracker[adv_id].clear()
                     # Limpia los estados negativos al terminar el combate
                     adv_status_tracker[adv_id].clear()
 
-                script.append({"second": current_second, "type": "flavor",
-                              "message": "¡VICTORIA! La zona está despejada."})
+                if all_dead:
+                    script.append({"second": current_second, "type": "flavor", "message": "💀 ¡DERROTA! Todo el grupo ha caído."})
+                    state = "CAMPFIRE"
+                else:
+                    script.append({"second": current_second, "type": "flavor", "message": "¡VICTORIA! La zona está despejada."})
+                    if any(temp_hp[a.id] <= 0 for a in adventurers):
+                        script.append({"second": current_second + 1, "type": "flavor", "message": "🏕️ El grupo decide montar un campamento para atender a los heridos."})
+                        state = "CAMPFIRE"
+                    else:
+                        state = "EXPLORING"
+
+        elif state == "CAMPFIRE":
+            current_second += 30
+            if current_second >= total_seconds:
+                break
+                
+            all_healed = True
+            for adv in adventurers:
+                if temp_hp[adv.id] < adv.max_hp:
+                    all_healed = False
+                    heal = random.randint(1, 3 + adv.base_con)
+                    temp_hp[adv.id] = min(adv.max_hp, temp_hp[adv.id] + heal)
+                    script.append({"second": current_second, "type": "heal", "adventurer_id": adv.id, "amount": heal, "message": f"🔥 {adv.name} descansa y recupera {heal} HP."})
+            
+            if all_healed:
+                script.append({"second": current_second, "type": "flavor", "message": "🔥 El grupo se ha recuperado por completo. ¡La aventura continúa!"})
                 state = "EXPLORING"
 
     script.sort(key=lambda x: x["second"])
@@ -1351,8 +1392,10 @@ def process_session_completion(session_id, survived_seconds=None):
                 loot[event["coin"]] += event["amount"]
             elif event["type"] == "damage":
                 adv_id = event["adventurer_id"]
-                damage_taken[adv_id] = damage_taken.get(
-                    adv_id, 0) + event["amount"]
+                damage_taken[adv_id] = damage_taken.get(adv_id, 0) + event["amount"]
+            elif event["type"] == "heal":
+                adv_id = event["adventurer_id"]
+                damage_taken[adv_id] = damage_taken.get(adv_id, 0) - event["amount"]
             # guardar items en el inventario del aventurero
             elif event["type"] == "item_loot":
                 adv = next((a for a in adventurers if a.id ==
@@ -1489,7 +1532,15 @@ def check_level_up(adv, log):
         adv.level += 1
         leveled_up = True
 
-        adv.max_hp += random.randint(4, 8) + adv.base_con
+        # Rebalanceo de HP según el rol
+        if adv.adv_class in ['BBN', 'FTR', 'PAL']:
+            hp_gain = random.randint(8, 12) + adv.base_con
+        elif adv.adv_class in ['CLR', 'DRD', 'BRD', 'ART']:
+            hp_gain = random.randint(5, 8) + adv.base_con
+        else: # ROG, RGR, MNK, SOR, WLK, WIZ
+            hp_gain = random.randint(3, 6) + adv.base_con
+            
+        adv.max_hp += hp_gain
         adv.current_hp = adv.max_hp
 
         stats = ['base_str', 'base_dex', 'base_con',
@@ -1498,8 +1549,11 @@ def check_level_up(adv, log):
         setattr(adv, chosen_stat, getattr(adv, chosen_stat) + 1)
 
         log.append(
-            f"🎉 ¡[bold yellow]{adv.name}[/bold yellow] ha alcanzado el Nivel {adv.level}! (+HP, +{chosen_stat.split('_')[1].upper()})")
+            f"🎉 ¡[bold yellow]{adv.name}[/bold yellow] ha alcanzado el Nivel {adv.level}! (+{hp_gain} HP, +{chosen_stat.split('_')[1].upper()})")
 
+    if leveled_up:
+        adv.save()
+        
     return leveled_up
 
 # --- LÓGICA BANCARIA Y MERCADO ---
