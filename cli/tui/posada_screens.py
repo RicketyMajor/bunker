@@ -6,6 +6,8 @@ from textual.reactive import reactive
 from textual.binding import Binding
 from textual import work
 import httpx
+import datetime as _dt
+import calendar as _cal
 from textual_plotext import PlotextPlot
 
 API_POSADA_BASE = "http://127.0.0.1:8008/posada/api/"
@@ -824,38 +826,107 @@ class WriteJournalModal(ModalScreen[str]):
 
 # --- MODALES KANBAN Y CALENDARIO ---
 
+# --- UTILIDADES DE FECHA ---
+
+MONTH_NAMES = [
+    ("Enero", 1), ("Febrero", 2), ("Marzo", 3), ("Abril", 4),
+    ("Mayo", 5), ("Junio", 6), ("Julio", 7), ("Agosto", 8),
+    ("Septiembre", 9), ("Octubre", 10), ("Noviembre", 11), ("Diciembre", 12),
+]
+
+
+def _build_year_options():
+    """Retorna opciones de año: año actual y el siguiente."""
+    y = _dt.date.today().year
+    return [(str(y), y), (str(y + 1), y + 1)]
+
+
+def _build_day_options(month: int = None, year: int = None):
+    """Retorna opciones de día (1-28/29/30/31) según el mes y año."""
+    if month and year:
+        max_day = _cal.monthrange(year, month)[1]
+    else:
+        max_day = 31
+    return [(str(d), d) for d in range(1, max_day + 1)]
+
+
+def _assemble_date(year_sel, month_sel, day_sel) -> str:
+    """Ensambla una fecha ISO desde los tres Select widgets."""
+    try:
+        y = int(year_sel)
+        m = int(month_sel)
+        d = int(day_sel)
+        return _dt.date(y, m, d).isoformat()
+    except (ValueError, TypeError):
+        return ""
+
+
 class NewKanbanTaskModal(ModalScreen[dict]):
     CSS = """
-    #new_task_dialog { width: 50; height: auto; padding: 1 2; border: solid $accent; background: $surface; }
+    #new_task_dialog { width: 55; height: auto; padding: 1 2; border: solid $accent; background: $surface; }
     .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
     .btn_row { height: 3; align: center middle; margin-top: 1; }
     .btn_row Button { margin: 0 1; }
+    .date_row { height: 4; }
+    .date_row Select { width: 1fr; margin: 0 1; }
+    .date_label { margin-top: 1; text-style: bold; color: $accent; }
     """
     def compose(self) -> ComposeResult:
+        today = _dt.date.today()
         with Vertical(id="new_task_dialog"):
             yield Label("Nueva Tarea", classes="modal_title")
             yield Input(placeholder="Título de la tarea", id="task_title")
             yield Label("Prioridad:")
             yield Select((("Baja", "LOW"), ("Media", "MED"), ("Alta", "HGH"), ("Crítica", "CRT")), id="task_priority", value="MED")
             yield Input(placeholder="Descripción (Opcional)", id="task_desc")
-            yield Input(placeholder="Fecha Límite YYYY-MM-DD (Opcional)", id="task_due")
+            yield Label("Fecha Límite (Opcional):", classes="date_label")
+            with Horizontal(classes="date_row"):
+                yield Select(_build_year_options(), id="task_due_year", value=today.year, prompt="Año")
+                yield Select(MONTH_NAMES, id="task_due_month", value=today.month, prompt="Mes")
+                yield Select(_build_day_options(today.month, today.year), id="task_due_day", value=today.day, prompt="Día")
             with Horizontal(classes="btn_row"):
                 yield Button("Crear", variant="success", id="btn_save_task")
+                yield Button("Sin Fecha", variant="warning", id="btn_save_task_no_date")
                 yield Button("Cancelar", variant="error", id="btn_cancel_task")
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Actualiza los días disponibles al cambiar mes o año."""
+        if event.select.id in ("task_due_month", "task_due_year"):
+            try:
+                year = int(self.query_one("#task_due_year", Select).value)
+                month = int(self.query_one("#task_due_month", Select).value)
+                day_select = self.query_one("#task_due_day", Select)
+                current_day = day_select.value
+                new_options = _build_day_options(month, year)
+                day_select.set_options(new_options)
+                max_day = new_options[-1][1]
+                if isinstance(current_day, int) and current_day <= max_day:
+                    day_select.value = current_day
+                else:
+                    day_select.value = max_day
+            except (ValueError, TypeError):
+                pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_cancel_task":
             self.dismiss(None)
-        elif event.button.id == "btn_save_task":
+        elif event.button.id in ("btn_save_task", "btn_save_task_no_date"):
             title = self.query_one("#task_title", Input).value
             if not title:
                 self.app.notify("La tarea necesita un título.", severity="error")
                 return
+            due_date = ""
+            if event.button.id == "btn_save_task":
+                due_date = _assemble_date(
+                    self.query_one("#task_due_year", Select).value,
+                    self.query_one("#task_due_month", Select).value,
+                    self.query_one("#task_due_day", Select).value,
+                )
             self.dismiss({
                 "title": title,
                 "priority": self.query_one("#task_priority", Select).value,
                 "description": self.query_one("#task_desc", Input).value,
-                "due_date": self.query_one("#task_due", Input).value
+                "due_date": due_date
             })
 
 
@@ -892,15 +963,23 @@ class NewKanbanColumnModal(ModalScreen[dict]):
 
 class NewCalendarEventModal(ModalScreen[dict]):
     CSS = """
-    #new_event_dialog { width: 50; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #new_event_dialog { width: 55; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     .modal_title { text-style: bold; color: $primary; text-align: center; margin-bottom: 1; width: 100%; }
     .btn_row { height: 3; align: center middle; margin-top: 1; }
     .btn_row Button { margin: 0 1; }
+    .date_row { height: 4; }
+    .date_row Select { width: 1fr; margin: 0 1; }
+    .date_label { margin-top: 1; text-style: bold; color: $accent; }
     """
     def compose(self) -> ComposeResult:
+        today = _dt.date.today()
         with Vertical(id="new_event_dialog"):
             yield Label("Anotar en el Calendario", classes="modal_title")
-            yield Input(placeholder="YYYY-MM-DD", id="event_date")
+            yield Label("Fecha del Evento:", classes="date_label")
+            with Horizontal(classes="date_row"):
+                yield Select(_build_year_options(), id="event_year", value=today.year, prompt="Año")
+                yield Select(MONTH_NAMES, id="event_month", value=today.month, prompt="Mes")
+                yield Select(_build_day_options(today.month, today.year), id="event_day", value=today.day, prompt="Día")
             yield Input(placeholder="Evento o Nota", id="event_title")
             yield Input(placeholder="Detalles (Opcional)", id="event_desc")
             with Horizontal():
@@ -910,21 +989,216 @@ class NewCalendarEventModal(ModalScreen[dict]):
                 yield Button("Anotar", variant="success", id="btn_save_event")
                 yield Button("Cancelar", variant="error", id="btn_cancel_event")
 
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Actualiza los días disponibles al cambiar mes o año."""
+        if event.select.id in ("event_month", "event_year"):
+            try:
+                year = int(self.query_one("#event_year", Select).value)
+                month = int(self.query_one("#event_month", Select).value)
+                day_select = self.query_one("#event_day", Select)
+                current_day = day_select.value
+                new_options = _build_day_options(month, year)
+                day_select.set_options(new_options)
+                max_day = new_options[-1][1]
+                if isinstance(current_day, int) and current_day <= max_day:
+                    day_select.value = current_day
+                else:
+                    day_select.value = max_day
+            except (ValueError, TypeError):
+                pass
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_cancel_event":
             self.dismiss(None)
         elif event.button.id == "btn_save_event":
-            date = self.query_one("#event_date", Input).value
+            date_str = _assemble_date(
+                self.query_one("#event_year", Select).value,
+                self.query_one("#event_month", Select).value,
+                self.query_one("#event_day", Select).value,
+            )
             title = self.query_one("#event_title", Input).value
-            if not date or not title:
+            if not date_str or not title:
                 self.app.notify("Fecha y Título son obligatorios.", severity="error")
                 return
             self.dismiss({
-                "date": date,
+                "date": date_str,
                 "title": title,
                 "description": self.query_one("#event_desc", Input).value,
                 "is_important": self.query_one("#event_important", Select).value == "True"
             })
+
+# --- MODALES DE DETALLE ---
+
+class HabitDetailsModal(ModalScreen[None]):
+    """Panel de detalle de un hábito diario."""
+
+    CSS = """
+    #habit_details_dialog { width: 60; height: auto; padding: 1 2; border: double $success; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .detail_section { margin-top: 1; text-style: bold; color: $success; }
+    .detail_content { margin-bottom: 1; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    """
+
+    DAY_NAMES = {"0": "Lun", "1": "Mar", "2": "Mié", "3": "Jue", "4": "Vie", "5": "Sáb", "6": "Dom"}
+
+    def __init__(self, habit_data: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.habit_data = habit_data
+
+    def compose(self) -> ComposeResult:
+        h = self.habit_data
+        habit_type = "[bold red]Mal Hábito (Evitar)[/]" if h.get("is_bad_habit") else "[bold green]Buen Hábito[/]"
+        diff = h.get("difficulty", "?")
+        diff_code = h.get("difficulty_code", "C")
+        diff_colors = {"S": "bold yellow", "A": "bold magenta", "B": "bold cyan", "C": "white"}
+        diff_color = diff_colors.get(diff_code, "white")
+
+        # Parse valid days
+        valid_str = h.get("valid_days", "0,1,2,3,4,5,6")
+        day_labels = [self.DAY_NAMES.get(d.strip(), "?") for d in valid_str.split(",") if d.strip()]
+        days_display = ", ".join(day_labels) if day_labels else "Todos los días"
+
+        streak = h.get("current_streak", 0)
+        completed = h.get("completed_today", False)
+        status_str = "[bold green]✔ Completado hoy[/]" if completed else "[gray]✘ Pendiente[/]"
+        if h.get("is_bad_habit"):
+            status_str = "[bold red]⚠ Recaída hoy[/]" if completed else "[bold green]🛡️ Evitado hoy[/]"
+
+        last_completed = h.get("last_completed_date", None) or "Nunca"
+        created = h.get("created_at", None) or "Desconocido"
+
+        with Vertical(id="habit_details_dialog"):
+            yield Label(f"📋 Detalle de Hábito", classes="modal_title")
+
+            yield Label("Nombre:", classes="detail_section")
+            yield Label(f"  {h.get('name', '?')}", classes="detail_content")
+
+            yield Label("Tipo:", classes="detail_section")
+            yield Label(f"  {habit_type}", classes="detail_content")
+
+            yield Label("Dificultad:", classes="detail_section")
+            yield Label(f"  [{diff_color}]{diff}[/]", classes="detail_content")
+
+            yield Label("Días Válidos:", classes="detail_section")
+            yield Label(f"  {days_display}", classes="detail_content")
+
+            yield Label("Estado Hoy:", classes="detail_section")
+            yield Label(f"  {status_str}", classes="detail_content")
+
+            yield Label("Racha Actual:", classes="detail_section")
+            yield Label(f"  🔥 {streak} día(s) consecutivos", classes="detail_content")
+
+            yield Label("Última Interacción:", classes="detail_section")
+            yield Label(f"  {last_completed}", classes="detail_content")
+
+            yield Label("Creado:", classes="detail_section")
+            yield Label(f"  {created}", classes="detail_content")
+
+            with Horizontal(classes="btn_row"):
+                yield Button("Cerrar", variant="primary", id="btn_close_details")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_close_details":
+            self.dismiss(None)
+
+
+class KanbanTaskDetailsModal(ModalScreen[None]):
+    """Panel de detalle de una tarea Kanban."""
+
+    CSS = """
+    #task_details_dialog { width: 60; height: auto; padding: 1 2; border: double $accent; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .detail_section { margin-top: 1; text-style: bold; color: $success; }
+    .detail_content { margin-bottom: 1; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    """
+
+    def __init__(self, task_data: dict, column_name: str = "?", **kwargs):
+        super().__init__(**kwargs)
+        self.task_data = task_data
+        self.column_name = column_name
+
+    def compose(self) -> ComposeResult:
+        t = self.task_data
+        priority_colors = {"CRT": "bold red", "HGH": "bold yellow", "MED": "bold cyan", "LOW": "white"}
+        p_code = t.get("priority_code", "MED")
+        p_color = priority_colors.get(p_code, "white")
+
+        due = t.get("due_date", None) or "Sin fecha límite"
+        desc = t.get("description", "") or "Sin descripción."
+
+        with Vertical(id="task_details_dialog"):
+            yield Label(f"📌 Detalle de Tarea", classes="modal_title")
+
+            yield Label("Título:", classes="detail_section")
+            yield Label(f"  {t.get('title', '?')}", classes="detail_content")
+
+            yield Label("Descripción:", classes="detail_section")
+            yield Label(f"  {desc}", classes="detail_content")
+
+            yield Label("Prioridad:", classes="detail_section")
+            yield Label(f"  [{p_color}]{t.get('priority', '?')}[/]", classes="detail_content")
+
+            yield Label("Columna Actual:", classes="detail_section")
+            yield Label(f"  {self.column_name}", classes="detail_content")
+
+            yield Label("Fecha Límite:", classes="detail_section")
+            yield Label(f"  {due}", classes="detail_content")
+
+            yield Label("Prestigio al Completar:", classes="detail_section")
+            yield Label(f"  +{t.get('prestige_reward', 0)} Prestigio", classes="detail_content")
+
+            with Horizontal(classes="btn_row"):
+                yield Button("Cerrar", variant="primary", id="btn_close_details")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_close_details":
+            self.dismiss(None)
+
+
+class CalendarEventDetailsModal(ModalScreen[None]):
+    """Panel de detalle de un evento del calendario."""
+
+    CSS = """
+    #event_details_dialog { width: 60; height: auto; padding: 1 2; border: double $primary; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .detail_section { margin-top: 1; text-style: bold; color: $success; }
+    .detail_content { margin-bottom: 1; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    """
+
+    def __init__(self, event_data: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.event_data = event_data
+
+    def compose(self) -> ComposeResult:
+        e = self.event_data
+        importance = "[bold yellow]★ Importante[/]" if e.get("is_important") else "Normal"
+        desc = e.get("description", "") or "Sin detalles adicionales."
+
+        with Vertical(id="event_details_dialog"):
+            yield Label(f"📅 Detalle de Evento", classes="modal_title")
+
+            yield Label("Título:", classes="detail_section")
+            yield Label(f"  {e.get('title', '?')}", classes="detail_content")
+
+            yield Label("Fecha:", classes="detail_section")
+            yield Label(f"  {e.get('date', '?')}", classes="detail_content")
+
+            yield Label("Descripción:", classes="detail_section")
+            yield Label(f"  {desc}", classes="detail_content")
+
+            yield Label("Importancia:", classes="detail_section")
+            yield Label(f"  {importance}", classes="detail_content")
+
+            with Horizontal(classes="btn_row"):
+                yield Button("Cerrar", variant="primary", id="btn_close_details")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_close_details":
+            self.dismiss(None)
+
 
 # --- PESTAÑAS ---
 
@@ -960,7 +1234,8 @@ class MissionsTab(TabPane):
         ("n", "new_chart", "Nuevo Gráf."),
         ("D", "delete_chart", "Borrar Gráf."),
         ("R", "claim_chart", "Reclamar"),
-        ("i", "inspect_chart", "Inspeccionar"),
+        ("i", "inspect_chart", "Inspeccionar Gráf."),
+        ("I", "inspect_habit", "Detalle Hábito"),
     ]
 
 class KanbanTab(TabPane):
@@ -969,9 +1244,9 @@ class KanbanTab(TabPane):
         ("t", "new_task", "Nueva Tarea"),
         ("left", "move_left", "Mover a Izq"),
         ("right", "move_right", "Mover a Der"),
-        ("d", "delete_task", "Borrar Tarea"),
         ("c", "new_col", "Nueva Columna"),
         ("e", "new_event", "Nuevo Evento"),
+        ("i", "inspect_kanban", "Detalle"),
     ]
 
 class JournalTab(TabPane):
@@ -1019,7 +1294,8 @@ class PosadaMainScreen(Screen):
         Binding("-", "delete_habit", "Borrar Hábito", show=False),
         Binding("u", "undo_habit", "Deshacer Hábito", show=False),
         Binding("R", "claim_chart", "Reclamar Gráfico", show=False),
-        Binding("i", "inspect_chart", "Inspeccionar", show=False),
+        Binding("i", "handle_i", "Inspeccionar", show=False),
+        Binding("I", "inspect_habit", "Detalle Hábito", show=False),
         Binding("t", "new_kanban_task", "Nueva Tarea", show=False),
         Binding("delete", "handle_x", "Borrar Tarea", show=False),
         Binding("e", "new_calendar_event", "Nuevo Evento", show=False),
@@ -1457,13 +1733,13 @@ class PosadaMainScreen(Screen):
                 "La Taberna -> [r] Reclutar Seleccionado  |  [f] Pagar Rondas de Cerveza (Refrescar)")
         elif pane_id == "tab_missions":
             lbl.update(
-                "Misiones -> [m] Marcar | [u] Deshacer | [-] Borrar | [<][>] Carrusel | [a] Coordenada | [R] Reclamar")
+                "Misiones -> [m] Marcar | [u] Deshacer | [-] Borrar | [I] Detalle | [<][>] Carrusel | [a] Dato | [i] Inspeccionar | [R] Reclamar")
         elif pane_id == "tab_journal":
             lbl.update(
                 "Diario de Viaje -> [w] Escribir Pensamiento  |  [◀] Página Anterior  |  [▶] Página Siguiente")
         elif pane_id == "tab_kanban":
             lbl.update(
-                "Kanban -> [t] Nueva Tarea | [c] Nueva Columna | [Shift+◀/▶] Mover Tarea | [x/Supr] Borrar Tarea")
+                "Kanban -> [t] Tarea | [c] Columna | [◀/▶] Mover | [x/Supr] Borrar | [i] Detalle | [e] Evento")
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Permite navegar súper rápido entre pestañas presionando 1, 2, 3 o 4."""
@@ -2041,6 +2317,84 @@ class PosadaMainScreen(Screen):
         current_chart = self.charts_cache[self.current_chart_index]
         self.app.push_screen(ChartDetailsModal(current_chart))
 
+    def action_inspect_habit(self) -> None:
+        """Abre el panel de detalle del hábito seleccionado."""
+        if self.query_one(TabbedContent).active != "tab_missions":
+            return
+        table = self.query_one("#missions_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key
+            habit_data = next(h for h in getattr(
+                self, 'habits_cache', []) if str(h['id']) == row_key.value)
+            self.app.push_screen(HabitDetailsModal(habit_data))
+        except Exception:
+            self.app.notify(
+                "Selecciona un hábito de la tabla primero.", severity="warning")
+
+    def action_inspect_kanban(self) -> None:
+        """Abre el panel de detalle de la tarea Kanban seleccionada o del evento del calendario."""
+        if self.query_one(TabbedContent).active != "tab_kanban":
+            return
+
+        # 1. Intentar con las tablas Kanban
+        for i in range(4):
+            try:
+                table = self.query_one(f"#kanban_col_{i}", DataTable)
+                if table.has_focus:
+                    row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                    if row_key:
+                        task_id = int(row_key.value.split("_")[0])
+                        col_id = int(row_key.value.split("_col")[1])
+                        # Buscar datos de la tarea y nombre de columna en el cache
+                        columns = getattr(self, 'kanban_data', {}).get("columns", [])
+                        for col in columns:
+                            if col["id"] == col_id:
+                                for task in col["tasks"]:
+                                    if task["id"] == task_id:
+                                        self.app.push_screen(
+                                            KanbanTaskDetailsModal(task, column_name=col["title"]))
+                                        return
+                    return
+            except Exception:
+                continue
+
+        # 2. Intentar con la tabla del calendario
+        try:
+            cal_table = self.query_one("#calendar_table", DataTable)
+            if cal_table.has_focus:
+                row_key = cal_table.coordinate_to_cell_key(cal_table.cursor_coordinate).row_key
+                if row_key:
+                    event_id = int(row_key.value)
+                    # Buscar el evento en el caché renderizado
+                    self._fetch_and_show_calendar_event(event_id)
+                    return
+        except Exception:
+            pass
+
+        self.app.notify(
+            "Selecciona una tarea o evento de la tabla primero.", severity="warning")
+
+    @work(thread=True)
+    def _fetch_and_show_calendar_event(self, event_id: int):
+        """Busca un evento específico del calendario para mostrar sus detalles."""
+        import datetime
+        now = datetime.datetime.now()
+        try:
+            resp = httpx.get(f"{API_POSADA_BASE}calendar/{now.year}/{now.month}/", timeout=5.0)
+            if resp.status_code == 200:
+                events = resp.json().get("events", [])
+                event_data = next((e for e in events if e["id"] == event_id), None)
+                if event_data:
+                    self.app.call_from_thread(
+                        self.app.push_screen, CalendarEventDetailsModal(event_data))
+                else:
+                    self.app.call_from_thread(
+                        self.app.notify, "Evento no encontrado.", severity="warning")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "Error al obtener detalles del evento.", severity="error")
+
     # --- DIARIO DE VIAJE ---
     @work(thread=True)
     def fetch_journal(self):
@@ -2146,6 +2500,11 @@ class PosadaMainScreen(Screen):
         if active_tab == "tab_guild": self.action_delete_adventurer()
         elif active_tab == "tab_kanban": self.action_delete_kanban_task()
         
+    def action_handle_i(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_missions": self.action_inspect_chart()
+        elif active_tab == "tab_kanban": self.action_inspect_kanban()
+
     def action_handle_left(self):
         active_tab = self.query_one(TabbedContent).active
         if active_tab == "tab_kanban": self.action_move_kanban_left()

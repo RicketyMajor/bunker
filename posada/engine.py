@@ -1208,8 +1208,13 @@ def _auto_equip(adv, item, event_log, pull_type):
 
 
 def evaluate_daily_penalties():
-    """Resta prestigio por pereza o PREMIA por evitar malos hábitos."""
+    """Resta prestigio por pereza o PREMIA por evitar malos hábitos.
+    
+    Usa `last_evaluated_date` como marcador de la última fecha procesada.
+    `last_completed_date` queda exclusivamente para acciones del usuario.
+    """
     today = timezone.localdate()
+    yesterday = today - timedelta(days=1)
     habits = DailyHabit.objects.all()
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
@@ -1217,28 +1222,60 @@ def evaluate_daily_penalties():
     penalty_log = []
 
     for habit in habits:
-        ref_date = habit.last_completed_date if habit.last_completed_date else habit.created_at
-        delta = (today - ref_date).days
+        # El marcador de evaluación indica hasta qué fecha ya se procesó
+        eval_ref = habit.last_evaluated_date if habit.last_evaluated_date else habit.created_at
+        eval_delta = (today - eval_ref).days
 
-        if delta > 1:
-            missed_valid_days = 0
-            for i in range(1, delta):
-                check_date = ref_date + timedelta(days=i)
+        if eval_delta < 1:
+            continue  # Ya evaluado hoy, nada que hacer
+
+        if habit.is_bad_habit:
+            # --- MALOS HÁBITOS: Recompensar por cada día válido sobrevivido ---
+            # Verificar cada día desde eval_ref+1 hasta ayer (inclusive).
+            # Si el usuario recayó en alguno de esos días (last_completed_date cae en el rango),
+            # los días DESPUÉS de la recaída no cuentan.
+            relapse_date = habit.last_completed_date  # None si nunca recayó
+
+            survived_valid_days = 0
+            check_date = eval_ref + timedelta(days=1)
+            while check_date <= yesterday:
+                # Si hubo recaída en este día o después, dejar de contar
+                if relapse_date and check_date >= relapse_date:
+                    break
                 if str(check_date.weekday()) in habit.valid_days:
-                    missed_valid_days += 1
+                    survived_valid_days += 1
+                check_date += timedelta(days=1)
 
-            if missed_valid_days > 0:
-                if habit.is_bad_habit:
-                    # ¡Resististe la tentación!
-                    reward_map = {'S': 50, 'A': 25, 'B': 10, 'C': 5}
-                    prestige_gain = reward_map.get(
-                        habit.difficulty, 5) * missed_valid_days
-                    total_prestige_change += prestige_gain
-                    habit.current_streak += missed_valid_days
-                    penalty_log.append(
-                        f"Evitaste '{habit.name}' por {missed_valid_days} día(s) (+{prestige_gain} Prestigio).")
-                else:
-                    # CASTIGO: Pereza en un buen hábito
+            if survived_valid_days > 0:
+                reward_map = {'S': 50, 'A': 25, 'B': 10, 'C': 5}
+                prestige_gain = reward_map.get(
+                    habit.difficulty, 5) * survived_valid_days
+                total_prestige_change += prestige_gain
+                habit.current_streak += survived_valid_days
+                penalty_log.append(
+                    f"Evitaste '{habit.name}' por {survived_valid_days} día(s) (+{prestige_gain} Prestigio).")
+
+            # Avanza el marcador de evaluación a ayer
+            habit.last_evaluated_date = yesterday
+            habit.save()
+
+        else:
+            # --- BUENOS HÁBITOS: Penalizar por días válidos no completados ---
+            # Solo penalizar si hay días no cubiertos entre la última evaluación y hoy.
+            # La referencia real es el máximo entre last_evaluated_date y last_completed_date,
+            # ya que completar un hábito "cubre" ese día.
+            completed_ref = habit.last_completed_date or habit.created_at
+            ref_date = max(eval_ref, completed_ref)
+            delta = (today - ref_date).days
+
+            if delta > 1:
+                missed_valid_days = 0
+                for i in range(1, delta):
+                    check_date = ref_date + timedelta(days=i)
+                    if str(check_date.weekday()) in habit.valid_days:
+                        missed_valid_days += 1
+
+                if missed_valid_days > 0:
                     prestige_loss = missed_valid_days * 15
                     total_prestige_change -= prestige_loss
                     habit.current_streak = 0
@@ -1250,7 +1287,6 @@ def evaluate_daily_penalties():
                     
                     coins_lost = []
                     for _ in range(missed_valid_days):
-                        # Descontar la moneda más alta disponible (secuencialmente)
                         for coin in coin_hierarchy:
                             if getattr(guild, coin) > 0:
                                 setattr(guild, coin, getattr(guild, coin) - 1)
@@ -1267,7 +1303,7 @@ def evaluate_daily_penalties():
                         penalty_log.append(
                             f"Hábito roto: '{habit.name}' (-{prestige_loss} Prestigio).")
 
-            habit.last_completed_date = today - timedelta(days=1)
+            habit.last_evaluated_date = yesterday
             habit.save()
 
     if total_prestige_change != 0:

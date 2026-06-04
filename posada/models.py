@@ -510,6 +510,9 @@ class DailyHabit(models.Model):
     created_at = models.DateField(auto_now_add=True)
     current_streak = models.PositiveIntegerField(default=0)
 
+    # Fecha de la última evaluación automática de recompensas/penalizaciones
+    last_evaluated_date = models.DateField(null=True, blank=True)
+
     # --- Undo Cache ---
     # Para recuperar la racha al deshacer recaídas
     previous_streak = models.PositiveIntegerField(default=0)

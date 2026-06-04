@@ -296,9 +296,14 @@ def list_habits(request):
     for h in habits:
         habit_list.append({
             "id": h.id, "name": h.name, "difficulty": h.get_difficulty_display(),
+            "difficulty_code": h.difficulty,
             "completed_today": h.last_completed_date == today,
             "current_streak": h.current_streak,
-            "is_bad_habit": h.is_bad_habit
+            "is_bad_habit": h.is_bad_habit,
+            "valid_days": h.valid_days,
+            "created_at": h.created_at.isoformat() if h.created_at else None,
+            "last_completed_date": h.last_completed_date.isoformat() if h.last_completed_date else None,
+            "previous_streak": h.previous_streak,
         })
 
     return Response({
