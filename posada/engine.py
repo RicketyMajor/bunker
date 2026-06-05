@@ -1280,11 +1280,12 @@ def evaluate_daily_penalties():
             survived_valid_days = 0
             check_date = eval_ref + timedelta(days=1)
             while check_date <= yesterday:
-                # Si hubo recaída en este día o después, dejar de contar
-                if relapse_date and check_date >= relapse_date:
-                    break
-                if str(check_date.weekday()) in habit.valid_days:
+                if relapse_date and check_date == relapse_date:
+                    # Recayó este día. No hay recompensa y la racha se reinicia.
+                    habit.current_streak = 0
+                elif str(check_date.weekday()) in habit.valid_days:
                     survived_valid_days += 1
+                    habit.current_streak += 1
                 check_date += timedelta(days=1)
 
             if survived_valid_days > 0:
@@ -1292,7 +1293,6 @@ def evaluate_daily_penalties():
                 prestige_gain = reward_map.get(
                     habit.difficulty, 5) * survived_valid_days
                 total_prestige_change += prestige_gain
-                habit.current_streak += survived_valid_days
                 penalty_log.append(
                     f"Evitaste '{habit.name}' por {survived_valid_days} día(s) (+{prestige_gain} Prestigio).")
 
