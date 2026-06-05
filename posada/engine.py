@@ -1607,19 +1607,31 @@ def universal_consolidate(entity):
 
 def get_imperial_value(entity):
     """Convierte toda la riqueza Imperial a Medios Peniques."""
-    return (entity.silver_penny * 100) + (entity.copper_penny * 10) + (entity.iron_penny * 2) + entity.iron_half_penny
+    silver = getattr(entity, 'silver_penny', getattr(entity, 'cost_silver_penny', 0))
+    copper = getattr(entity, 'copper_penny', getattr(entity, 'cost_copper_penny', 0))
+    iron = getattr(entity, 'iron_penny', getattr(entity, 'cost_iron_penny', 0))
+    half_iron = getattr(entity, 'iron_half_penny', getattr(entity, 'cost_iron_half_penny', 0))
+    return (silver * 100) + (copper * 10) + (iron * 2) + half_iron
 
 
 def get_commonwealth_value(entity):
     """Convierte toda la riqueza de la Mancomunidad a fracciones de Ardite (Base 32)."""
+    marco = getattr(entity, 'marco', getattr(entity, 'cost_marco', 0))
+    real = getattr(entity, 'real', getattr(entity, 'cost_real', 0))
+    talento = getattr(entity, 'talento', getattr(entity, 'cost_talento', 0))
+    sueldo = getattr(entity, 'sueldo', getattr(entity, 'cost_sueldo', 0))
+    iota = getattr(entity, 'iota', getattr(entity, 'cost_iota', 0))
+    drabin = getattr(entity, 'drabin', getattr(entity, 'cost_drabin', 0))
+    ardite = getattr(entity, 'ardite', getattr(entity, 'cost_ardite', 0))
+
     val = 0
-    val += entity.marco * 352000
-    val += entity.real * 88000
-    val += entity.talento * 35200
-    val += entity.sueldo * 1100
-    val += entity.iota * 3520
-    val += entity.drabin * 352
-    val += entity.ardite * 32
+    val += marco * 352000
+    val += real * 88000
+    val += talento * 35200
+    val += sueldo * 1100
+    val += iota * 3520
+    val += drabin * 352
+    val += ardite * 32
     return val
 
 
