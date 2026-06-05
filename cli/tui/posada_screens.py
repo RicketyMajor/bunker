@@ -1547,26 +1547,33 @@ class PosadaMainScreen(Screen):
             self.app.push_screen(CharacterCreationModal(),
                                  self.submit_new_character)
 
-    @work(thread=True)
     def submit_new_character(self, result: dict | None) -> None:
-        """Envía el nuevo personaje a Django y recarga la interfaz."""
+        """Callback de push_screen: recibe el resultado del modal y lanza el worker HTTP."""
         if result is None:
             return
+        self._do_create_character(result)
+
+    @work(thread=True)
+    def _do_create_character(self, result: dict) -> None:
+        """Worker HTTP que envía el nuevo personaje a Django y recarga la interfaz."""
         try:
             resp = httpx.post(
                 f"{API_POSADA_BASE}adventurer/create/", json=result, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.app.notify, "¡Avatar creado! Bienvenido a La Posada.", severity="success")
-                self.sync_guild_status()
+                self.app.call_from_thread(self.sync_guild_status)
             else:
-                # error de cupo lleno
-                error_msg = resp.json().get("message", "Error al crear el personaje.")
+                # Intenta parsear el JSON de error; si el servidor devolvió HTML (500), usa un mensaje genérico
+                try:
+                    error_msg = resp.json().get("message", "Error al crear el personaje.")
+                except Exception:
+                    error_msg = f"Error del servidor (HTTP {resp.status_code})."
                 self.app.call_from_thread(
                     self.app.notify, error_msg, severity="error")
         except Exception as e:
             self.app.call_from_thread(
-                self.app.notify, "Fallo de conexión.", severity="error")
+                self.app.notify, f"Fallo de conexión al crear personaje: {e}", severity="error")
 
     # --- MÁQUINA DE ESTADOS DE BOTONES ---
     def set_timer_ui_state(self, state: str) -> None:

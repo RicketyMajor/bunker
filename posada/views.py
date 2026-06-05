@@ -206,10 +206,10 @@ def create_adventurer(request):
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
     # 1 cupo por cada Nivel del Gremio
-    if Adventurer.objects.count() >= guild.level:
+    if Adventurer.objects.count() >= guild.prestige_level:
         return Response({
             "status": "error",
-            "message": f"Gremio Nv. {guild.level} lleno. Estudia y sube de nivel para tener más cupos."
+            "message": f"Gremio Nv. {guild.prestige_level} lleno. Estudia y sube de nivel para tener más cupos."
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data
