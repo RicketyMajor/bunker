@@ -56,7 +56,7 @@ def ensure_infrastructure_up():
         httpx.get("http://localhost:8008/api/books/library/", timeout=2.0)
         _infrastructure_checked = True  # Sellamos la verificación exitosa
 
-    except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError):
+    except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
         console.print(
             "\n[bold yellow]Infraestructura dormida o inestable. Encendiendo servidores...[/bold yellow]")
         project_dir = Path(__file__).resolve().parent.parent
@@ -79,7 +79,7 @@ def ensure_infrastructure_up():
                 _infrastructure_checked = True  # Sellamos la verificación tras encender
                 return
 
-            except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError):
+            except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
                 console.print(".", end="", style="cyan")
                 sys.stdout.flush()
                 time.sleep(1)

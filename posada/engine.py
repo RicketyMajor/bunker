@@ -959,6 +959,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                 if all_dead:
                     script.append({"second": current_second, "type": "flavor", "message": "💀 ¡DERROTA! Todo el grupo ha caído."})
+                    active_monsters_group.clear()
                     state = "CAMPFIRE"
                 else:
                     script.append({"second": current_second, "type": "flavor", "message": "¡VICTORIA! La zona está despejada."})
@@ -1010,27 +1011,10 @@ def distribute_tithe(guild, adventurers_qs, loot_dict, event_log):
 
 
 def _seed_items_if_empty():
-    """Forjamos los primeros objetos con el nuevo sistema granular de 8 slots."""
+    """Ejecuta el catálogo oficial de load_items si la base de datos de objetos está vacía."""
     if not Item.objects.exists():
-        # Armas y Escudos
-        Item.objects.create(name="Daga de Hierro", item_type='W1H',
-                            rarity='COM', cost_in_copper=10, bonus_damage=2, bonus_dex=1)
-        Item.objects.create(name="Mandoble Pesado", item_type='W2H',
-                            rarity='UNC', cost_in_copper=50, bonus_damage=5, bonus_str=2)
-        Item.objects.create(name="Escudo de Roble", item_type='OFF',
-                            rarity='COM', cost_in_copper=15, bonus_armor=2, bonus_con=1)
-        # Armadura
-        Item.objects.create(name="Casco de Cuero", item_type='HED',
-                            rarity='COM', cost_in_copper=10, bonus_armor=1)
-        Item.objects.create(name="Cota de Malla", item_type='TRS',
-                            rarity='UNC', cost_in_copper=50, bonus_armor=3)
-        Item.objects.create(name="Botas Ligeras", item_type='FET',
-                            rarity='COM', cost_in_copper=10, bonus_dex=1)
-        # Accesorios y Consumibles
-        Item.objects.create(name="Amuleto de Erudito", item_type='ACC',
-                            rarity='RAR', cost_in_copper=100, bonus_int=3, bonus_wis=2)
-        Item.objects.create(name="Poción de Salud Menor", item_type='CNS',
-                            rarity='COM', cost_in_copper=5, description="Cura 10 HP")
+        from django.core.management import call_command
+        call_command('load_items')
 
 
 def _seed_guild_upgrades():

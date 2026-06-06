@@ -308,13 +308,21 @@ class AdventurerDetailsModal(ModalScreen[None]):
         table = self.query_one("#equipment_table", DataTable)
         table.add_columns("Ranura", "Objeto Equipado")
 
+        # 2. Poblar Tabla del Grimorio
+        grim_table = self.query_one("#grimoire_table", DataTable)
+        grim_table.add_columns("Habilidad", "Tipo / Gasto", "Nivel Req.")
+
+        self.populate_tables()
+
+    def populate_tables(self):
+        table = self.query_one("#equipment_table", DataTable)
+        table.clear()
+
         eq = self.adv_data.get("equipment", {})
         slots = [
             ("Mano Principal", "equip_main_hand"), ("Mano Secundaria", "equip_off_hand"),
-            ("Cabeza", "equip_head"), ("Torso",
-                                       "equip_torso"), ("Manos", "equip_hands"),
-            ("Piernas", "equip_legs"), ("Pies",
-                                        "equip_feet"), ("Collar", "equip_necklace"),
+            ("Cabeza", "equip_head"), ("Torso", "equip_torso"), ("Manos", "equip_hands"),
+            ("Piernas", "equip_legs"), ("Pies", "equip_feet"), ("Collar", "equip_necklace"),
             ("Anillo 1", "equip_ring_1"), ("Anillo 2", "equip_ring_2"),
             ("Brazalete", "equip_bracelet"), ("Aretes", "equip_earring")
         ]
@@ -328,12 +336,24 @@ class AdventurerDetailsModal(ModalScreen[None]):
                 item_str = self.adv_data.get(key, "Vacío")
                 table.add_row(name, item_str, key=key)
 
-        # 2. Poblar Tabla del Grimorio
         grim_table = self.query_one("#grimoire_table", DataTable)
-        grim_table.add_columns("Habilidad", "Tipo / Gasto", "Nivel Req.")
+        grim_table.clear()
         for skill in self.adv_data.get("grimoire", []):
             grim_table.add_row(
                 skill["name"], skill["type"], str(skill["req_level"]))
+
+    @work(thread=True)
+    def fetch_my_data_and_refresh(self):
+        try:
+            resp = httpx.get(f"{API_POSADA_BASE}status/", timeout=5.0)
+            if resp.status_code == 200:
+                advs = resp.json().get("adventurers", [])
+                my_data = next((a for a in advs if a["id"] == self.adv_data["id"]), None)
+                if my_data:
+                    self.adv_data = my_data
+                    self.app.call_from_thread(self.populate_tables)
+        except Exception:
+            pass
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Captura el evento del cursor para el Panel de Lore."""
@@ -354,7 +374,7 @@ class AdventurerDetailsModal(ModalScreen[None]):
             self.dismiss(None)
         elif event.button.id == "btn_open_backpack":
             self.app.push_screen(InventoryModal(
-                "adv", self.adv_data["id"], f"Mochila de {self.adv_data['name']}"))
+                "adv", self.adv_data["id"], f"Mochila de {self.adv_data['name']}"), lambda _: self.fetch_my_data_and_refresh())
         elif event.button.id == "btn_unequip":
             table = self.query_one("#equipment_table", DataTable)
             try:
@@ -372,7 +392,7 @@ class AdventurerDetailsModal(ModalScreen[None]):
         if resp.status_code == 200:
             self.app.call_from_thread(
                 self.app.notify, resp.json().get("message"), severity="success")
-            self.app.call_from_thread(self.dismiss, None)
+            self.fetch_my_data_and_refresh()
         else:
             self.app.call_from_thread(
                 self.app.notify, resp.json().get("error"), severity="error")
@@ -1719,7 +1739,7 @@ class PosadaMainScreen(Screen):
             # Busca en el caché el aventurero que coincida con esa llave
             adv_data = next(a for a in getattr(
                 self, 'adventurers_cache', []) if str(a['id']) == row_key.value)
-            self.app.push_screen(AdventurerDetailsModal(adv_data))
+            self.app.push_screen(AdventurerDetailsModal(adv_data), lambda _: self.sync_guild_status())
         except Exception:
             self.app.notify(
                 "Selecciona un aventurero de la tabla primero.", severity="warning")
