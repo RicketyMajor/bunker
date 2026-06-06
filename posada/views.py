@@ -213,15 +213,34 @@ def create_adventurer(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data
+    cost_copper = data.get('cost_in_copper', 0)
+    if cost_copper > 0:
+        from posada.engine import pay_with_change
+        class DummyItem:
+            pass
+        dummy = DummyItem()
+        dummy.cost_marco = dummy.cost_real = dummy.cost_talento = dummy.cost_sueldo = 0
+        dummy.cost_iota = dummy.cost_drabin = dummy.cost_ardite = 0
+        dummy.cost_silver_penny = dummy.cost_iron_penny = dummy.cost_iron_half_penny = 0
+        dummy.cost_copper_penny = cost_copper
+        
+        if not pay_with_change(guild, dummy):
+            return Response({
+                "status": "error",
+                "message": f"Fondos insuficientes. El contrato cuesta {cost_copper} Monedas de Cobre (o equivalente)."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     stats = data.get('stats', None)
+    recruit_lvl = data.get('level', 1)
 
     adv = Adventurer.objects.create(
         name=data.get('name', 'Aventurero Desconocido'),
         adv_class=data.get('adv_class', 'FTR'),
         race=data.get('race', 'HUM'),
         gender=data.get('gender', 'O'),
-        max_hp=25,
-        current_hp=25,
+        level=recruit_lvl,
+        max_hp=25 + (recruit_lvl * 5),
+        current_hp=25 + (recruit_lvl * 5),
         # Si vienen stats de la taberna, los asignamos. Si no, 0.
         base_str=stats['str'] if stats else 0, base_dex=stats['dex'] if stats else 0,
         base_con=stats['con'] if stats else 0, base_int=stats['int'] if stats else 0,
@@ -238,25 +257,40 @@ def create_adventurer(request):
 
 @api_view(['GET'])
 def tavern_recruits(request):
-    """Genera 3 reclutas procedurales con nombres y stats aleatorios."""
+    """Genera reclutas procedurales escalados al Gremio."""
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+    # 3 reclutas base + 2 por cada nivel después del 1
+    num_recruits = 3 + (guild.prestige_level - 1) * 2
+    
+    # Calcular nivel máximo posible basado en los aventureros actuales
+    max_lvl = 1
+    advs = Adventurer.objects.all()
+    if advs.exists():
+        max_lvl = max([a.level for a in advs])
+    max_recruit_lvl = max(1, max_lvl - 1)
+
     prefixes = ["Thor", "Grim", "Ar", "Leg", "Kvoth", "El",
                 "Fae", "Gael", "Bae", "Mor", "Dae", "Val", "Gim"]
     suffixes = ["din", "gar", "agorn", "olas", "e", "rond",
                 "lin", "dor", "th", "gan", "mon", "ria", "li"]
 
     recruits = []
-    for _ in range(3):
+    for _ in range(num_recruits):
         # Generación de Identidad
         name = random.choice(prefixes) + random.choice(suffixes)
         adv_class_obj = random.choice(AdventurerClass.choices)
         race_obj = random.choice(AdventurerRace.choices)
         gender_obj = random.choice(AdventurerGender.choices)
 
-        # Reparto Procedural de los 13 Puntos Base
+        recruit_lvl = random.randint(1, max_recruit_lvl)
+        cost_copper = recruit_lvl * 50
+        equipment_desc = f"Set Básico Nv. {recruit_lvl}" if recruit_lvl < 5 else f"Set Curtido Nv. {recruit_lvl}"
+
+        # Reparto Procedural de los Puntos Base
         stats = {'str': 0, 'dex': 0, 'con': 0,
                  'int': 0, 'wis': 0, 'cha': 0, 'luk': 0}
         keys = list(stats.keys())
-        for _ in range(13):
+        for _ in range(13 + (recruit_lvl - 1)):
             stats[random.choice(keys)] += 1
 
         recruits.append({
@@ -266,7 +300,10 @@ def tavern_recruits(request):
             "race": race_obj[0],
             "race_display": race_obj[1],
             "gender": gender_obj[0],
-            "stats": stats
+            "stats": stats,
+            "level": recruit_lvl,
+            "cost_in_copper": cost_copper,
+            "equipment": equipment_desc
         })
     return Response({"recruits": recruits})
 

@@ -594,6 +594,20 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 script.append({"second": current_second - 15, "type": "loot", "coin": "drabin",
                               "amount": 1, "message": f"{adv.name} desenterró 1 Drabín."})
 
+            # Drops aleatorios
+            if all_items_db and random.random() < (0.05 + (luk_bonus * 0.01)):
+                roll = random.random()
+                rarity = 'COM'
+                if roll < 0.05: rarity = 'RAR'
+                elif roll < 0.25: rarity = 'UNC'
+                
+                pool = [i for i in all_items_db if i.rarity == rarity]
+                if not pool:
+                    pool = all_items_db
+                drop_item = random.choice(pool)
+                script.append({"second": current_second - 5, "type": "item_loot", "item_id": drop_item.id, "adventurer_id": adv.id,
+                              "message": f"🎁 {adv.name} encontró algo brillando: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
+
         elif state == "COMBAT":
             current_second += 15
             if current_second >= total_seconds:
@@ -1712,36 +1726,26 @@ def market_phase(adventurers_qs, event_log):
             continue
 
         valid_items = [i for i in all_items if is_class_allowed(adv, i)]
-        affordable_items = [i for i in valid_items if can_afford(adv, i)]
-
-        if not affordable_items:
-            continue
-
-        purchased_item = None
-
-        # primera prioridad: supervivencia
-        if adv.current_hp < (adv.max_hp * 0.4):
-            potions = [i for i in affordable_items if i.item_type == 'CNS']
-            if potions:
-                purchased_item = max(potions, key=lambda x: get_item_score(x))
-
-        # segunda prioridad: busca el mayor salto de estadísticas
-        if not purchased_item:
-            best_upgrade = None
-            best_score_diff = 0
-
-            for item in affordable_items:
-                if item.item_type in ['CNS', 'MSC']:
-                    continue
-
+        
+        shopping = True
+        purchases = 0
+        while shopping and purchases < 5:  # Limitar a 5 compras por sesión para no trabar
+            affordable_items = [i for i in valid_items if can_afford(adv, i)]
+            if not affordable_items:
+                break
+            
+            # Inteligencia de Ahorro: Revisar si hay objetos deseables (vacíos o mejoras) que el aventurero aún no puede pagar.
+            is_saving = False
+            unaffordable_items = [i for i in valid_items if not can_afford(adv, i) and i.item_type not in ['CNS', 'MSC']]
+            for item in unaffordable_items:
                 score_new = get_item_score(item)
                 curr_score = -1
-
                 if item.item_type == 'RNG':
-                    s1 = get_item_score(
-                        adv.equip_ring_1) if adv.equip_ring_1 else -1
-                    s2 = get_item_score(
-                        adv.equip_ring_2) if adv.equip_ring_2 else -1
+                    if not adv.equip_ring_1 or not adv.equip_ring_2:
+                        is_saving = True
+                        break
+                    s1 = get_item_score(adv.equip_ring_1)
+                    s2 = get_item_score(adv.equip_ring_2)
                     curr_score = min(s1, s2)
                 else:
                     slot_map = {
@@ -1752,26 +1756,106 @@ def market_phase(adventurers_qs, event_log):
                     }
                     slot_name = slot_map.get(item.item_type)
                     if slot_name:
+                        if not getattr(adv, slot_name):
+                            is_saving = True
+                            break
                         curr_item = getattr(adv, slot_name)
-                        curr_score = get_item_score(
-                            curr_item) if curr_item else -1
-
+                        curr_score = get_item_score(curr_item) if curr_item else -1
                         if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
                             continue
 
                 if score_new > curr_score:
-                    diff = score_new - curr_score
-                    if diff > best_score_diff:
-                        best_score_diff = diff
-                        best_upgrade = item
+                    is_saving = True
+                    break
 
-            if best_upgrade:
-                purchased_item = best_upgrade
+            purchased_item = None
 
-        # Ejecutar transacción
-        if purchased_item:
-            if pay_with_change(adv, purchased_item):
-                _auto_equip(adv, purchased_item, event_log, "Mercado")
+            # 1. Prioridad: Supervivencia
+            if adv.current_hp < (adv.max_hp * 0.4):
+                potions = [i for i in affordable_items if i.item_type == 'CNS']
+                if potions:
+                    purchased_item = max(potions, key=lambda x: get_item_score(x))
+
+            # 2. Prioridad: Llenar espacios vacíos
+            if not purchased_item:
+                for item in affordable_items:
+                    if item.item_type in ['CNS', 'MSC']:
+                        continue
+                    
+                    if item.item_type == 'RNG':
+                        if not adv.equip_ring_1 or not adv.equip_ring_2:
+                            purchased_item = item
+                            break
+                    else:
+                        slot_map = {
+                            'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
+                            'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
+                            'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
+                            'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
+                        }
+                        slot_name = slot_map.get(item.item_type)
+                        if slot_name and not getattr(adv, slot_name):
+                            # Si está comprando un OFF, validar que no tenga un W2H
+                            if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
+                                continue
+                            purchased_item = item
+                            break
+
+            # 3. Prioridad: Mejoras significativas
+            if not purchased_item:
+                best_upgrade = None
+                best_score_diff = 0
+
+                for item in affordable_items:
+                    if item.item_type in ['CNS', 'MSC']:
+                        continue
+
+                    score_new = get_item_score(item)
+                    curr_score = -1
+
+                    if item.item_type == 'RNG':
+                        s1 = get_item_score(adv.equip_ring_1) if adv.equip_ring_1 else -1
+                        s2 = get_item_score(adv.equip_ring_2) if adv.equip_ring_2 else -1
+                        curr_score = min(s1, s2)
+                    else:
+                        slot_map = {
+                            'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
+                            'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
+                            'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
+                            'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
+                        }
+                        slot_name = slot_map.get(item.item_type)
+                        if slot_name:
+                            curr_item = getattr(adv, slot_name)
+                            curr_score = get_item_score(curr_item) if curr_item else -1
+
+                            if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
+                                continue
+
+                    if score_new > curr_score:
+                        diff = score_new - curr_score
+                        if diff > best_score_diff:
+                            best_score_diff = diff
+                            best_upgrade = item
+
+                if best_upgrade:
+                    purchased_item = best_upgrade
+
+            # 4. Prioridad: Misceláneos o consumibles si no hay más equipo útil
+            # Si el aventurero está ahorrando para algo caro, la probabilidad de malgastar dinero en misceláneos baja drásticamente (del 40% al 5%).
+            buy_chance = 0.05 if is_saving else 0.40
+            if not purchased_item and random.random() < buy_chance:
+                misc_items = [i for i in affordable_items if i.item_type in ['CNS', 'MSC']]
+                if misc_items:
+                    purchased_item = random.choice(misc_items)
+
+            # Ejecutar transacción
+            if purchased_item:
+                if pay_with_change(adv, purchased_item):
+                    _auto_equip(adv, purchased_item, event_log, "Mercado")
+                    purchases += 1
+            else:
+                shopping = False
 
 
 def consolidate_wealth(guild_id):

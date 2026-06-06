@@ -1049,6 +1049,27 @@ class NewCalendarEventModal(ModalScreen[dict]):
 
 # --- MODALES DE DETALLE ---
 
+class DeleteConfirmationModal(ModalScreen[bool]):
+    CSS = """
+    #del_confirm_dialog { width: 45; height: auto; padding: 1 2; border: solid $error; background: $surface; }
+    .modal_title { text-style: bold; color: $error; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    """
+    def compose(self) -> ComposeResult:
+        with Vertical(id="del_confirm_dialog"):
+            yield Label("¿Eliminar aventurero permanentemente?", classes="modal_title")
+            with Horizontal(classes="btn_row"):
+                yield Button("Sí, eliminar", variant="error", id="btn_confirm_del")
+                yield Button("Cancelar", variant="primary", id="btn_cancel_del")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_confirm_del":
+            self.dismiss(True)
+        elif event.button.id == "btn_cancel_del":
+            self.dismiss(False)
+
+
 class HabitDetailsModal(ModalScreen[None]):
     """Panel de detalle de un hábito diario."""
 
@@ -1477,7 +1498,7 @@ class PosadaMainScreen(Screen):
         self.clock_ticker = self.set_interval(1, self.tick_timer, pause=True)
 
         self.query_one("#tavern_table", DataTable).add_columns(
-            "Nombre", "Clase", "Raza", "Estadísticas Base (13 pts)")
+            "Nombre", "Clase", "Raza", "Nivel", "Costo", "Equipamiento", "Stats Base")
         self.refresh_tavern_api()  # Llena la taberna al entrar
 
         # Sincroniza la interfaz con la base de datos
@@ -1912,7 +1933,12 @@ class PosadaMainScreen(Screen):
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key
             adv_id = row_key.value
-            self.request_deletion(adv_id)
+
+            def check_deletion(confirm: bool | None):
+                if confirm:
+                    self.request_deletion(adv_id)
+
+            self.app.push_screen(DeleteConfirmationModal(), check_deletion)
         except Exception:
             self.app.notify(
                 "Selecciona un aventurero de la tabla primero.", severity="warning")
@@ -1967,8 +1993,11 @@ class PosadaMainScreen(Screen):
         for idx, r in enumerate(recruits):
             s = r["stats"]
             stats_str = f"F:{s['str']} D:{s['dex']} C:{s['con']} I:{s['int']} S:{s['wis']} Ca:{s['cha']} Lu:{s['luk']}"
+            cost_str = f"{r.get('cost_in_copper', 0)} Cobre"
+            eq_str = r.get("equipment", "Ninguno")
+            lvl_str = str(r.get("level", 1))
             table.add_row(r["name"], r["adv_class_display"],
-                          r["race_display"], stats_str, key=str(idx))
+                          r["race_display"], lvl_str, cost_str, eq_str, stats_str, key=str(idx))
 
     def action_refresh_tavern(self) -> None:
         if self.query_one(TabbedContent).active == "tab_tavern":
