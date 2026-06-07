@@ -123,25 +123,7 @@ def furia_feroz(context):
     return True
 
 
-@SkillRegistry.register(
-    skill_id="accion_astuta", name="Acción Astuta", skill_type="COMBAT", req_level=2, allowed_classes=["ROG"]
-)
-def accion_astuta(context):
-    caster = context['caster']
-
-    # COSTO: 1 Stamina
-    if context.get('eval_mode'):
-        if caster.class_resources.get('stamina', 0) < 1:
-            return 0
-        if caster.current_hp < (caster.max_hp * 0.6) and 'DODGING' not in context['adv_status'][caster.id]:
-            return 80
-        return 0
-
-    caster.class_resources['stamina'] -= 1
-    context['adv_status'][caster.id].add('DODGING')
-    context['log'].append({"second": context['current_second'], "type": "flavor",
-                           "message": f"💨 {caster.name} quema Stamina en una [bold blue]Acción Astuta[/bold blue] volviéndose escurridizo."})
-    return True
+# Removido: accion_astuta antigua (reemplazada en la sección exclusiva del ROG)
 
 
 # Removido: golpe_aturdidor antigua (reemplazada en la sección exclusiva del MNK)
@@ -2407,4 +2389,194 @@ def aura_coraje(context):
             heal_amount = random.randint(30, 60) + caster.get_stat_modifiers()['cha'] * 4
             context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
                                    "message": f"    -> {adv.name} siente cómo el miedo abandona su cuerpo y sus heridas cierran milagrosamente ({heal_amount} HP curados)."})
+    return True
+
+# ==========================================
+# ROGUE SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="ataque_furtivo", name="Ataque Furtivo", skill_type="COMBAT", req_level=1, allowed_classes=["ROG"]
+)
+def ataque_furtivo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(10, 20) + caster.get_stat_modifiers()['dex'] * 3
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🗡️ ¡ATAQUE FURTIVO! Aprovechando un punto ciego, {caster.name} apuñala brutalmente a [bold red]{target['name']}[/bold red] ({dmg} daño crítico)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="accion_astuta_rog", name="Acción Astuta", skill_type="COMBAT", req_level=2, allowed_classes=["ROG"]
+)
+def accion_astuta_rog(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(5, 12) + caster.get_stat_modifiers()['dex']
+    target['hp'] -= dmg
+    
+    heal_amount = random.randint(5, 15) + caster.get_stat_modifiers()['dex'] * 2
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💨 {caster.name} golpea rápido a [bold red]{target['name']}[/bold red] ({dmg} daño) y usa su Acción Astuta para retirarse de la línea enemiga."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> 🛡️ La maniobra esquiva confunde a los enemigos, previniendo sus contraataques ({heal_amount} HP mitigados pasivamente)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="arquetipo_picaro", name="Arquetipo de Pícaro", skill_type="SESSION", req_level=3, allowed_classes=["ROG"]
+)
+def arquetipo_picaro(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80
+
+    coins = random.randint(5, 15) * 10 # 50 a 150 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🎭 Usando las artes de su Arquetipo de Pícaro, {caster.name} saquea cofres ocultos que la party había ignorado (+{coins} cobres)."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(3, 8) + caster.get_stat_modifiers()['dex']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> Consigue suministros médicos extra ({heal_amount} HP sanados para {adv.name})."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="pies_ligeros", name="Pies Ligeros", skill_type="SESSION", req_level=4, allowed_classes=["ROG"]
+)
+def pies_ligeros(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 75 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🐾 Con Pies Ligeros, {caster.name} guía a la party por un pasillo plagado de trampas invisibles y terreno peligroso."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(5, 15) + caster.get_stat_modifiers()['dex'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} sortea una trampa mortal ({heal_amount} HP de letalidad evitada)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="esquiva_asombrosa", name="Esquiva Asombrosa", skill_type="COMBAT", req_level=5, allowed_classes=["ROG"]
+)
+def esquiva_asombrosa(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85 if caster.current_hp < caster.max_hp * 0.5 else 0
+
+    if caster.current_hp < caster.max_hp * 0.5:
+        heal_amount = random.randint(20, 35) + caster.get_stat_modifiers()['dex'] * 3
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🛡️ ¡Esquiva Asombrosa! {caster.name} fue golpeado salvajemente, pero dobla su cuerpo a último segundo para dividir el impacto a la mitad ({heal_amount} HP recuperados)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="pericia_duplicada", name="Pericia Duplicada", skill_type="SESSION", req_level=6, allowed_classes=["ROG"]
+)
+def pericia_duplicada(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90
+
+    coins = random.randint(15, 30) * 10 # 150 a 300 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🔎 Aplicando su Pericia Duplicada en Juego de Manos, {caster.name} desmonta una caja fuerte inexpugnable y se hace de oro masivo (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="evasion_rogue", name="Evasión", skill_type="COMBAT", req_level=7, allowed_classes=["ROG"]
+)
+def evasion_rogue(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if caster.current_hp < caster.max_hp * 0.4 else 0
+
+    if caster.current_hp < caster.max_hp * 0.4:
+        heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['dex'] * 4
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🌫️ ¡EVASIÓN PERFECTA! El aliento destructivo del enemigo iba a incinerarlo, pero {caster.name} no sufre ni un rasguño ({heal_amount} HP de letalidad evadida in-extremis)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="golpe_sucio", name="Golpe Sucio", skill_type="COMBAT", req_level=8, allowed_classes=["ROG"]
+)
+def golpe_sucio(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(15, 30) + caster.get_stat_modifiers()['dex'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🩸 ¡Golpe Sucio! {caster.name} le arroja ácido a los ojos a [bold red]{target['name']}[/bold red] y lo apuñala ({dmg} daño). El monstruo queda CEGADO."})
+                           
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(10, 20) + caster.get_stat_modifiers()['dex'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> El enemigo falla desesperadamente contra {adv.name} por la ceguera ({heal_amount} HP de daño enemigo prevenido)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="infiltrado_supremo", name="Infiltrado Supremo", skill_type="SESSION", req_level=9, allowed_classes=["ROG"]
+)
+def infiltrado_supremo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 85 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🎭 Como un Infiltrado Supremo, {caster.name} provee a todo el gremio de uniformes enemigos y salvoconductos falsificados, evadiendo ejércitos enteros."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(25, 40) + caster.get_stat_modifiers()['int'] * 3
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} se ahorra colosales niveles de daño y fatiga al caminar tranquilamente ({heal_amount} HP prevenidos)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="mente_escurridiza", name="Mente Escurridiza", skill_type="SESSION", req_level=10, allowed_classes=["ROG"]
+)
+def mente_escurridiza(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 95 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🧠 La Mente Escurridiza de {caster.name} es impermeable al control mental. Disipa los terrores invisibles de la sala como si no fueran nada."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['wis'] * 3
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> La cordura de {adv.name} es restaurada a través de trucos psicológicos ({heal_amount} HP curados)."})
     return True
