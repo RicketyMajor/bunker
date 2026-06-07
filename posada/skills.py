@@ -769,3 +769,196 @@ def presencia_intimidante(context):
         context['log'].append({"second": context['current_second'], "type": "flavor",
                                "message": f"👹 La Presencia Intimidante de {caster.name} paraliza a [bold red]{target['name']}[/bold red], causándole {dmg} de daño por pánico."})
     return True
+
+# ==========================================
+# BARD SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="inspiracion_bardica", name="Inspiración Bárdica", skill_type="COMBAT", req_level=1, allowed_classes=["BRD"]
+)
+def inspiracion_bardica(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 50 if context['enemies'] and context['allies'] else 0
+
+    if not context['enemies'] or not context['allies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target_enemy = random.choice(context['enemies'])
+    buffed_ally = random.choice([a for a in context['allies'] if a != caster] or [caster])
+    
+    dmg = random.randint(1, 6) + adv_mods['cha']
+    target_enemy['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🎵 {caster.name} toca una melodía motivadora. ¡Inspirado, {buffed_ally.name} asesta un golpe rápido a [bold red]{target_enemy['name']}[/bold red] por {dmg} de daño!"})
+    return True
+
+@SkillRegistry.register(
+    skill_id="erudito_todo", name="Erudito de Todo", skill_type="SESSION", req_level=2, allowed_classes=["BRD"]
+)
+def erudito_todo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 45
+
+    coins = random.randint(1, 5) * 5 # 5 a 25 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"📚 Gracias a su conocimiento como Erudito de Todo, {caster.name} identifica el valor de unos trastos que los demás ignoraron (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="cancion_descanso", name="Canción de Descanso", skill_type="SESSION", req_level=3, allowed_classes=["BRD"]
+)
+def cancion_descanso(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 65 if allies_hurt >= 2 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🎶 {caster.name} interpreta una apacible Canción de Descanso para el grupo."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(1, 6) + caster.get_stat_modifiers()['cha']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} recobra fuerzas ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="oido_absoluto", name="Oído Absoluto", skill_type="SESSION", req_level=4, allowed_classes=["BRD"]
+)
+def oido_absoluto(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 55 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"👂 Usando su Oído Absoluto, {caster.name} detecta un crujido sutil y detiene al grupo antes de activar una trampa."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = max(1, caster.get_stat_modifiers()['wis'] + caster.get_stat_modifiers()['cha'])
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} respira aliviado por haber evitado el peligro ({heal_amount} HP equivalentes)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="inspiracion_fontanal", name="Inspiración Fontanal", skill_type="SESSION", req_level=5, allowed_classes=["BRD"]
+)
+def inspiracion_fontanal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.4)]
+        return 75 if critical_allies else 0
+
+    critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.4)]
+    if critical_allies:
+        target = random.choice(critical_allies)
+        heal_amount = random.randint(4, 16) + caster.get_stat_modifiers()['cha'] * 2
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target.id, "amount": heal_amount,
+                               "message": f"⛲ {caster.name} recita un himno épico de Inspiración Fontanal. ¡{target.name} se llena de vitalidad inagotable y recupera {heal_amount} HP!"})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="contrahechizo_musical", name="Contrahechizo Musical", skill_type="COMBAT", req_level=6, allowed_classes=["BRD"]
+)
+def contrahechizo_musical(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        for status_list in adv_status.values():
+            if any(s in status_list for s in ['PSN', 'BRN', 'BLD']):
+                return 80
+        return 0
+
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        bad_status = [s for s in status_list if s in ['PSN', 'BRN', 'BLD']]
+        if bad_status:
+            for s in bad_status:
+                adv_status[adv.id].remove(s)
+            
+            heal_amount = random.randint(1, 8) + caster.get_stat_modifiers()['cha']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"🎸 {caster.name} toca un Contrahechizo Musical disonante que quiebra la magia enemiga, limpiando los estados de {adv.name} y curándole {heal_amount} HP."})
+            return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="murmullo_perturbador", name="Murmullo Perturbador", skill_type="COMBAT", req_level=7, allowed_classes=["BRD"]
+)
+def murmullo_perturbador(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 60 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = max(5, caster.get_stat_modifiers()['cha'] * 3) + random.randint(1, 8)
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🗣️ {caster.name} le lanza un insulto psíquico con Murmullo Perturbador a [bold red]{target['name']}[/bold red], infligiéndole {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="presencia_escenica", name="Presencia Escénica", skill_type="SESSION", req_level=8, allowed_classes=["BRD"]
+)
+def presencia_escenica(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85
+
+    coins = 100 # 1 Drabin
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🎭 Gracias a la Presencia Escénica de {caster.name}, el grupo impresiona a unos mercaderes y consiguen un botín garantizado (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="improvisacion_magica", name="Improvisación Mágica", skill_type="COMBAT", req_level=9, allowed_classes=["BRD"]
+)
+def improvisacion_magica(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if len(context['enemies']) >= 2 else 40
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🎭 {caster.name} recurre a su Improvisación Mágica, imitando un hechizo elemental destructivo a la perfección."})
+    
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 8) for _ in range(4)) + caster.get_stat_modifiers()['cha'] # 4d8
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 💥 El hechizo improvisado devasta a [bold red]{target['name']}[/bold red] por {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="secretos_magicos", name="Secretos Mágicos", skill_type="COMBAT", req_level=10, allowed_classes=["BRD"]
+)
+def secretos_magicos(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 100 if context['enemies'] and context['allies'] else 0
+
+    if not context['enemies'] or not context['allies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target_enemy = random.choice(context['enemies'])
+    buffed_ally = min(context['allies'], key=lambda a: a.current_hp / a.max_hp)
+    
+    dmg = random.randint(2, 20) + adv_mods['cha'] * 2
+    heal_amount = random.randint(2, 20) + adv_mods['cha'] * 2
+    
+    target_enemy['hp'] -= dmg
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌟 Usando Secretos Mágicos, {caster.name} fusiona roles: asesta {dmg} daño mágico a [bold red]{target_enemy['name']}[/bold red]..."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": buffed_ally.id, "amount": heal_amount,
+                           "message": f"🌟 ...y simultáneamente canaliza un milagro que cura a {buffed_ally.name} por {heal_amount} HP."})
+    return True
