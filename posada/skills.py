@@ -339,3 +339,211 @@ def eldritch_blast(context):
             context['log'].append({"second": context['current_second'], "type": "flavor",
                                    "message": f"    -> El rayo falla contra [bold red]{target['name']}[/bold red]."})
     return True
+
+# ==========================================
+# ARTIFICER SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="chatarra_magica", name="Chatarra Mágica", skill_type="SESSION", req_level=1, allowed_classes=["ART"]
+)
+def chatarra_magica(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        # Solo usar si hay aliados heridos
+        allies = [a for a in context['allies'] if a.current_hp < a.max_hp]
+        return 45 if allies else 0
+
+    adv_mods = caster.get_stat_modifiers()
+    heal_amount = max(1, random.randint(1, 4) + adv_mods['int'])
+    
+    allies = [a for a in context['allies'] if a.current_hp < a.max_hp]
+    if allies:
+        target = min(allies, key=lambda a: a.current_hp / a.max_hp)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target.id, "amount": heal_amount,
+                               "message": f"🔧 {caster.name} ajusta la armadura abollada de {target.name}, restaurando {heal_amount} HP."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="infusiones_basicas", name="Infusiones Básicas", skill_type="SESSION", req_level=2, allowed_classes=["ART"]
+)
+def infusiones_basicas(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 40
+
+    target = random.choice(context['allies'])
+    # Se traduce como un ataque gratuito del aliado (un buff simulado)
+    if not context['enemies']:
+        return False
+    
+    enemy = random.choice(context['enemies'])
+    dmg = random.randint(1, 6) + caster.get_stat_modifiers()['int']
+    enemy['hp'] -= dmg
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"✨ {caster.name} imbuye temporalmente el arma de {target.name}. ¡El impacto infundido inflige {dmg} de daño extra a [bold red]{enemy['name']}[/bold red]!"})
+    return True
+
+@SkillRegistry.register(
+    skill_id="especializacion_temprana", name="Especialización Temprana", skill_type="COMBAT", req_level=3, allowed_classes=["ART"]
+)
+def especializacion_temprana(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 60 if context['enemies'] else 0
+
+    adv_mods = caster.get_stat_modifiers()
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚙️ {caster.name} despliega su Cañón Elíxir en el campo de batalla."})
+    
+    if context['enemies']:
+        target = random.choice(context['enemies'])
+        dmg = random.randint(2, 16) + adv_mods['int'] # 2d8
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 💥 El Cañón dispara a [bold red]{target['name']}[/bold red], infligiendo {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ajuste_tuercas", name="Ajuste de Tuercas", skill_type="SESSION", req_level=4, allowed_classes=["ART"]
+)
+def ajuste_tuercas(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        # Solo evaluar alto si alguien tiene estados negativos
+        for status_list in adv_status.values():
+            if any(s in status_list for s in ['PSN', 'BRN', 'BLD']):
+                return 70
+        return 0
+
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        bad_status = [s for s in status_list if s in ['PSN', 'BRN', 'BLD']]
+        if bad_status:
+            cured = bad_status[0]
+            adv_status[adv.id].remove(cured)
+            context['log'].append({"second": context['current_second'], "type": "flavor",
+                                   "message": f"🧰 {caster.name} repara rápidamente el equipo de {adv.name}, anulando el efecto de {cured}."})
+            return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="municion_arcana", name="Munición Arcana", skill_type="COMBAT", req_level=5, allowed_classes=["ART"]
+)
+def municion_arcana(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 65 if len(context['enemies']) >= 1 else 0
+
+    adv_mods = caster.get_stat_modifiers()
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🔫 {caster.name} dispara Munición Arcana explosiva."})
+    
+    if not context['enemies']: return False
+    
+    target1 = random.choice(context['enemies'])
+    dmg1 = random.randint(1, 8) + adv_mods['int']
+    target1['hp'] -= dmg1
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"    -> Impacto directo en [bold red]{target1['name']}[/bold red] por {dmg1} daño."})
+                           
+    other_enemies = [e for e in context['enemies'] if e != target1]
+    if other_enemies:
+        target2 = random.choice(other_enemies)
+        dmg2 = random.randint(1, 8)
+        target2['hp'] -= dmg2
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> ☄️ La metralla alcanza a [bold red]{target2['name']}[/bold red] por {dmg2} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="sintonia_avanzada", name="Sintonía Avanzada", skill_type="SESSION", req_level=6, allowed_classes=["ART"]
+)
+def sintonia_avanzada(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 50 if caster.current_hp < caster.max_hp else 0
+
+    adv_mods = caster.get_stat_modifiers()
+    heal_amount = max(1, random.randint(2, 8) + adv_mods['int'])
+    
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"🔋 {caster.name} canaliza la energía estática de sus objetos mágicos, curándose {heal_amount} HP."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="genio_intermitente", name="Genio Intermitente", skill_type="SESSION", req_level=7, allowed_classes=["ART"]
+)
+def genio_intermitente(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        # Alto puntaje si un aliado está a menos del 25% de vida
+        critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.25)]
+        return 80 if critical_allies else 0
+
+    critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.25)]
+    if critical_allies:
+        target = random.choice(critical_allies)
+        heal_amount = max(5, random.randint(3, 12) + caster.get_stat_modifiers()['int'] * 2)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target.id, "amount": heal_amount,
+                               "message": f"💡 {caster.name} tiene un chispazo de genialidad y desvía un golpe letal que iba hacia {target.name}, restaurando {heal_amount} HP equivalentes."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="blindaje_runico", name="Blindaje Rúnico", skill_type="SESSION", req_level=8, allowed_classes=["ART"]
+)
+def blindaje_runico(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 55 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    dmg = random.randint(2, 12) + caster.get_stat_modifiers()['int']
+    target['hp'] -= dmg
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛡️ La armadura de {caster.name} libera una descarga rúnica. [bold red]{target['name']}[/bold red] recibe {dmg} daño eléctrico al acercarse."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="prototipo_explosivo", name="Prototipo Explosivo", skill_type="COMBAT", req_level=9, allowed_classes=["ART"]
+)
+def prototipo_explosivo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if len(context['enemies']) > 1 else 30
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💣 {caster.name} lanza un invento inestable al centro del grupo enemigo."})
+    
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 6) for _ in range(3)) # 3d6
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 💥 [bold red]{target['name']}[/bold red] recibe {dmg} daño por fuerza."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="replica_objeto", name="Réplica de Objeto", skill_type="SESSION", req_level=10, allowed_classes=["ART"]
+)
+def replica_objeto(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 100 # Siempre útil
+
+    if random.random() < 0.50:
+        from .models import Item, ItemRarity
+        items_db = list(Item.objects.filter(rarity__in=['COM', 'UNC']))
+        if items_db:
+            drop_item = random.choice(items_db)
+            context['log'].append({"second": context['current_second'], "type": "item_loot", "item_id": drop_item.id, "adventurer_id": caster.id,
+                                   "message": f"🛠️ {caster.name} ha fabricado un prototipo rápido: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
+    else:
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"🛠️ {caster.name} intenta fabricar un objeto, pero el prototipo falla estrepitosamente."})
+    return True
