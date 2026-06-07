@@ -172,34 +172,7 @@ def accion_astuta(context):
     return True
 
 
-@SkillRegistry.register(
-    skill_id="golpe_aturdidor", name="Golpe Aturdidor", skill_type="COMBAT", req_level=5, allowed_classes=["MNK"]
-)
-def golpe_aturdidor(context):
-    caster = context['caster']
-    enemies = [m for m in context['enemies'] if 'STUNNED' not in m['status']]
-
-    # COSTO: 1 Ki
-    if context.get('eval_mode'):
-        if caster.class_resources.get('ki', 0) < 1:
-            return 0
-        return 75 if enemies else 0
-
-    caster.class_resources['ki'] -= 1
-    target = random.choice(enemies)
-
-    from posada.engine import calculate_save_dc, roll_d20
-    save_dc = calculate_save_dc(caster)
-    m_save = roll_d20() + target['stats']['con']
-
-    if m_save < save_dc:
-        target['status'].add('STUNNED')
-        context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"⚡ {caster.name} gasta 1 Ki. ¡[bold red]{target['name']}[/bold red] queda [bold yellow]ATURDIDO[/bold yellow]!"})
-    else:
-        context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"🛡️ {caster.name} intenta aturdir, pero [bold red]{target['name']}[/bold red] resiste."})
-    return True
+# Removido: golpe_aturdidor antigua (reemplazada en la sección exclusiva del MNK)
 
 
 @SkillRegistry.register(
@@ -2120,3 +2093,210 @@ def impulso_grimorio(context):
         context['log'].append({"second": context['current_second'], "type": "flavor",
                                "message": f"    -> 🌠 Tormenta arcana impacta a [bold red]{target['name']}[/bold red] sin piedad ({dmg} daño masivo)."})
     return True
+
+# ==========================================
+# MONK SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="defensa_sin_armadura", name="Defensa sin Armadura", skill_type="SESSION", req_level=1, allowed_classes=["MNK"]
+)
+def defensa_sin_armadura(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 65 if caster.current_hp < caster.max_hp else 0
+
+    if caster.current_hp < caster.max_hp:
+        heal_amount = random.randint(2, 6) + caster.get_stat_modifiers()['dex']
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🥋 Su Defensa sin Armadura y agilidad zen previenen un gran desgaste físico ({heal_amount} HP preservados)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="flujo_de_ki", name="Flujo de Ki", skill_type="COMBAT", req_level=2, allowed_classes=["MNK"]
+)
+def flujo_de_ki(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(2, 10) + caster.get_stat_modifiers()['dex'] * 2
+    target['hp'] -= dmg
+    
+    heal_amount = max(1, caster.get_stat_modifiers()['wis']) * 2
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💨 {caster.name} fluye con el Ki, asestando golpes ultrarrápidos a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> Inmediatamente adopta una postura esquiva y se retira sin ser golpeado ({heal_amount} HP mitigados/sanados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="deflectar_proyectiles", name="Deflectar Proyectiles", skill_type="COMBAT", req_level=3, allowed_classes=["MNK"]
+)
+def deflectar_proyectiles(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    heal_amount = random.randint(5, 15) + caster.get_stat_modifiers()['dex']
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    dmg = heal_amount # Devuelve el daño que mitigó
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"✋ ¡Reflejo zen! {caster.name} atrapa un proyectil en el aire (Mitiga {heal_amount} HP) y lo devuelve velozmente a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="caida_lenta", name="Caída Lenta", skill_type="SESSION", req_level=4, allowed_classes=["MNK"]
+)
+def caida_lenta(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 65 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🪶 El grupo resbala en un acantilado profundo. {caster.name} usa Caída Lenta, rebotando en las paredes para atrapar y salvar a sus aliados."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(5, 12) + caster.get_stat_modifiers()['dex']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} aterriza de pie suavemente ({heal_amount} HP salvados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="golpe_aturdidor_mnk", name="Golpe Aturdidor", skill_type="COMBAT", req_level=5, allowed_classes=["MNK"]
+)
+def golpe_aturdidor_mnk(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(5, 15) + caster.get_stat_modifiers()['dex'] * 2
+    target['hp'] -= dmg
+    
+    heal_amount = random.randint(10, 20) + caster.get_stat_modifiers()['wis'] * 2
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚡ {caster.name} asesta un Golpe Aturdidor certero. [bold red]{target['name']}[/bold red] recibe ({dmg} daño) y queda completamente paralizado."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> 🛡️ La parálisis enemiga previene letalidad inminente al grupo ({heal_amount} HP mitigados pasivamente)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ataques_ki", name="Ataques de Ki Mágicos", skill_type="COMBAT", req_level=6, allowed_classes=["MNK"]
+)
+def ataques_ki(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 10) for _ in range(3)) + caster.get_stat_modifiers()['wis'] * 3
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"👊 Sus puños brillan con pura energía espiritual. {caster.name} desata Ataques de Ki Mágicos, ignorando resistencias de [bold red]{target['name']}[/bold red] ({dmg} daño absoluto)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="evasion_absoluta", name="Evasión Absoluta", skill_type="COMBAT", req_level=7, allowed_classes=["MNK"]
+)
+def evasion_absoluta(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if caster.current_hp <= (caster.max_hp * 0.3) else 0
+
+    if caster.current_hp <= (caster.max_hp * 0.3):
+        heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['dex'] * 4
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🌫️ ¡Evasión Absoluta! El ataque de área iba a ser mortal, pero {caster.name} se mueve más rápido que la luz (Esquiva impecable: {heal_amount} HP curados/evitados)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="mente_serena", name="Mente Serena", skill_type="SESSION", req_level=8, allowed_classes=["MNK"]
+)
+def mente_serena(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 75 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🧘 Mediante su Mente Serena, {caster.name} disipa los terrores invisibles y la fatiga del equipo en absoluto silencio."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(10, 20) + caster.get_stat_modifiers()['wis'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} halla la paz mental ({heal_amount} HP restaurados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="movimiento_sin_limites", name="Movimiento sin Límites", skill_type="SESSION", req_level=9, allowed_classes=["MNK"]
+)
+def movimiento_sin_limites(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80
+
+    coins = random.randint(8, 15) * 10 # 80 a 150 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🏃‍♂️ Desafiando la gravedad con su Movimiento sin Límites, {caster.name} corre por una cascada vertical y hurta un tesoro intocable (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="pureza_cuerpo", name="Pureza de Cuerpo", skill_type="SESSION", req_level=10, allowed_classes=["MNK"]
+)
+def pureza_cuerpo(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        for status_list in adv_status.values():
+            if 'PSN' in status_list:
+                return 95
+        return 40 if caster.current_hp < caster.max_hp else 0
+
+    cleansed = False
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🧬 El metabolismo inmaculado de {caster.name} exuda una Pureza de Cuerpo sobrehumana."})
+
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        if 'PSN' in status_list:
+            cleansed = True
+            adv_status[adv.id].remove('PSN')
+            heal_amount = random.randint(15, 30) + caster.get_stat_modifiers()['con'] * 3
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> 🧪 Su tacto expulsa el veneno letal de {adv.name} y purifica la sangre ({heal_amount} HP curados)."})
+                                   
+    if caster.current_hp < caster.max_hp and not cleansed:
+         heal_amount = random.randint(20, 50) + caster.get_stat_modifiers()['con'] * 4
+         caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+         context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                                "message": f"    -> 🌱 Su propio cuerpo rechaza toda enfermedad pasivamente, regenerándose ({heal_amount} HP sanados)."})
+         cleansed = True
+
+    return cleansed
