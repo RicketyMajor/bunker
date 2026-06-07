@@ -268,42 +268,7 @@ def castigo_divino(context):
 # ==========================================
 
 
-@SkillRegistry.register(
-    skill_id="bola_de_fuego", name="Bola de Fuego", skill_type="SESSION", req_level=5, allowed_classes=["WIZ"]
-)
-def bola_de_fuego(context):
-    caster = context['caster']
-    if context.get('eval_mode'):
-        if caster.class_resources.get('mana', 0) < 3:
-            return 0
-        return 85 if len(context['enemies']) > 1 else 20
-
-    caster.class_resources['mana'] -= 3
-    from posada.engine import calculate_save_dc, roll_d20
-    save_dc = calculate_save_dc(caster)
-
-    context['log'].append({"second": context['current_second'], "type": "flavor",
-                           "message": f"🔥 {caster.name} sacrifica 3 de Maná conjurando [bold red]BOLA DE FUEGO[/bold red]."})
-
-    fire_dmg = sum(random.randint(1, 6) for _ in range(8))
-    for target in context['enemies']:
-        # Monstruo tira D20 para intentar salvarse
-        m_raw_save = random.randint(1, 20)
-        is_saved = False
-        if m_raw_save == 20:
-            is_saved = True  # 20 Natural salva siempre
-        elif m_raw_save == 1:
-            is_saved = False  # 1 Natural falla siempre
-        else:
-            is_saved = (m_raw_save + target['stats']['dex']) >= save_dc
-
-        dmg_taken = fire_dmg // 2 if is_saved else fire_dmg
-        final_dmg = max(1, dmg_taken - target['stats']['con'])
-
-        target['hp'] -= final_dmg
-        context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"    -> [bold red]{target['name']}[/bold red] recibe {final_dmg} daño."})
-    return True
+# Removido: bola_de_fuego antigua (reemplazada en la sección exclusiva de WIZ)
 
 
 @SkillRegistry.register(
@@ -1957,4 +1922,201 @@ def metamagia_avanzada(context):
         heal_amount = random.randint(5, 15) + caster.get_stat_modifiers()['cha']
         context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
                                "message": f"    -> 🛡️ La magia cuidadosamente esquiva a {adv.name}, dándole energía ({heal_amount} HP recuperados)."})
+    return True
+
+# ==========================================
+# WIZARD SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="proyectil_magico", name="Proyectil Mágico", skill_type="COMBAT", req_level=1, allowed_classes=["WIZ"]
+)
+def proyectil_magico(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    # 3 dardos mágicos. Puede impactar al mismo o distintos.
+    targets = [random.choice(context['enemies']) for _ in range(3)]
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🪄 {caster.name} conjura Proyectil Mágico, lanzando 3 dardos de fuerza ineludibles:"})
+                           
+    for i, target in enumerate(targets):
+        dmg = random.randint(2, 5) + caster.get_stat_modifiers()['int']
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 💫 El dardo {i+1} impacta a [bold red]{target['name']}[/bold red] de lleno ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="tradicion_arcana", name="Tradición Arcana", skill_type="SESSION", req_level=2, allowed_classes=["WIZ"]
+)
+def tradicion_arcana(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 50
+
+    coins = random.randint(3, 8) * 10 # 30 a 80 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"📚 Gracias a su Tradición Arcana, {caster.name} optimiza los recursos de escriba del grupo, recuperando y ahorrando materiales por valor de {coins} cobres."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="memorizacion_rapida", name="Memorización Rápida", skill_type="SESSION", req_level=3, allowed_classes=["WIZ"]
+)
+def memorizacion_rapida(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 65 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"📖 Usando su Memorización Rápida, {caster.name} traza velozmente runas de protección sobre el grupo."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(2, 8) + caster.get_stat_modifiers()['int']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> La magia escuda a {adv.name} de las inclemencias ({heal_amount} HP prevenidos/curados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="bola_de_fuego_wiz", name="Bola de Fuego", skill_type="COMBAT", req_level=4, allowed_classes=["WIZ"]
+)
+def bola_de_fuego_wiz(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🔥 ¡BOLA DE FUEGO! {caster.name} desata una explosión térmica devastadora en toda la sala:"})
+                           
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 6) for _ in range(8)) + caster.get_stat_modifiers()['int'] * 2
+        target['hp'] -= dmg
+        
+        # Posibilidad de aplicar BRN (Burn) simulado
+        burn_msg = ""
+        if random.random() < 0.3:
+            adv_status = context.get('adv_status', {}) # en este caso no aplica a monstruos permanentemente, solo flavor
+            burn_msg = " [red](Quemado)[/red]"
+            
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 💥 [bold red]{target['name']}[/bold red] es engullido por las llamas ({dmg} daño){burn_msg}."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="enfoque_inquebrantable", name="Enfoque Inquebrantable", skill_type="COMBAT", req_level=5, allowed_classes=["WIZ"]
+)
+def enfoque_inquebrantable(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if caster.current_hp <= (caster.max_hp * 0.4) else 0
+
+    if caster.current_hp <= (caster.max_hp * 0.4):
+        heal_amount = random.randint(10, 20) + caster.get_stat_modifiers()['con'] * 2
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🧠 {caster.name} mantiene un Enfoque Inquebrantable frente al dolor. La magia residual fortifica su cuerpo ({heal_amount} HP recuperados)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="rasgo_escuela", name="Rasgo de Escuela Especializado", skill_type="COMBAT", req_level=6, allowed_classes=["WIZ"]
+)
+def rasgo_escuela(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(15, 30) + caster.get_stat_modifiers()['int'] * 3
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🎓 {caster.name} demuestra el pináculo de su Escuela de Magia, desintegrando las defensas de [bold red]{target['name']}[/bold red] ({dmg} daño mágico absoluto)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="barrera_intelectual", name="Barrera Intelectual", skill_type="SESSION", req_level=7, allowed_classes=["WIZ"]
+)
+def barrera_intelectual(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 60 if allies_hurt >= 2 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛡️ La Barrera Intelectual de {caster.name} se expande, disipando toxinas mentales y fatiga de la party."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(5, 12) + caster.get_stat_modifiers()['int']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> La mente de {adv.name} se aclara ({heal_amount} HP sanados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="biblioteca_mental", name="Biblioteca Mental", skill_type="SESSION", req_level=8, allowed_classes=["WIZ"]
+)
+def biblioteca_mental(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 80 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🗺️ Accediendo a su Biblioteca Mental, {caster.name} descifra la arquitectura del calabozo y guía al grupo por rutas seguras."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(10, 20) + caster.get_stat_modifiers()['int'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} evita trampas mortales gracias al mapa ({heal_amount} HP de daño evitado)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="contrahechizo_calculado", name="Contrahechizo Calculado", skill_type="COMBAT", req_level=9, allowed_classes=["WIZ"]
+)
+def contrahechizo_calculado(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if caster.current_hp <= (caster.max_hp * 0.3) and context['enemies'] else 0
+
+    if not context['enemies'] or caster.current_hp > (caster.max_hp * 0.3): return False
+    target = random.choice(context['enemies'])
+    
+    heal_amount = random.randint(20, 40) + caster.get_stat_modifiers()['int'] * 3
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    dmg = heal_amount // 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛑 ¡Contrahechizo Calculado! {caster.name} anula un ataque letal, absorbiendo su energía (Mitiga {heal_amount} HP) y redirigiéndola como un latigazo a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="impulso_grimorio", name="Impulso de Grimorio", skill_type="COMBAT", req_level=10, allowed_classes=["WIZ"]
+)
+def impulso_grimorio(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if context['enemies'] else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"📜 {caster.name} desata el Impulso de Grimorio. Rompiendo las leyes de la magia, lanza una ráfaga incesante de conjuros:"})
+                           
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 10) for _ in range(6)) + caster.get_stat_modifiers()['int'] * 4
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 🌠 Tormenta arcana impacta a [bold red]{target['name']}[/bold red] sin piedad ({dmg} daño masivo)."})
     return True
