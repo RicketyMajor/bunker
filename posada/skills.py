@@ -65,35 +65,7 @@ class SkillRegistry:
 #    return True
 
 
-@SkillRegistry.register(
-    skill_id="curacion_menor", name="Curación Menor", skill_type="COMBAT", req_level=1, allowed_classes=["PAL"]
-)
-def curacion_menor(context):
-    caster = context['caster']
-    allies = context['allies']
-
-    # COSTO: 1 Maná
-    if context.get('eval_mode'):
-        if caster.class_resources.get('mana', 0) < 1:
-            return 0
-        wounded_allies = [a for a in allies if a.current_hp < a.max_hp]
-        if not wounded_allies:
-            return 0
-        target = min(wounded_allies, key=lambda a: a.current_hp / a.max_hp)
-        return 40 + min(60, (target.max_hp - target.current_hp) * 5)
-
-    caster.class_resources['mana'] -= 1
-
-    wounded_allies = [a for a in allies if a.current_hp < a.max_hp]
-    target = min(wounded_allies, key=lambda a: a.current_hp / a.max_hp)
-    heal_amount = random.randint(
-        1, 8) + caster.get_stat_modifiers().get('wis', 0)
-    target.current_hp = min(target.max_hp, target.current_hp + heal_amount)
-
-    context['log'].append({"second": context['current_second'], "type": "flavor",
-                           "message": f"✨ {caster.name} gasta Maná y lanza [bold yellow]Curación Menor[/bold yellow] sobre {target.name} (+{heal_amount} HP)."})
-    return True
-
+# Removido: curacion_menor antigua (reemplazada en la sección exclusiva del PAL)
 
 @SkillRegistry.register(
     skill_id="golpe_brutal", name="Golpe Brutal", skill_type="COMBAT", req_level=1, allowed_classes=["BBN"]
@@ -175,66 +147,7 @@ def accion_astuta(context):
 # Removido: golpe_aturdidor antigua (reemplazada en la sección exclusiva del MNK)
 
 
-@SkillRegistry.register(
-    skill_id="imposicion_manos", name="Imposición de Manos", skill_type="SESSION", req_level=1, allowed_classes=["PAL"]
-)
-def imposicion_manos(context):
-    caster = context['caster']
-
-    # COSTO: 5 Sanación
-    wounded_allies = [a for a in context['allies'] if a.current_hp < a.max_hp]
-    if context.get('eval_mode'):
-        if caster.class_resources.get('sanacion', 0) < 5:
-            return 0
-        if not wounded_allies:
-            return 0
-        target = min(wounded_allies, key=lambda a: a.current_hp / a.max_hp)
-        return 50 + min(40, (target.max_hp - target.current_hp) * 4)
-
-    caster.class_resources['sanacion'] -= 5
-    target = min(wounded_allies, key=lambda a: a.current_hp / a.max_hp)
-    heal = 5
-    target.current_hp = min(target.max_hp, target.current_hp + heal)
-    context['log'].append({"second": context['current_second'], "type": "flavor",
-                           "message": f"✋ {caster.name} drena su energía sagrada para [bold yellow]Imposición de Manos[/bold yellow] sobre {target.name} (+{heal} HP)."})
-    return True
-
-
-@SkillRegistry.register(
-    skill_id="castigo_divino", name="Castigo Divino", skill_type="COMBAT", req_level=2, allowed_classes=["PAL"]
-)
-def castigo_divino(context):
-    caster = context['caster']
-    if context.get('eval_mode'):
-        if caster.class_resources.get('mana', 0) < 1:
-            return 0
-        return 70 if context['enemies'] else 0
-
-    target = random.choice(context['enemies'])
-    adv_mods = caster.get_stat_modifiers()
-
-    m_evasion = 8 + max(target['stats']['dex'],
-                        target['stats'].get('armor', 0))
-    a_raw_roll = random.randint(1, 20)
-    a_roll_total = a_raw_roll + max(adv_mods['str'], adv_mods['dex'])
-
-    if a_raw_roll == 20 or (a_raw_roll != 1 and a_roll_total >= m_evasion):
-        caster.class_resources['mana'] -= 1
-        sides = adv_mods.get('weapon_dice_sides', 4) or 4
-        count = adv_mods.get('weapon_dice_count', 1) or 1
-        base_dmg = sum(random.randint(1, sides) for _ in range(
-            count)) + adv_mods['damage'] + adv_mods['str']
-        smite_dmg = sum(random.randint(1, 8) for _ in range(2))
-
-        final_dmg = max(1, (base_dmg + smite_dmg) - target['stats']['con'])
-        target['hp'] -= final_dmg
-        context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"☀️ ¡Gasto de Maná! [bold yellow]Castigo Divino[/bold yellow] de {caster.name} arrasa a [bold red]{target['name']}[/bold red] ({final_dmg} daño)."})
-    else:
-        context['log'].append({"second": context['current_second'], "type": "flavor",
-                               "message": f"🛡️ {caster.name} falla el golpe y retiene su Maná."})
-        return False
-    return True
+# Removido: imposicion_manos y castigo_divino antiguas (reemplazadas en la sección exclusiva del PAL)
 
 # ==========================================
 # ERUDITOS ARCANOS
@@ -2300,3 +2213,198 @@ def pureza_cuerpo(context):
          cleansed = True
 
     return cleansed
+
+# ==========================================
+# PALADIN SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="imposicion_manos_pal", name="Imposición de Manos", skill_type="SESSION", req_level=1, allowed_classes=["PAL"]
+)
+def imposicion_manos_pal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 75 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"✨ {caster.name} extiende su mano y canaliza una curación sagrada hacia los heridos."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(5, 10) + caster.level * 5
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} se baña en luz divina ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="castigo_divino_pal", name="Castigo Divino", skill_type="COMBAT", req_level=2, allowed_classes=["PAL"]
+)
+def castigo_divino_pal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(15, 30) + caster.get_stat_modifiers()['str'] * 2 + caster.get_stat_modifiers()['cha'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"☀️ ¡CASTIGO DIVINO! {caster.name} golpea con su arma imbuida en luz sagrada, destrozando a [bold red]{target['name']}[/bold red] ({dmg} daño radiante)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="juramento_sagrado", name="Juramento Sagrado", skill_type="SESSION", req_level=3, allowed_classes=["PAL"]
+)
+def juramento_sagrado(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 65 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛡️ Guiado por su Juramento Sagrado, {caster.name} protege a sus compañeros de los peligros del entorno."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(4, 12) + caster.get_stat_modifiers()['cha']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> Su devoción salvaguarda a {adv.name} ({heal_amount} HP preservados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="sentido_divino", name="Sentido Divino", skill_type="SESSION", req_level=4, allowed_classes=["PAL"]
+)
+def sentido_divino(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85
+
+    coins = random.randint(5, 10) * 10 # 50 a 100 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"👁️ Con su Sentido Divino, {caster.name} detecta la magia oscura oculta, evadiendo una emboscada y reclamando un alijo macabro (+{coins} cobres)."})
+    
+    # Curación pasiva por la fatiga evitada
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(5, 15)
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} se libra del horror oculto ({heal_amount} HP de daño prevenido)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ataque_extra_pal", name="Ataque Extra", skill_type="COMBAT", req_level=5, allowed_classes=["PAL"]
+)
+def ataque_extra_pal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚔️ El celo sagrado de {caster.name} le permite realizar un Ataque Extra implacable:"})
+                           
+    for i in range(2):
+        if not context['enemies']: break
+        target = random.choice(context['enemies'])
+        dmg = random.randint(8, 20) + caster.get_stat_modifiers()['str'] * 2
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 🗡️ Golpe {i+1}: Impacta a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="aura_proteccion", name="Aura de Protección", skill_type="COMBAT", req_level=6, allowed_classes=["PAL"]
+)
+def aura_proteccion(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if any(a.current_hp < a.max_hp * 0.4 for a in context['allies']) else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛡️ El Aura de Protección de {caster.name} brilla intensamente, mitigando los golpes enemigos."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp * 0.4:
+            heal_amount = random.randint(15, 30) + caster.get_stat_modifiers()['cha'] * 2
+            adv.current_hp = min(adv.max_hp, adv.current_hp + heal_amount)
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> La luz rechaza la letalidad sobre {adv.name} ({heal_amount} HP curados/prevenidos)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="aura_subclase", name="Aura de Subclase", skill_type="COMBAT", req_level=7, allowed_classes=["PAL"]
+)
+def aura_subclase(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🔥 El Aura de Subclase de {caster.name} emana llamas de conquista, purificando a los monstruos cercanos."})
+                           
+    for target in context['enemies']:
+        dmg = random.randint(5, 15) + caster.get_stat_modifiers()['cha'] * 2
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> [bold red]{target['name']}[/bold red] sufre en presencia del Paladín ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="castigo_firme", name="Castigo Firme", skill_type="COMBAT", req_level=8, allowed_classes=["PAL"]
+)
+def castigo_firme(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if caster.current_hp < caster.max_hp * 0.5 else 0
+
+    if caster.current_hp < caster.max_hp * 0.5:
+        heal_amount = random.randint(20, 40) + caster.get_stat_modifiers()['cha'] * 3
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🛐 Castigo Firme: {caster.name} retiene su fervor y lo canaliza en autosanación absoluta ({heal_amount} HP restaurados)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="voluntad_hierro", name="Voluntad de Hierro", skill_type="SESSION", req_level=9, allowed_classes=["PAL"]
+)
+def voluntad_hierro(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 80 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🧠 La Voluntad de Hierro de {caster.name} purga cualquier manipulación mental o estrés acumulado en la party."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(15, 30) + caster.get_stat_modifiers()['cha'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> La psique de {adv.name} se vuelve irrompible ({heal_amount} HP sanados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="aura_coraje", name="Aura de Coraje", skill_type="SESSION", req_level=10, allowed_classes=["PAL"]
+)
+def aura_coraje(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 95 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🦁 ¡AURA DE CORAJE! La simple presencia de {caster.name} disipa el terror de las sombras, inspirando un valor absoluto."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(30, 60) + caster.get_stat_modifiers()['cha'] * 4
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} siente cómo el miedo abandona su cuerpo y sus heridas cierran milagrosamente ({heal_amount} HP curados)."})
+    return True
