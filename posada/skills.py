@@ -96,7 +96,7 @@ def curacion_menor(context):
 
 
 @SkillRegistry.register(
-    skill_id="golpe_brutal", name="Golpe Brutal", skill_type="COMBAT", req_level=1, allowed_classes=["FTR", "BBN"]
+    skill_id="golpe_brutal", name="Golpe Brutal", skill_type="COMBAT", req_level=1, allowed_classes=["BBN"]
 )
 def golpe_brutal(context):
     caster = context['caster']
@@ -1573,4 +1573,187 @@ def desvanecerse(context):
                            "message": f"    -> 🗡️ Asesta un golpe catastrófico desde el sigilo a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
     context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
                            "message": f"    -> 🛡️ Estando oculto, recupera la calma y sana sus heridas ({heal_amount} HP recuperados)."})
+    return True
+
+# ==========================================
+# FIGHTER SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="fuerzas_flaqueza", name="Fuerzas de Flaqueza", skill_type="COMBAT", req_level=1, allowed_classes=["FTR"]
+)
+def fuerzas_flaqueza(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if caster.current_hp <= (caster.max_hp * 0.4) else 0
+
+    if caster.current_hp <= (caster.max_hp * 0.4):
+        heal_amount = random.randint(1, 10) + caster.level
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🩸 {caster.name} saca Fuerzas de Flaqueza en pleno combate, regenerando velozmente {heal_amount} HP."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="oleada_accion", name="Oleada de Acción", skill_type="COMBAT", req_level=2, allowed_classes=["FTR"]
+)
+def oleada_accion(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 65 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    target = random.choice(context['enemies'])
+    adv_mods = caster.get_stat_modifiers()
+    
+    dmg = sum(random.randint(1, 10) for _ in range(2)) + adv_mods['str'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚔️ {caster.name} rompe sus límites con una Oleada de Acción, asestando dos golpes devastadores a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="arquetipo_marcial", name="Arquetipo Marcial", skill_type="SESSION", req_level=3, allowed_classes=["FTR"]
+)
+def arquetipo_marcial(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 60 if allies_hurt >= 2 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⛺ Usando su Arquetipo Marcial, {caster.name} fortifica el campamento, previniendo emboscadas tácticas."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(1, 8) + caster.get_stat_modifiers()['con']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} descansa seguro ({heal_amount} HP preservados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="postura_firme", name="Postura Firme", skill_type="SESSION", req_level=4, allowed_classes=["FTR"]
+)
+def postura_firme(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 50 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛡️ {caster.name} adopta una Postura Firme, anclándose para proteger al grupo de un derrumbe inesperado."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(2, 6) + caster.get_stat_modifiers()['str']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} esquiva las rocas ({heal_amount} HP de daño ambiental evitado)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ataque_extra_ftr", name="Ataque Extra (Guerrero)", skill_type="COMBAT", req_level=5, allowed_classes=["FTR"]
+)
+def ataque_extra_ftr(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 10) for _ in range(3)) + caster.get_stat_modifiers()['str'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🗡️ {caster.name} encadena ataques con maestría pura, destrozando a [bold red]{target['name']}[/bold red] ({dmg} daño físico)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="entrenamiento_fisico", name="Entrenamiento Físico Absoluto", skill_type="SESSION", req_level=6, allowed_classes=["FTR"]
+)
+def entrenamiento_fisico(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 45
+
+    coins = random.randint(5, 12) * 5 # 25 a 60 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🧗‍♂️ Con su Entrenamiento Físico Absoluto, {caster.name} escala un foso imposible y recupera un botín atrapado (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="guardia_agresiva", name="Guardia Agresiva", skill_type="COMBAT", req_level=7, allowed_classes=["FTR"]
+)
+def guardia_agresiva(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    adv_mods = caster.get_stat_modifiers()
+    heal_amount = max(5, random.randint(5, 15) + adv_mods['con'])
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    dmg = random.randint(5, 15) + adv_mods['str'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🛡️ ¡Guardia Agresiva! {caster.name} bloquea el embate y contraataca con su escudo a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> 🩹 El desvío perfecto evita desgaste futuro ({heal_amount} HP amortiguados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="recarga_marcial", name="Recarga Marcial", skill_type="SESSION", req_level=8, allowed_classes=["FTR"]
+)
+def recarga_marcial(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if caster.current_hp <= (caster.max_hp * 0.5) else 0
+
+    if caster.current_hp < caster.max_hp:
+        heal_amount = random.randint(10, 30) + caster.get_stat_modifiers()['con'] * 3
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"⚔️ {caster.name} realiza una Recarga Marcial. Afila sus armas, estira sus músculos y recupera {heal_amount} HP, listo para la guerra."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="indomable", name="Indomable", skill_type="COMBAT", req_level=9, allowed_classes=["FTR"]
+)
+def indomable(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 100 if caster.current_hp <= (caster.max_hp * 0.2) else 0
+
+    if caster.current_hp <= (caster.max_hp * 0.2):
+        heal_amount = random.randint(20, 50) + caster.get_stat_modifiers()['con'] * 4
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🔥 ¡Indomable! A un paso de la muerte, la voluntad de {caster.name} rechaza el fracaso. (Curación in extremis: {heal_amount} HP)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="estilo_critico", name="Estilo Crítico", skill_type="COMBAT", req_level=10, allowed_classes=["FTR"]
+)
+def estilo_critico(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = (sum(random.randint(1, 12) for _ in range(4)) + caster.get_stat_modifiers()['str'] * 4) * 2 # Daño masivo crítico
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💥 ¡Estilo Crítico! {caster.name} encuentra el punto ciego absoluto de [bold red]{target['name']}[/bold red] y desata un golpe letal ({dmg} DAÑO CRÍTICO)."})
     return True
