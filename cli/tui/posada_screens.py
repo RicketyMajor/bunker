@@ -1,6 +1,6 @@
 from textual.app import ComposeResult
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Header, Footer, Button, Label, TabbedContent, TabPane, DataTable, Log, Input, RadioSet, RadioButton, SelectionList, Select, TextArea
+from textual.widgets import Header, Footer, Button, Label, TabbedContent, TabPane, DataTable, RichLog, Input, RadioSet, RadioButton, SelectionList, Select, TextArea
 from textual.containers import Vertical, Horizontal, Grid, VerticalScroll
 from textual.reactive import reactive
 from textual.binding import Binding
@@ -1379,7 +1379,7 @@ class PosadaMainScreen(Screen):
         border-top: solid $primary;
         padding: 0 1;
     }
-    Log {
+    RichLog {
         text-opacity: 0.9;
     }
     .log-damage {
@@ -1428,7 +1428,7 @@ class PosadaMainScreen(Screen):
                         # Columna Derecha (MUD Log)
                         with Vertical(id="right_col", classes="mud_log_panel"):
                             yield Label("📜 Registro de Eventos")
-                            yield Log(id="event_log", highlight=True)
+                            yield RichLog(id="event_log", markup=True, highlight=True)
 
                 with GuildTab("El Gremio", id="tab_guild"):
                     with Vertical(classes="guild_stats"):
@@ -1493,7 +1493,7 @@ class PosadaMainScreen(Screen):
         self.query_one("#missions_table", DataTable).add_columns(
             "Misión", "Recompensa Base", "Estado")
 
-        self.query_one("#event_log", Log).write_line(
+        self.query_one("#event_log", RichLog).write(
             "La taberna está silenciosa. Esperando órdenes del Maestro...")
         self.clock_ticker = self.set_interval(1, self.tick_timer, pause=True)
 
@@ -1669,7 +1669,7 @@ class PosadaMainScreen(Screen):
             if event["second"] == elapsed:
                 # Formatea el timestamp para que se vea como [14:32] en el log
                 m, s = divmod(elapsed, 60)
-                self.query_one("#event_log", Log).write_line(
+                self.query_one("#event_log", RichLog).write(
                     f"[{m:02d}:{s:02d}] {event['message']}")
 
         # Lógica normal del reloj
@@ -1698,7 +1698,7 @@ class PosadaMainScreen(Screen):
             self.clock_ticker.pause()
             self.timer_active = False
             self.set_timer_ui_state("paused")
-            self.query_one("#event_log", Log).write_line(
+            self.query_one("#event_log", RichLog).write(
                 "La expedición se detiene. Los monstruos acechan...")
 
     def action_resume_timer(self) -> None:
@@ -1708,7 +1708,7 @@ class PosadaMainScreen(Screen):
             self.clock_ticker.resume()
             self.timer_active = True
             self.set_timer_ui_state("running")
-            self.query_one("#event_log", Log).write_line(
+            self.query_one("#event_log", RichLog).write(
                 "Se reanuda la marcha en la oscuridad.")
 
     def action_stop_timer(self) -> None:
@@ -1799,9 +1799,9 @@ class PosadaMainScreen(Screen):
         if result is None:
             return
 
-        log = self.query_one("#event_log", Log)
+        log = self.query_one("#event_log", RichLog)
         log.clear()
-        log.write_line("Consultando al Oráculo del Gremio...")
+        log.write("Consultando al Oráculo del Gremio...")
 
         self.active_party_ids = result.get("party", [])
         self.session_category = result["category"]
@@ -1836,7 +1836,7 @@ class PosadaMainScreen(Screen):
         self.current_session_id = data.get("session_id")
         self.session_script = data.get("script", [])
 
-        log = self.query_one("#event_log", Log)
+        log = self.query_one("#event_log", RichLog)
         party_table = self.query_one("#active_party_table", DataTable)
         party_table.clear()
 
@@ -1856,19 +1856,19 @@ class PosadaMainScreen(Screen):
             self.is_countdown = True
             self.session_duration_mins = result["duration"]
             self.time_seconds = result["duration"] * 60
-            log.write_line(
+            log.write(
                 f"\n[Misión: {cat}] El reloj inicia. ¡Que la suerte os acompañe!")
         else:
             self.is_countdown = False
             self.time_seconds = 0
-            log.write_line(
+            log.write(
                 f"\n[Misión: {cat}] Cronómetro iniciado hacia lo desconocido.")
 
         self.clock_ticker.resume()
 
     # --- FLUJO DE CIERRE Y BOTÍN ---
     def handle_session_end(self, success: bool):
-        log = self.query_one("#event_log", Log)
+        log = self.query_one("#event_log", RichLog)
 
         if self.is_countdown:
             total_sec = getattr(self, 'session_duration_mins', 25) * 60
@@ -1877,12 +1877,12 @@ class PosadaMainScreen(Screen):
             elapsed = self.time_seconds
 
         if success:
-            log.write_line("¡Mazmorra completada con éxito!")
+            log.write("¡Mazmorra completada con éxito!")
         else:
-            log.write_line(
+            log.write(
                 "Has tocado el cuerno de retirada. La party huye.")
 
-        log.write_line("Consolidando resultados con la Bóveda del Gremio...")
+        log.write("Consolidando resultados con la Bóveda del Gremio...")
 
         session_id = getattr(self, 'current_session_id', None)
         if session_id:
@@ -1907,11 +1907,11 @@ class PosadaMainScreen(Screen):
                 self.app.notify, "Fallo crítico al reclamar botín.", severity="error")
 
     def show_loot_summary(self, data: dict) -> None:
-        log = self.query_one("#event_log", Log)
+        log = self.query_one("#event_log", RichLog)
 
         # Imprime los reportes de post-sesión (Diezmo, Tienda, XP)
         for event_msg in data.get("log", []):
-            log.write_line(f"📜 {event_msg}")
+            log.write(f"📜 {event_msg}")
 
         # Muestra la ventana de victoria
         engine_details = data.get("engine_details", {})
@@ -2001,7 +2001,7 @@ class PosadaMainScreen(Screen):
 
     def action_refresh_tavern(self) -> None:
         if self.query_one(TabbedContent).active == "tab_tavern":
-            self.query_one("#event_log", Log).write_line(
+            self.query_one("#event_log", RichLog).write(
                 "🍺 Has pagado unas rondas de cerveza. Nuevos reclutas se acercan a la mesa.")
             self.refresh_tavern_api()
 

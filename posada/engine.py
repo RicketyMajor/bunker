@@ -178,13 +178,12 @@ def calculate_save_dc(adv):
 def generate_session_script(session_id, duration_minutes, adventurers_qs):
     random.seed(session_id)
     script = []
-    session_monster_xp = 0
     total_seconds = duration_minutes * 60
     adventurers = list(adventurers_qs)
 
     if not adventurers:
         random.seed()
-        return script, session_monster_xp
+        return script
 
     # --- INICIALIZACIÓN DINÁMICA DE RECURSOS ---
     for adv in adventurers:
@@ -894,10 +893,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     if m['hp'] <= 0:
                         # Rescata la XP que otorga el monstruo y la sumamos al pozo
                         xp_ganada = getattr(m['base'], 'xp_reward', 0)
-                        session_monster_xp += xp_ganada
 
                         script.append({"second": current_second - 2, "type": "flavor",
-                                      "message": f"💀 [bold red]{m['name']}[/bold red] cae derrotado (+{xp_ganada} XP)."})
+                                      "message": f"💀 [bold red]{m['name']}[/bold red] cae derrotado (+{xp_ganada} XP).", "xp_ganada": xp_ganada})
                         active_monsters_group.remove(m)
 
                         # Generar Monedas
@@ -964,7 +962,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
     script.sort(key=lambda x: x["second"])
     random.seed()
-    return script, session_monster_xp
+    return script
 
 
 def distribute_tithe(guild, adventurers_qs, loot_dict, event_log):
@@ -1334,7 +1332,7 @@ def process_session_completion(session_id, survived_seconds=None):
         survived_seconds = session.duration_minutes * 60
 
     # Re-genera el guion exacto usando determinista
-    script, session_monster_xp = generate_session_script(
+    script = generate_session_script(
         session.id, session.duration_minutes, adventurers)
 
     loot = {
@@ -1346,8 +1344,12 @@ def process_session_completion(session_id, survived_seconds=None):
 
     # Procesar eventos ocurridos dentro del tiempo sobrevivido
     damage_taken = {}
+    session_monster_xp = 0
     for event in script:
         if event["second"] <= survived_seconds:
+            if event.get("xp_ganada"):
+                session_monster_xp += event["xp_ganada"]
+            
             if event["type"] == "loot":
                 loot[event["coin"]] += event["amount"]
             elif event["type"] == "damage":
@@ -1691,8 +1693,9 @@ def market_phase(adventurers_qs, event_log):
         
         shopping = True
         purchases = 0
-        while shopping and purchases < 5:  # Limitar a 5 compras por sesión para no trabar
-            affordable_items = [i for i in valid_items if can_afford(adv, i)]
+        while shopping and purchases < 5:
+            # Se asegura de que no tengan valor 0 absoluto para evitar comprar items default de pruebas
+            affordable_items = [i for i in valid_items if can_afford(adv, i) and (get_imperial_value(i) > 0 or get_commonwealth_value(i) > 0)]
             if not affordable_items:
                 break
             
