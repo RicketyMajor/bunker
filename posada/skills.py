@@ -547,3 +547,225 @@ def replica_objeto(context):
         context['log'].append({"second": context['current_second'], "type": "flavor",
                                "message": f"🛠️ {caster.name} intenta fabricar un objeto, pero el prototipo falla estrepitosamente."})
     return True
+
+# ==========================================
+# BARBARIAN SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="furia_feroz", name="Furia Feroz", skill_type="COMBAT", req_level=1, allowed_classes=["BBN"]
+)
+def furia_feroz(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 50 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(1, 12) + adv_mods['str'] * 2
+    target['hp'] -= dmg
+    
+    # "Reduces physical damage taken" -> We heal the barbarian a bit.
+    heal_amount = max(1, dmg // 3)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"😡 {caster.name} entra en Furia Feroz y ataca a [bold red]{target['name']}[/bold red] por {dmg} daño."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"🛡️ Su trance bélico le permite ignorar el dolor, recuperando {heal_amount} HP equivalentes."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ataque_temerario", name="Ataque Temerario", skill_type="COMBAT", req_level=2, allowed_classes=["BBN"]
+)
+def ataque_temerario(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        # High value if he has plenty of HP to spare
+        return 70 if context['enemies'] and caster.current_hp > (caster.max_hp * 0.5) else 20
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target = random.choice(context['enemies'])
+    
+    # Ventaja = tira dos veces, elige el mejor (lo simulamos con daño alto)
+    dmg1 = random.randint(1, 12) + adv_mods['str']
+    dmg2 = random.randint(1, 12) + adv_mods['str']
+    final_dmg = max(dmg1, dmg2) + 5
+    
+    target['hp'] -= final_dmg
+    
+    # Enemies have advantage against him = take recoil damage
+    recoil = max(1, random.randint(1, 6))
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚔️ {caster.name} lanza un Ataque Temerario contra [bold red]{target['name']}[/bold red] infligiendo {final_dmg} daño masivo."})
+    context['log'].append({"second": context['current_second'], "type": "damage", "adventurer_id": caster.id, "amount": recoil,
+                           "message": f"🩸 Por exponerse tanto, {caster.name} recibe {recoil} daño de contragolpe."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="senda_furia", name="Senda de la Furia", skill_type="SESSION", req_level=3, allowed_classes=["BBN"]
+)
+def senda_furia(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 65 if len(context['enemies']) >= 2 else 10
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🦅 {caster.name} ruge, canalizando el poder de su Senda de la Furia."})
+    
+    for target in context['enemies']:
+        dmg = random.randint(1, 6) + caster.get_stat_modifiers()['str']
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> [bold red]{target['name']}[/bold red] tiembla de terror y recibe {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="piel_curtida", name="Piel Curtida", skill_type="SESSION", req_level=4, allowed_classes=["BBN"]
+)
+def piel_curtida(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 60 if caster.current_hp < caster.max_hp else 0
+
+    adv_mods = caster.get_stat_modifiers()
+    heal_amount = max(1, random.randint(2, 10) + adv_mods['con'] + adv_mods['str'])
+    
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"💪 {caster.name} flexiona su Piel Curtida por las batallas, curándose {heal_amount} HP."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ataque_extra_bbn", name="Ataque Extra (Bárbaro)", skill_type="COMBAT", req_level=5, allowed_classes=["BBN"]
+)
+def ataque_extra_bbn(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if len(context['enemies']) >= 1 else 0
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    
+    # Primer ataque
+    target1 = random.choice(context['enemies'])
+    dmg1 = random.randint(1, 12) + adv_mods['str']
+    target1['hp'] -= dmg1
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🪓 {caster.name} asesta un primer golpe a [bold red]{target1['name']}[/bold red] ({dmg1} daño)."})
+    
+    # Segundo ataque
+    living_enemies = [e for e in context['enemies'] if e['hp'] > 0]
+    if living_enemies:
+        target2 = random.choice(living_enemies)
+        dmg2 = random.randint(1, 12) + adv_mods['str']
+        target2['hp'] -= dmg2
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> Y un Ataque Extra brutal contra [bold red]{target2['name']}[/bold red] ({dmg2} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="instinto_manada", name="Instinto de Manada", skill_type="SESSION", req_level=6, allowed_classes=["BBN"]
+)
+def instinto_manada(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 70 if allies_hurt >= 2 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🐺 Usando su Instinto de Manada, {caster.name} guía al grupo lejos del peligro."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = max(2, random.randint(1, 6) + caster.get_stat_modifiers()['wis'])
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} descansa seguro ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="instinto_salvaje", name="Instinto Salvaje", skill_type="COMBAT", req_level=7, allowed_classes=["BBN"]
+)
+def instinto_salvaje(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        # Solo tiene sentido usar esto al inicio (enemigos con casi toda la vida)
+        if not context['enemies']: return 0
+        target = context['enemies'][0]
+        # Simular si están intactos
+        return 85 if target['hp'] >= target.get('max_hp', 10) * 0.9 else 10
+
+    if not context['enemies']: return False
+    
+    target = random.choice(context['enemies'])
+    dmg = sum(random.randint(1, 10) for _ in range(3)) + caster.get_stat_modifiers()['str']
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚡ Movido por su Instinto Salvaje, {caster.name} se abalanza primero y destroza a [bold red]{target['name']}[/bold red] con {dmg} de daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="zancada_poderosa", name="Zancada Poderosa", skill_type="SESSION", req_level=8, allowed_classes=["BBN"]
+)
+def zancada_poderosa(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 55 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    dmg = random.randint(2, 16) + caster.get_stat_modifiers()['str']
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌪️ {caster.name} atraviesa el terreno con su Zancada Poderosa, atropellando a [bold red]{target['name']}[/bold red] y causándole {dmg} de daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="critico_brutal", name="Crítico Brutal", skill_type="COMBAT", req_level=9, allowed_classes=["BBN"]
+)
+def critico_brutal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    # 3d12
+    dmg = sum(random.randint(1, 12) for _ in range(3)) + caster.get_stat_modifiers()['str'] * 3
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🩸 ¡CRÍTICO BRUTAL! {caster.name} parte en dos a [bold red]{target['name']}[/bold red] infligiendo unos monstruosos {dmg} de daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="presencia_intimidante", name="Presencia Intimidante", skill_type="SESSION", req_level=10, allowed_classes=["BBN"]
+)
+def presencia_intimidante(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    # Si es SML o MED, y falla salvación (lo hacemos automático en el motor)
+    if getattr(target.get('base'), 'category', 'SML') in ['SML', 'MED']:
+        dmg = target['hp'] # Ejecución instakill
+        target['hp'] = 0
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"👹 {caster.name} suelta un grito tan aterrador que [bold red]{target['name']}[/bold red] huye despavorido del combate."})
+    else:
+        dmg = sum(random.randint(1, 10) for _ in range(4))
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"👹 La Presencia Intimidante de {caster.name} paraliza a [bold red]{target['name']}[/bold red], causándole {dmg} de daño por pánico."})
+    return True
