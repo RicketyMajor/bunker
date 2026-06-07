@@ -608,6 +608,46 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 script.append({"second": current_second - 5, "type": "item_loot", "item_id": drop_item.id, "adventurer_id": adv.id,
                               "message": f"🎁 {adv.name} encontró algo brillando: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
 
+
+            # --- EVALUACIÓN DE HABILIDADES DE SESIÓN (EXPLORACIÓN) ---
+            for adv_idx, adv in enumerate(adventurers):
+                if temp_hp[adv.id] <= 0: continue
+                available_session_skills = []
+                for skill_id, skill_data in SkillRegistry.get_all_skills().items():
+                    if skill_data["type"] == "SESSION" and adv.adv_class in skill_data["allowed_classes"] and adv.level >= skill_data["req_level"]:
+                        if skill_id not in session_skills_tracker[adv.id]:
+                            available_session_skills.append(skill_data)
+                
+                if available_session_skills:
+                    context = {
+                        'caster': adv,
+                        'allies': adventurers,
+                        'enemies': [], # No hay enemigos en exploración
+                        'adv_status': adv_status_tracker,
+                        'current_second': current_second - 2,
+                        'log': script,
+                        'eval_mode': True,
+                        'session_duration': total_seconds,
+                        'base_gold': session_gold
+                    }
+                    best_action = None
+                    best_score = 50
+                    for skill in available_session_skills:
+                        try:
+                            score = skill["execute"](context)
+                            if isinstance(score, bool): score = 0
+                            if score > best_score:
+                                best_score = score
+                                best_action = skill
+                        except: pass
+                        
+                    if best_action:
+                        context['eval_mode'] = False
+                        try:
+                            success = best_action["execute"](context)
+                            if success:
+                                session_skills_tracker[adv.id].add(best_action["id"])
+                        except: pass
         elif state == "COMBAT":
             current_second += 15
             if current_second >= total_seconds:
@@ -625,308 +665,231 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 script.append({"second": current_second - 12, "type": "flavor",
                               "message": f"El [bold red]{f_mon['name']}[/bold red] {flav}"})
 
-            # --- TURNO DE LOS MONSTRUOS ---
+            # --- PREPARACIÓN DE INICIATIVA ---
+            combatants = []
             for m in active_monsters_group:
-                # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL MONSTRUO ---
-                dot_damage = 0
-                if 'PSN' in m['status']:
-                    dot_damage += random.randint(1, 4)
-                if 'BRN' in m['status']:
-                    dot_damage += random.randint(1, 6)
-                if 'BLD' in m['status']:
-                    dot_damage += random.randint(1, 4)
-                if dot_damage > 0:
-                    m['hp'] -= dot_damage
-                    script.append({"second": current_second - 10, "type": "flavor",
-                                  "message": f"🩸 [bold red]{m['name']}[/bold red] sufre {dot_damage} de daño por estados alterados."})
-                    if m['hp'] <= 0:
-                        continue  # Si muere por DoT, pierde su turno
-
-                # Si el monstruo está aturdido, pierde el turno
-                if 'STUNNED' in m['status']:
-                    m['status'].remove('STUNNED')
-                    script.append({"second": current_second - 8, "type": "flavor",
-                                  "message": f"💫 [bold red]{m['name']}[/bold red] está aturdido y no puede moverse."})
-                    continue
-
-                valid_targets = [a for a in adventurers if temp_hp[a.id] > 0]
-                if not valid_targets:
-                    break  # Todos los aventureros han caído
-                target = random.choice(valid_targets)
-                adv_mods = target.get_stat_modifiers()
-
-                # --- CA AVENTURERO: 8 + Mayor entre Destreza o Armadura ---
-                adv_evasion = 8 + max(adv_mods['dex'], adv_mods['armor'])
-
-                adv_on_attack = 'BLINDED' in adv_status_tracker[
-                    target.id] or 'RECKLESS' in adv_status_tracker[target.id]
-                disadv_on_attack = 'BLINDED' in m['status'] or 'DODGING' in adv_status_tracker[target.id]
-
-                # Tirada Crítica vs Normal
-                m_raw_roll = roll_d20(
-                    advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
-                m_roll_total = m_raw_roll + m['stats']['dex']
-
-                is_hit = False
-                if m_raw_roll == 20:
-                    is_hit = True  # Éxito Crítico
-                elif m_raw_roll == 1:
-                    is_hit = False  # Fallo Crítico
-                else:
-                    is_hit = (m_roll_total >= adv_evasion)
-
-                if is_hit:
-                    base_m = m['base']
-                    m_dmg_dice = sum(random.randint(1, base_m.damage_dice_sides)
-                                     for _ in range(base_m.damage_dice_count))
-                    m_extra_dice = sum(random.randint(1, getattr(base_m, 'bonus_damage_dice_sides', 4)) for _ in range(
-                        getattr(base_m, 'bonus_damage_dice_count', 0))) if getattr(base_m, 'bonus_damage_dice_count', 0) > 0 else 0
-
-                    m_dmg = m_dmg_dice + m_extra_dice + \
-                        base_m.bonus_damage + m['stats']['str']
-
-                    if target.adv_class == 'ROG' and target.level >= 5 and 'REACTION_USED' not in adv_status_tracker[target.id]:
-                        m_dmg = m_dmg // 2
-                        adv_status_tracker[target.id].add('REACTION_USED')
-                        script.append({"second": current_second - 8, "type": "flavor",
-                                      "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y mitiga el impacto."})
-
-                    if 'RAGING' in adv_status_tracker[target.id]:
-                        m_dmg = m_dmg // 2
-
-                    eff_m = getattr(base_m, 'on_hit_effect', 'NON')
-                    if eff_m != 'NON' and random.randint(1, 100) <= getattr(base_m, 'effect_chance', 0):
-                        if eff_m == 'LFS':
-                            heal = sum(random.randint(1, getattr(base_m, 'effect_dice_sides', 4)) for _ in range(
-                                getattr(base_m, 'effect_dice_count', 1)))
-                            max_hp = m['max_hp']
-                            m['hp'] = min(max_hp, m['hp'] + heal)
-                            script.append({"second": current_second - 8, "type": "flavor",
-                                          "message": f"¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
-                        else:
-                            adv_status_tracker[target.id].add(eff_m)
-                            script.append({"second": current_second - 8, "type": "flavor",
-                                          "message": f"¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
-
-                    eff_adv = adv_mods.get('on_hit_effect', 'NON')
-                    if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
-                        thorns_dmg = random.randint(1, 4)
-                        m['hp'] -= thorns_dmg
-                        script.append({"second": current_second - 7, "type": "flavor",
-                                      "message": f"La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
-
-                    # --- Mitigación por Constitución y Daño Mínimo 1 ---
-                    final_dmg = max(1, m_dmg - adv_mods['con'])
-                    temp_hp[target.id] -= final_dmg
-
-                    crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if m_raw_roll == 20 else ""
-                    script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
-                                  "message": f"{crit_msg}[bold red]{m['name']}[/bold red] golpea a {target.name} ({final_dmg} daño)."})
+                init = random.randint(1, 20) + m['stats']['dex']
+                combatants.append({'type': 'monster', 'entity': m, 'init': init})
+            for adv in adventurers:
+                if temp_hp[adv.id] > 0:
+                    init = random.randint(1, 20) + adv.get_stat_modifiers()['dex']
+                    combatants.append({'type': 'adventurer', 'entity': adv, 'init': init})
+            
+            combatants.sort(key=lambda x: x['init'], reverse=True)
+            
+            for combatant in combatants:
+                if combatant['type'] == 'monster':
+                    m = combatant['entity']
+                    if m['hp'] <= 0: continue
                     
-                    if temp_hp[target.id] <= 0:
-                        script.append({"second": current_second - 7, "type": "flavor", "message": f"⚠️ [bold yellow]{target.name}[/bold yellow] ha caído inconsciente en combate."})
+                    # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL MONSTRUO ---
+                    dot_damage = 0
+                    if 'PSN' in m['status']: dot_damage += random.randint(1, 4)
+                    if 'BRN' in m['status']: dot_damage += random.randint(1, 6)
+                    if 'BLD' in m['status']: dot_damage += random.randint(1, 4)
+                    if dot_damage > 0:
+                        m['hp'] -= dot_damage
+                        script.append({"second": current_second - 10, "type": "flavor",
+                                      "message": f"🩸 [bold red]{m['name']}[/bold red] sufre {dot_damage} de daño por estados alterados."})
+                        if m['hp'] <= 0: continue
+
+                    if 'STUNNED' in m['status']:
+                        m['status'].remove('STUNNED')
+                        script.append({"second": current_second - 8, "type": "flavor",
+                                      "message": f"💫 [bold red]{m['name']}[/bold red] está aturdido y no puede moverse."})
+                        continue
+
+                    valid_targets = [a for a in adventurers if temp_hp[a.id] > 0]
+                    if not valid_targets: break
+                    target = random.choice(valid_targets)
+                    adv_mods = target.get_stat_modifiers()
+                    adv_evasion = 8 + max(adv_mods['dex'], adv_mods['armor'])
+                    adv_on_attack = 'BLINDED' in adv_status_tracker[target.id] or 'RECKLESS' in adv_status_tracker[target.id]
+                    disadv_on_attack = 'BLINDED' in m['status'] or 'DODGING' in adv_status_tracker[target.id]
+
+                    m_raw_roll = roll_d20(advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
+                    m_roll_total = m_raw_roll + m['stats']['dex']
+
+                    is_hit = False
+                    if m_raw_roll == 20: is_hit = True
+                    elif m_raw_roll == 1: is_hit = False
+                    else: is_hit = (m_roll_total >= adv_evasion)
+
+                    if is_hit:
+                        base_m = m['base']
+                        m_dmg_dice = sum(random.randint(1, base_m.damage_dice_sides) for _ in range(base_m.damage_dice_count))
+                        m_extra_dice = sum(random.randint(1, getattr(base_m, 'bonus_damage_dice_sides', 4)) for _ in range(getattr(base_m, 'bonus_damage_dice_count', 0))) if getattr(base_m, 'bonus_damage_dice_count', 0) > 0 else 0
+                        m_dmg = m_dmg_dice + m_extra_dice + base_m.bonus_damage + m['stats']['str']
+
+                        if target.adv_class == 'ROG' and target.level >= 5 and 'REACTION_USED' not in adv_status_tracker[target.id]:
+                            m_dmg = m_dmg // 2
+                            adv_status_tracker[target.id].add('REACTION_USED')
+                            script.append({"second": current_second - 8, "type": "flavor", "message": f"🛡️ {target.name} usa [bold yellow]Esquiva Asombrosa[/bold yellow] y mitiga el impacto."})
+
+                        if 'RAGING' in adv_status_tracker[target.id]:
+                            m_dmg = m_dmg // 2
+
+                        eff_m = getattr(base_m, 'on_hit_effect', 'NON')
+                        if eff_m != 'NON' and random.randint(1, 100) <= getattr(base_m, 'effect_chance', 0):
+                            if eff_m == 'LFS':
+                                heal = sum(random.randint(1, getattr(base_m, 'effect_dice_sides', 4)) for _ in range(getattr(base_m, 'effect_dice_count', 1)))
+                                m['hp'] = min(m['max_hp'], m['hp'] + heal)
+                                script.append({"second": current_second - 8, "type": "flavor", "message": f"¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
+                            else:
+                                adv_status_tracker[target.id].add(eff_m)
+                                script.append({"second": current_second - 8, "type": "flavor", "message": f"¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+
+                        eff_adv = adv_mods.get('on_hit_effect', 'NON')
+                        if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
+                            thorns_dmg = random.randint(1, 4)
+                            m['hp'] -= thorns_dmg
+                            script.append({"second": current_second - 7, "type": "flavor", "message": f"La armadura de {target.name} devuelve {thorns_dmg} daño a [bold red]{m['name']}[/bold red]."})
+
+                        final_dmg = max(1, m_dmg - adv_mods['con'])
+                        temp_hp[target.id] -= final_dmg
+
+                        crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if m_raw_roll == 20 else ""
+                        script.append({"second": current_second - 8, "type": "damage", "adventurer_id": target.id, "amount": final_dmg,
+                                      "message": f"{crit_msg}[bold red]{m['name']}[/bold red] golpea a {target.name} ({final_dmg} daño)."})
+                        if temp_hp[target.id] <= 0:
+                            script.append({"second": current_second - 7, "type": "flavor", "message": f"⚠️ [bold yellow]{target.name}[/bold yellow] ha caído inconsciente en combate."})
+                    else:
+                        fail_msg = "falla estrepitosamente" if m_raw_roll == 1 else "falla su ataque"
+                        script.append({"second": current_second - 8, "type": "flavor", "message": f"[bold red]{m['name']}[/bold red] {fail_msg} contra {target.name}."})
+                
                 else:
-                    fail_msg = "falla estrepitosamente" if m_raw_roll == 1 else "falla su ataque"
-                    script.append({"second": current_second - 8, "type": "flavor",
-                                  "message": f"[bold red]{m['name']}[/bold red] {fail_msg} contra {target.name}."})
+                    adv = combatant['entity']
+                    if temp_hp[adv.id] <= 0: continue
+                    if not active_monsters_group: break
+                    
+                    adv_mods = adv.get_stat_modifiers()
 
-            # --- TURNO DE LOS AVENTUREROS ---
-            for i, adv in enumerate(adventurers):
-                if temp_hp[adv.id] <= 0:
-                    continue  # Si el aventurero está inconsciente, salta su turno
+                    if temp_hp[adv.id] < (adv.max_hp * 0.3):
+                        heal_slots = list(InventorySlot.objects.filter(adventurer=adv, item__consumable_type='HEL', quantity__gt=0))
+                        if heal_slots:
+                            slot = heal_slots[0]
+                            slot.quantity -= 1
+                            if slot.quantity <= 0: slot.delete()
+                            else: slot.save()
 
-                if not active_monsters_group:
-                    break  # Si murieron todos, paran de atacar
+                            heal_amount = slot.item.consumable_amount if slot.item.consumable_amount > 0 else random.randint(10, 20)
+                            temp_hp[adv.id] = min(adv.max_hp, temp_hp[adv.id] + heal_amount)
+                            script.append({"second": current_second - 5, "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                           "message": f"¡Salud Crítica! {adv.name} bebe desesperadamente una [bold cyan]{slot.item.name}[/bold cyan] (+{heal_amount} HP)."})
+                            continue
 
-                adv_mods = adv.get_stat_modifiers()
+                    dot_damage = 0
+                    if 'PSN' in adv_status_tracker[adv.id]: dot_damage += random.randint(1, 4)
+                    if 'BRN' in adv_status_tracker[adv.id]: dot_damage += random.randint(1, 6)
+                    if 'BLD' in adv_status_tracker[adv.id]: dot_damage += random.randint(1, 4)
+                    if dot_damage > 0:
+                        temp_hp[adv.id] -= dot_damage
+                        script.append({"second": current_second - 6, "type": "damage", "adventurer_id": adv.id,
+                                      "amount": dot_damage, "message": f"{adv.name} sufre {dot_damage} de daño continuo."})
+                        if temp_hp[adv.id] <= 0:
+                            script.append({"second": current_second - 5, "type": "flavor", "message": f"⚠️ [bold yellow]{adv.name}[/bold yellow] ha caído inconsciente por sus heridas."})
+                            continue
 
-                # --- IA DE CONSUMIBLES TÁCTICOS (POCIONES DE SALUD) ---
-                # Si la salud está por debajo del 30% (Crítico)
-                if temp_hp[adv.id] < (adv.max_hp * 0.3):
-                    heal_slots = list(InventorySlot.objects.filter(
-                        adventurer=adv, item__consumable_type='HEL', quantity__gt=0))
-                    if heal_slots:
-                        # Toma la primera poción curativa que encuentre
-                        slot = heal_slots[0]
-                        slot.quantity -= 1
-                        if slot.quantity <= 0:
-                            slot.delete()
-                        else:
-                            slot.save()
+                    available_skills = []
+                    for skill_id, skill_data in SkillRegistry.get_all_skills().items():
+                        if adv.adv_class in skill_data["allowed_classes"] and adv.level >= skill_data["req_level"]:
+                            if skill_data["type"] == "COMBAT" and skill_id not in combat_skills_tracker[adv.id]:
+                                available_skills.append(skill_data)
 
-                        # Si el ítem no tiene una curación base, asume 15 por defecto
-                        heal_amount = slot.item.consumable_amount if slot.item.consumable_amount > 0 else random.randint(
-                            10, 20)
-                        temp_hp[adv.id] = min(
-                            adv.max_hp, temp_hp[adv.id] + heal_amount)
+                    best_action = "BASIC_ATTACK"
+                    best_score = 50
 
-                        script.append({"second": current_second - 5, "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
-                                       "message": f"¡Salud Crítica! {adv.name} bebe desesperadamente una [bold cyan]{slot.item.name}[/bold cyan] (+{heal_amount} HP)."})
-                        continue  # ¡Termina su turno inmediatamente, beber la poción fue su acción!
-                # --------------------------------------------------------
+                    context = {
+                        'caster': adv,
+                        'allies': adventurers,
+                        'enemies': active_monsters_group,
+                        'adv_status': adv_status_tracker,
+                        'current_second': current_second - 4,
+                        'log': script,
+                        'eval_mode': True
+                    }
 
-                # --- APLICAR DAÑO EN EL TIEMPO (DoT) AL AVENTURERO ---
-                dot_damage = 0
-                if 'PSN' in adv_status_tracker[adv.id]:
-                    dot_damage += random.randint(1, 4)
-                if 'BRN' in adv_status_tracker[adv.id]:
-                    dot_damage += random.randint(1, 6)
-                if 'BLD' in adv_status_tracker[adv.id]:
-                    dot_damage += random.randint(1, 4)
-                if dot_damage > 0:
-                    temp_hp[adv.id] -= dot_damage
-                    script.append({"second": current_second - 6, "type": "damage", "adventurer_id": adv.id,
-                                  "amount": dot_damage, "message": f"{adv.name} sufre {dot_damage} de daño continuo."})
-                    if temp_hp[adv.id] <= 0:
-                        script.append({"second": current_second - 5, "type": "flavor", "message": f"⚠️ [bold yellow]{adv.name}[/bold yellow] ha caído inconsciente por sus heridas."})
+                    for skill in available_skills:
+                        try:
+                            score = skill["execute"](context)
+                            if score > best_score:
+                                best_score = score
+                                best_action = skill
+                        except: pass
 
-                # 1. Identificar Habilidades Disponibles en el Grimorio
-                available_skills = []
-                for skill_id, skill_data in SkillRegistry.get_all_skills().items():
-                    if adv.adv_class in skill_data["allowed_classes"] and adv.level >= skill_data["req_level"]:
-                        if skill_data["type"] == "COMBAT" and skill_id not in combat_skills_tracker[adv.id]:
-                            available_skills.append(skill_data)
-                        elif skill_data["type"] == "SESSION" and skill_id not in session_skills_tracker[adv.id]:
-                            available_skills.append(skill_data)
+                    context['eval_mode'] = False
 
-                # 2. IA de Utilidad: ¿Qué hacer en este turno?
-                best_action = "BASIC_ATTACK"
-                best_score = 50  # Puntuación base para un ataque normal
+                    if best_action == "BASIC_ATTACK":
+                        adv_status_tracker[adv.id].discard('REACTION_USED')
+                        attacks = 2 if adv.level >= 5 and adv.adv_class in ['FTR', 'BBN', 'RGR', 'PAL', 'MNK'] else 1
 
-                context = {
-                    'caster': adv,
-                    'allies': adventurers,
-                    'enemies': active_monsters_group,
-                    'adv_status': adv_status_tracker,
-                    'current_second': current_second - 4,
-                    'log': script,
-                    'eval_mode': True  # Modo evaluación silencioso
-                }
+                        for _ in range(attacks):
+                            if not active_monsters_group: break
+                            target_m = random.choice(active_monsters_group)
+                            attack_stat = max(adv_mods['str'], adv_mods['dex'])
 
-                # El aventurero simula mentalmente cada habilidad para ver su utilidad actual
-                for skill in available_skills:
-                    score = skill["execute"](context)
-                    if score > best_score:
-                        best_score = score
-                        best_action = skill
+                            adv_on_attack = 'BLINDED' in target_m['status'] or 'RECKLESS' in adv_status_tracker[adv.id]
+                            disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
 
-                # Apaga el modo evaluación para la acción real
-                context['eval_mode'] = False
+                            m_evasion = 8 + max(target_m['stats']['dex'], target_m['stats'].get('armor', 0))
+                            a_raw_roll = roll_d20(advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
+                            a_roll_total = a_raw_roll + attack_stat
 
-                # 3. Ejecutar la Mejor Decisión
-                if best_action == "BASIC_ATTACK":
-                    # --- ATAQUE BÁSICO Y MULTIATAQUE ---
+                            if 'INSPIRED' in adv_status_tracker[adv.id]:
+                                bard_dice = random.randint(1, 6)
+                                a_roll_total += bard_dice
+                                adv_status_tracker[adv.id].remove('INSPIRED')
+                                script.append({"second": current_second - 5, "type": "flavor", "message": f"🎵 ¡La música del Bardo guía el golpe! (+{bard_dice})"})
 
-                    # Limpia la Reacción para que el Pícaro la vuelva a tener disponible
-                    adv_status_tracker[adv.id].discard('REACTION_USED')
+                            is_hit = False
+                            if a_raw_roll == 20: is_hit = True
+                            elif a_raw_roll == 1: is_hit = False
+                            else: is_hit = (a_roll_total >= m_evasion)
 
-                    # Nivel 5: Clases Marciales atacan dos veces
-                    attacks = 2 if adv.level >= 5 and adv.adv_class in [
-                        'FTR', 'BBN', 'RGR', 'PAL', 'MNK'] else 1
+                            if is_hit:
+                                sides = adv_mods.get('weapon_dice_sides', 4) or 4
+                                count = adv_mods.get('weapon_dice_count', 1) or 1
+                                a_dmg = sum(random.randint(1, sides) for _ in range(count)) + adv_mods['damage'] + adv_mods['str']
 
-                    for _ in range(attacks):
-                        if not active_monsters_group:
-                            break
+                                extra_count = adv_mods.get('bonus_dmg_dice_count', 0)
+                                if extra_count > 0:
+                                    extra_sides = adv_mods.get('bonus_dmg_dice_sides', 4) or 4
+                                    a_dmg += sum(random.randint(1, extra_sides) for _ in range(extra_count))
 
-                        target_m = random.choice(active_monsters_group)
-                        attack_stat = max(adv_mods['str'], adv_mods['dex'])
+                                if adv.adv_class == 'ROG' and adv_on_attack:
+                                    sneak_dice = (adv.level + 1) // 2
+                                    sneak_dmg = sum(random.randint(1, 6) for _ in range(sneak_dice))
+                                    a_dmg += sneak_dmg
+                                    script.append({"second": current_second - 5, "type": "flavor", "message": f"🗡️ ¡Ataque Furtivo de {adv.name}! (+{sneak_dmg})"})
 
-                        # Lógica de Ventaja/Desventaja
-                        adv_on_attack = 'BLINDED' in target_m['status'] or 'RECKLESS' in adv_status_tracker[adv.id]
-                        disadv_on_attack = 'BLINDED' in adv_status_tracker[adv.id]
+                                if 'RAGING' in adv_status_tracker[adv.id]: a_dmg += 2
+                                if 'INFUSED_WEAPON' in adv_status_tracker[adv.id]: a_dmg += 1
 
-                        # --- CA MONSTRUO: 8 + Mayor entre Destreza o Armadura ---
-                        m_evasion = 8 + \
-                            max(target_m['stats']['dex'],
-                                target_m['stats'].get('armor', 0))
+                                eff = adv_mods.get('on_hit_effect', 'NON')
+                                if eff != 'NON' and eff != 'THN':
+                                    if random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
+                                        if eff == 'LFS':
+                                            heal = sum(random.randint(1, adv_mods['effect_dice_sides']) for _ in range(adv_mods['effect_dice_count']))
+                                            temp_hp[adv.id] = min(adv.max_hp, temp_hp[adv.id] + heal)
+                                            script.append({"second": current_second - 4, "type": "heal", "adventurer_id": adv.id, "amount": heal, "message": f"🦇 {adv.name} drena {heal} HP."})
+                                        else:
+                                            target_m['status'].add(eff)
+                                            eff_names = {'PSN': 'Veneno', 'BLD': 'Sangrado', 'BRN': 'Quemaduras', 'STN': 'Aturdimiento', 'BLN': 'Ceguera'}
+                                            script.append({"second": current_second - 4, "type": "flavor", "message": f"¡{adv.name} inflige {eff_names.get(eff, eff)}!"})
 
-                        a_raw_roll = roll_d20(
-                            advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
-                        a_roll_total = a_raw_roll + attack_stat
+                                final_dmg = max(1, a_dmg - target_m['stats']['con'])
+                                target_m['hp'] -= final_dmg
 
-                        if 'INSPIRED' in adv_status_tracker[adv.id]:
-                            bard_dice = random.randint(1, 6)
-                            a_roll_total += bard_dice
-                            adv_status_tracker[adv.id].remove('INSPIRED')
-                            script.append({"second": current_second - 5, "type": "flavor",
-                                          "message": f"🎵 ¡La música del Bardo guía el golpe! (+{bard_dice})"})
-
-                        is_hit = False
-                        if a_raw_roll == 20:
-                            is_hit = True  # Éxito Crítico
-                        elif a_raw_roll == 1:
-                            is_hit = False  # Fallo Crítico
-                        else:
-                            is_hit = (a_roll_total >= m_evasion)
-
-                        if is_hit:
-                            sides = adv_mods.get('weapon_dice_sides', 4) or 4
-                            count = adv_mods.get('weapon_dice_count', 1) or 1
-                            a_dmg = sum(random.randint(1, sides) for _ in range(
-                                count)) + adv_mods['damage'] + adv_mods['str']
-
-                            extra_count = adv_mods.get(
-                                'bonus_dmg_dice_count', 0)
-                            if extra_count > 0:
-                                extra_sides = adv_mods.get(
-                                    'bonus_dmg_dice_sides', 4) or 4
-                                a_dmg += sum(random.randint(1, extra_sides)
-                                             for _ in range(extra_count))
-
-                            if adv.adv_class == 'ROG' and adv_on_attack:
-                                sneak_dice = (adv.level + 1) // 2
-                                sneak_dmg = sum(random.randint(1, 6)
-                                                for _ in range(sneak_dice))
-                                a_dmg += sneak_dmg
-                                script.append({"second": current_second - 5, "type": "flavor",
-                                              "message": f"🗡️ ¡Ataque Furtivo de {adv.name}! (+{sneak_dmg})"})
-
-                            if 'RAGING' in adv_status_tracker[adv.id]:
-                                a_dmg += 2
-                            if 'INFUSED_WEAPON' in adv_status_tracker[adv.id]:
-                                a_dmg += 1
-
-                            eff = adv_mods.get('on_hit_effect', 'NON')
-                            if eff != 'NON' and eff != 'THN':
-                                if random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
-                                    if eff == 'LFS':
-                                        heal = sum(random.randint(1, adv_mods['effect_dice_sides']) for _ in range(
-                                            adv_mods['effect_dice_count']))
-                                        temp_hp[adv.id] = min(adv.max_hp, temp_hp[adv.id] + heal)
-                                        script.append({"second": current_second - 4, "type": "heal", "adventurer_id": adv.id,
-                                                      "amount": heal, "message": f"🦇 {adv.name} drena {heal} HP."})
-                                    else:
-                                        target_m['status'].add(eff)
-                                        eff_names = {
-                                            'PSN': 'Veneno', 'BLD': 'Sangrado', 'BRN': 'Quemaduras', 'STN': 'Aturdimiento', 'BLN': 'Ceguera'}
-                                        script.append({"second": current_second - 4, "type": "flavor",
-                                                      "message": f"¡{adv.name} inflige {eff_names.get(eff, eff)}!"})
-
-                            # --- Mitigación por Constitución y Daño Mínimo 1 ---
-                            final_dmg = max(
-                                1, a_dmg - target_m['stats']['con'])
-                            target_m['hp'] -= final_dmg
-
-                            crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if a_raw_roll == 20 else ""
-                            script.append({"second": current_second - 4, "type": "flavor",
-                                          "message": f"{crit_msg}{adv.name} asesta un golpe de {final_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
-                        else:
-                            fail_msg = "falla catastróficamente" if a_raw_roll == 1 else "falla su ataque"
-                            script.append({"second": current_second - 4, "type": "flavor",
-                                          "message": f"{adv.name} {fail_msg} contra [bold red]{target_m['name']}[/bold red]."})
-
-                else:
-                    # --- EJECUCIÓN DE HABILIDAD ---
-                    success = best_action["execute"](context)
-                    if success:
-                        # Coloca la habilidad en enfriamiento temporal
-                        if best_action["type"] == "COMBAT":
-                            combat_skills_tracker[adv.id].add(
-                                best_action["id"])
-                        elif best_action["type"] == "SESSION":
-                            session_skills_tracker[adv.id].add(
-                                best_action["id"])
-
+                                crit_msg = "[bold magenta]¡CRÍTICO![/bold magenta] " if a_raw_roll == 20 else ""
+                                script.append({"second": current_second - 4, "type": "flavor",
+                                              "message": f"{crit_msg}{adv.name} asesta un golpe de {final_dmg} daño a [bold red]{target_m['name']}[/bold red]."})
+                            else:
+                                fail_msg = "falla catastróficamente" if a_raw_roll == 1 else "falla su ataque"
+                                script.append({"second": current_second - 4, "type": "flavor", "message": f"{adv.name} {fail_msg} contra [bold red]{target_m['name']}[/bold red]."})
+                    else:
+                        success = best_action["execute"](context)
+                        if success:
+                            combat_skills_tracker[adv.id].add(best_action["id"])
                 # --- Comprobación Universal de Muertes ---
                 for m in list(active_monsters_group):
                     if m['hp'] <= 0:
