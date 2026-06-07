@@ -627,8 +627,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         'current_second': current_second - 2,
                         'log': script,
                         'eval_mode': True,
-                        'session_duration': total_seconds,
-                        'base_gold': session_gold
+                        'session_duration': total_seconds
                     }
                     best_action = None
                     best_score = 50
