@@ -66,7 +66,7 @@ class SkillRegistry:
 
 
 @SkillRegistry.register(
-    skill_id="curacion_menor", name="Curación Menor", skill_type="COMBAT", req_level=1, allowed_classes=["CLR", "PAL"]
+    skill_id="curacion_menor", name="Curación Menor", skill_type="COMBAT", req_level=1, allowed_classes=["PAL"]
 )
 def curacion_menor(context):
     caster = context['caster']
@@ -961,4 +961,214 @@ def secretos_magicos(context):
                            "message": f"🌟 Usando Secretos Mágicos, {caster.name} fusiona roles: asesta {dmg} daño mágico a [bold red]{target_enemy['name']}[/bold red]..."})
     context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": buffed_ally.id, "amount": heal_amount,
                            "message": f"🌟 ...y simultáneamente canaliza un milagro que cura a {buffed_ally.name} por {heal_amount} HP."})
+    return True
+
+# ==========================================
+# CLERIC SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="dominio_divino", name="Dominio Divino", skill_type="SESSION", req_level=1, allowed_classes=["CLR"]
+)
+def dominio_divino(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 50 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🕊️ Guiado por su Dominio Divino, {caster.name} proyecta un santuario de paz."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(1, 4) + caster.get_stat_modifiers()['wis']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} se baña en luz sagrada ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="canalizar_divinidad", name="Canalizar Divinidad", skill_type="COMBAT", req_level=2, allowed_classes=["CLR"]
+)
+def canalizar_divinidad(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 55 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(2, 16) + adv_mods['wis'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"☀️ {caster.name} logra Canalizar Divinidad, disparando un haz radiante que calcina a [bold red]{target['name']}[/bold red] por {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="aura_devocion", name="Aura de Devoción", skill_type="SESSION", req_level=3, allowed_classes=["CLR"]
+)
+def aura_devocion(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        for status_list in adv_status.values():
+            if any(s in status_list for s in ['PSN', 'BRN', 'BLD']):
+                return 75
+        return 0
+
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        bad_status = [s for s in status_list if s in ['PSN', 'BRN', 'BLD']]
+        if bad_status:
+            for s in bad_status:
+                adv_status[adv.id].remove(s)
+            context['log'].append({"second": context['current_second'], "type": "flavor",
+                                   "message": f"✨ El Aura de Devoción constante de {caster.name} purifica instantáneamente las aflicciones de {adv.name}."})
+            return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="bendicion_matutina", name="Bendición Matutina", skill_type="SESSION", req_level=4, allowed_classes=["CLR"]
+)
+def bendicion_matutina(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.5)]
+        return 65 if critical_allies else 0
+
+    critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.5)]
+    if critical_allies:
+        target = random.choice(critical_allies)
+        heal_amount = max(5, random.randint(2, 12) + caster.get_stat_modifiers()['wis'] * 3)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target.id, "amount": heal_amount,
+                               "message": f"🙏 Una trampa mortal falla por centímetros gracias a la Bendición Matutina de {caster.name}. {target.name} se salva ileso ({heal_amount} HP equivalentes)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="destruir_muertos", name="Destruir Muertos Vivientes", skill_type="COMBAT", req_level=5, allowed_classes=["CLR"]
+)
+def destruir_muertos(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💀 {caster.name} levanta su símbolo sagrado para Destruir Muertos Vivientes."})
+    
+    for target in context['enemies']:
+        # Instakill para pequeños y medianos, daño para los grandes
+        if getattr(target.get('base'), 'category', 'SML') in ['SML', 'MED']:
+            target['hp'] = 0
+            context['log'].append({"second": context['current_second'], "type": "flavor",
+                                   "message": f"    -> 💨 [bold red]{target['name']}[/bold red] es desintegrado en polvo de estrellas."})
+        else:
+            dmg = random.randint(1, 8) + caster.get_stat_modifiers()['wis']
+            target['hp'] -= dmg
+            context['log'].append({"second": context['current_second'], "type": "flavor",
+                                   "message": f"    -> 🔥 [bold red]{target['name']}[/bold red] arde con fuego celestial ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="intercesion_protectora", name="Intercesión Protectora", skill_type="COMBAT", req_level=6, allowed_classes=["CLR"]
+)
+def intercesion_protectora(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.25)]
+        return 90 if critical_allies else 0
+
+    critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.25)]
+    if critical_allies:
+        target = random.choice(critical_allies)
+        heal_amount = max(10, random.randint(5, 20) + caster.get_stat_modifiers()['wis'] * 3)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target.id, "amount": heal_amount,
+                               "message": f"🛡️ ¡Intercesión Protectora! {caster.name} salta frente a un golpe letal dirigido a {target.name}, curándole {heal_amount} HP y salvándole la vida."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="escudo_fe", name="Escudo de Fe", skill_type="SESSION", req_level=7, allowed_classes=["CLR"]
+)
+def escudo_fe(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 55 if caster.current_hp < caster.max_hp else 0
+
+    heal_amount = random.randint(2, 12) + caster.get_stat_modifiers()['wis'] * 2
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"🛡️ El Escudo de Fe pasivo de {caster.name} amortigua los golpes ambientales constantes ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="golpe_divino", name="Golpe Divino", skill_type="COMBAT", req_level=8, allowed_classes=["CLR"]
+)
+def golpe_divino(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 8) for _ in range(3)) + caster.get_stat_modifiers()['wis'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚔️ {caster.name} ejecuta un Golpe Divino espectacular que parte a [bold red]{target['name']}[/bold red] infligiendo {dmg} de daño radiante."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="comunion_diaria", name="Comunión Diaria", skill_type="SESSION", req_level=9, allowed_classes=["CLR"]
+)
+def comunion_diaria(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 100 # Siempre útil buscar botín
+
+    from .models import Item, ItemRarity
+    items_db = list(Item.objects.filter(rarity__in=['COM', 'UNC']))
+    if items_db:
+        drop_item = random.choice(items_db)
+        context['log'].append({"second": context['current_second'], "type": "item_loot", "item_id": drop_item.id, "adventurer_id": caster.id,
+                               "message": f"📿 Tras una Comunión Diaria, los dioses guían a {caster.name} hacia un tesoro oculto: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
+    else:
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"📿 {caster.name} reza, pero los dioses guardan silencio hoy."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="intervencion_divina", name="Intervención Divina", skill_type="COMBAT", req_level=10, allowed_classes=["CLR"]
+)
+def intervencion_divina(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        # Solo usar si hay al menos 2 monstruos o es jefe, muy raro de evaluar pero muy potente
+        return 95 if len(context['enemies']) >= 2 else 50
+
+    if not context['enemies']: return False
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌟 {caster.name} cae de rodillas e implora una Intervención Divina a los cielos..."})
+    
+    d100 = random.randint(1, 100)
+    # Probabilidad = Nivel de Clérigo (10%)
+    if d100 <= caster.level:
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 🌩️ ¡UN MILAGRO! ¡El cielo se abre y un cataclismo sagrado cae sobre los monstruos!"})
+        for target in context['enemies']:
+            target['hp'] = 0
+            context['log'].append({"second": context['current_second'], "type": "flavor",
+                                   "message": f"    -> [bold red]{target['name']}[/bold red] es borrado de la existencia."})
+    else:
+        dmg = random.randint(2, 20) + caster.get_stat_modifiers()['wis']
+        target = random.choice(context['enemies'])
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> ⚡ Los dioses no bajan, pero otorgan fuerza. [bold red]{target['name']}[/bold red] sufre {dmg} de daño celestial."})
     return True
