@@ -269,7 +269,7 @@ def castigo_divino(context):
 
 
 @SkillRegistry.register(
-    skill_id="bola_de_fuego", name="Bola de Fuego", skill_type="SESSION", req_level=5, allowed_classes=["WIZ", "SOR"]
+    skill_id="bola_de_fuego", name="Bola de Fuego", skill_type="SESSION", req_level=5, allowed_classes=["WIZ"]
 )
 def bola_de_fuego(context):
     caster = context['caster']
@@ -1756,4 +1756,205 @@ def estilo_critico(context):
     
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"💥 ¡Estilo Crítico! {caster.name} encuentra el punto ciego absoluto de [bold red]{target['name']}[/bold red] y desata un golpe letal ({dmg} DAÑO CRÍTICO)."})
+    return True
+
+# ==========================================
+# SORCERER SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="origen_arcano", name="Origen Arcano", skill_type="SESSION", req_level=1, allowed_classes=["SOR"]
+)
+def origen_arcano(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 60 if caster.current_hp < caster.max_hp else 0
+
+    if caster.current_hp < caster.max_hp:
+        heal_amount = random.randint(2, 6) + caster.get_stat_modifiers()['cha']
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🐉 Las escamas místicas del Origen Arcano de {caster.name} endurecen su piel, curando su desgaste ({heal_amount} HP)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="fuente_magia", name="Fuente de Magia", skill_type="COMBAT", req_level=2, allowed_classes=["SOR"]
+)
+def fuente_magia(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(2, 12) + caster.get_stat_modifiers()['cha'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"✨ {caster.name} convierte su propia esencia en una Fuente de Magia, calcinando a [bold red]{target['name']}[/bold red] por {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="metamagia_basica", name="Metamagia (Conjuro Gemelo)", skill_type="COMBAT", req_level=3, allowed_classes=["SOR"]
+)
+def metamagia_basica(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if len(context['enemies']) >= 2 else 50
+
+    if not context['enemies']: return False
+    
+    # Intenta seleccionar dos objetivos distintos si hay más de 1
+    targets = random.sample(context['enemies'], min(2, len(context['enemies'])))
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🔮 {caster.name} retuerce la magia usando Conjuro Gemelo:"})
+                           
+    for target in targets:
+        dmg = random.randint(2, 10) + caster.get_stat_modifiers()['cha']
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> ⚡ Un rayo arcano impacta a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="flujo_estable", name="Flujo Estable", skill_type="SESSION", req_level=4, allowed_classes=["SOR"]
+)
+def flujo_estable(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 45
+
+    coins = random.randint(4, 10) * 5 # 20 a 50 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🌌 Su Flujo Estable estabiliza la magia volátil de la sala, revelando un tesoro de plata pura (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="sobrecarga_arcana", name="Sobrecarga Arcana", skill_type="COMBAT", req_level=5, allowed_classes=["SOR"]
+)
+def sobrecarga_arcana(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 8) for _ in range(4)) + caster.get_stat_modifiers()['cha'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💥 {caster.name} impone una Sobrecarga Arcana, forzando a [bold red]{target['name']}[/bold red] a recibir el impacto pleno y crítico de su conjuro ({dmg} daño mágico)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="corazon_origen", name="Corazón del Origen", skill_type="SESSION", req_level=6, allowed_classes=["SOR"]
+)
+def corazon_origen(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        for status_list in adv_status.values():
+            if 'BRN' in status_list:
+                return 80
+        return 0
+
+    cleansed = False
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        if 'BRN' in status_list:
+            cleansed = True
+            adv_status[adv.id].remove('BRN')
+            
+            heal_amount = random.randint(10, 20) + caster.get_stat_modifiers()['cha'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"🔥 El Corazón del Origen de {caster.name} absorbe las llamas que consumían a {adv.name}, sanándole {heal_amount} HP."})
+    return cleansed
+
+@SkillRegistry.register(
+    skill_id="escudo_espejismo", name="Escudo de Espejismo", skill_type="COMBAT", req_level=7, allowed_classes=["SOR"]
+)
+def escudo_espejismo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if caster.current_hp <= (caster.max_hp * 0.5) else 0
+
+    if caster.current_hp <= (caster.max_hp * 0.5):
+        heal_amount = random.randint(15, 30) + caster.get_stat_modifiers()['cha'] * 3
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🪞 ¡Escudo de Espejismo! {caster.name} se fragmenta en ilusiones, evadiendo ataques mortales (Mitiga/Cura {heal_amount} HP)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="intuicion_conjuro", name="Intuición de Conjuro", skill_type="SESSION", req_level=8, allowed_classes=["SOR"]
+)
+def intuicion_conjuro(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 100 # Item Drop garantizado
+
+    from .models import Item, ItemRarity
+    items_db = list(Item.objects.filter(rarity__in=['COM', 'UNC']))
+    if items_db:
+        drop_item = random.choice(items_db)
+        context['log'].append({"second": context['current_second'], "type": "item_loot", "item_id": drop_item.id, "adventurer_id": caster.id,
+                               "message": f"🔮 Su Intuición de Conjuro le permite identificar mágicamente los remanentes de un artefacto enterrado: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
+    else:
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"🔮 {caster.name} intenta identificar un objeto mágico, pero no encuentra nada estable en esta zona."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="transfusion_sangre", name="Transfusión de Sangre", skill_type="COMBAT", req_level=9, allowed_classes=["SOR"]
+)
+def transfusion_sangre(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if context['enemies'] and caster.current_hp > (caster.max_hp * 0.3) else 0
+
+    if not context['enemies'] or caster.current_hp <= (caster.max_hp * 0.3): return False
+    
+    # Pierde HP para infligir daño colosal a todos
+    hp_cost = max(1, int(caster.current_hp * 0.15))
+    caster.current_hp -= hp_cost
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🩸 {caster.name} sacrifica su propia vitalidad ({hp_cost} HP) en una Transfusión de Sangre para potenciar su poder destructivo."})
+    
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 12) for _ in range(4)) + caster.get_stat_modifiers()['cha'] * 3
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 💀 [bold red]{target['name']}[/bold red] es bombardeado por magia de sangre ({dmg} daño oscuro)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="metamagia_avanzada", name="Metamagia Avanzada", skill_type="COMBAT", req_level=10, allowed_classes=["SOR"]
+)
+def metamagia_avanzada(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if context['enemies'] else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌠 {caster.name} desata la Metamagia Avanzada: Conjuro Potenciado + Conjuro Cuidadoso."})
+    
+    # Daño a todos los enemigos
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 10) for _ in range(5)) + caster.get_stat_modifiers()['cha'] * 4
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> ☄️ [bold red]{target['name']}[/bold red] recibe el infierno metamágico ({dmg} daño devastador)."})
+    
+    # Curación pasiva a los aliados por la energía residual curativa ("Cuidadoso")
+    for adv in context['allies']:
+        heal_amount = random.randint(5, 15) + caster.get_stat_modifiers()['cha']
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                               "message": f"    -> 🛡️ La magia cuidadosamente esquiva a {adv.name}, dándole energía ({heal_amount} HP recuperados)."})
     return True
