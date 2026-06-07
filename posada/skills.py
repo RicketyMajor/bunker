@@ -139,39 +139,7 @@ def furia_feroz(context):
 # Removido: bola_de_fuego antigua (reemplazada en la sección exclusiva de WIZ)
 
 
-@SkillRegistry.register(
-    skill_id="eldritch_blast", name="Descarga Sobrenatural", skill_type="COMBAT", req_level=1, allowed_classes=["WLK"]
-)
-def eldritch_blast(context):
-    caster = context['caster']
-    if context.get('eval_mode'):
-        return 55 if context['enemies'] else 0
-
-    adv_mods = caster.get_stat_modifiers()
-    beams = 2 if caster.level >= 5 else 1
-
-    context['log'].append({"second": context['current_second'], "type": "flavor",
-                           "message": f"🌌 {caster.name} dispara {beams} rayo(s) de [bold magenta]Eldritch Blast[/bold magenta]."})
-
-    for i in range(beams):
-        if not context['enemies']:
-            break
-        target = random.choice(context['enemies'])
-
-        m_evasion = 8 + max(target['stats']['dex'],
-                            target['stats'].get('armor', 0))
-        a_raw_roll = random.randint(1, 20)
-
-        if a_raw_roll == 20 or (a_raw_roll != 1 and (a_raw_roll + adv_mods['cha']) >= m_evasion):
-            dmg = random.randint(1, 10) + adv_mods['cha']
-            final_dmg = max(1, dmg - target['stats']['con'])
-            target['hp'] -= final_dmg
-            context['log'].append({"second": context['current_second'], "type": "flavor",
-                                   "message": f"    -> ¡Impacto en [bold red]{target['name']}[/bold red]! ({final_dmg} daño)"})
-        else:
-            context['log'].append({"second": context['current_second'], "type": "flavor",
-                                   "message": f"    -> El rayo falla contra [bold red]{target['name']}[/bold red]."})
-    return True
+# Removido: eldritch_blast antigua (reemplazada en la sección exclusiva del WLK)
 
 # ==========================================
 # ARTIFICER SKILLS
@@ -2579,4 +2547,190 @@ def mente_escurridiza(context):
             heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['wis'] * 3
             context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
                                    "message": f"    -> La cordura de {adv.name} es restaurada a través de trucos psicológicos ({heal_amount} HP curados)."})
+    return True
+
+# ==========================================
+# WARLOCK SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="patron_pacto", name="Patrón del Pacto", skill_type="SESSION", req_level=1, allowed_classes=["WLK"]
+)
+def patron_pacto(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 75 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"👁️‍🗨️ {caster.name} susurra al vacío. Su Patrón del Pacto responde, otorgando favores oscuros a la party a cambio de su cordura."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(5, 12) + caster.get_stat_modifiers()['cha']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> Sombras envuelven a {adv.name}, cerrando sus heridas sobrenaturalmente ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="invocaciones_eldritch", name="Invocaciones Eldritch", skill_type="COMBAT", req_level=2, allowed_classes=["WLK"]
+)
+def invocaciones_eldritch(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌌 ¡ELDRITCH BLAST! {caster.name} canaliza sus Invocaciones Eldritch, desatando múltiples rayos de fuerza abisal:"})
+                           
+    for i in range(2):
+        if not context['enemies']: break
+        target = random.choice(context['enemies'])
+        dmg = random.randint(8, 15) + caster.get_stat_modifiers()['cha'] * 2
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> ☄️ Rayo {i+1} impacta a [bold red]{target['name']}[/bold red] de lleno ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="regalo_pacto", name="Regalo del Pacto", skill_type="SESSION", req_level=3, allowed_classes=["WLK"]
+)
+def regalo_pacto(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 65 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"📖 El Regalo del Pacto de {caster.name} revela un camino seguro mediante presagios demoníacos, guiando al grupo por el abismo."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(4, 10) + caster.get_stat_modifiers()['cha']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> Evita el letal peligro inminente para {adv.name} ({heal_amount} HP preservados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="mirada_penetrante", name="Mirada Penetrante", skill_type="SESSION", req_level=4, allowed_classes=["WLK"]
+)
+def mirada_penetrante(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85
+
+    coins = random.randint(8, 20) * 10 # 80 a 200 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🧿 Los ojos de {caster.name} arden con la Mirada Penetrante, destrozando ilusiones mágicas y hallando un enorme tesoro oscuro (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="magia_pacto_aumentada", name="Magia de Pacto Aumentada", skill_type="COMBAT", req_level=5, allowed_classes=["WLK"]
+)
+def magia_pacto_aumentada(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(20, 40) + caster.get_stat_modifiers()['cha'] * 4
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🔥 ¡Magia de Pacto Aumentada a Nivel 3! {caster.name} desgarra la realidad y engulle a [bold red]{target['name']}[/bold red] en fuego infernal ({dmg} daño absoluto ignorando defensas)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="escape_defensivo", name="Escape Defensivo", skill_type="COMBAT", req_level=6, allowed_classes=["WLK"]
+)
+def escape_defensivo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if caster.current_hp < caster.max_hp * 0.4 else 0
+
+    if caster.current_hp < caster.max_hp * 0.4:
+        heal_amount = random.randint(25, 40) + caster.get_stat_modifiers()['cha'] * 3
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"💨 ¡Escape Defensivo! Acorralado, {caster.name} se vuelve invisible de repente y se teletransporta, salvando su vida milagrosamente ({heal_amount} HP recuperados de un golpe mortal)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="velo_sombras", name="Velo de Sombras", skill_type="COMBAT", req_level=7, allowed_classes=["WLK"]
+)
+def velo_sombras(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 85 if caster.current_hp < caster.max_hp * 0.3 else 0
+
+    if caster.current_hp < caster.max_hp * 0.3:
+        heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['cha'] * 4
+        caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🌫️ Sumergiéndose en el Velo de Sombras, {caster.name} se vuelve inalcanzable. El ataque enemigo lo atraviesa como si fuera neblina ({heal_amount} HP de daño prevenido al máximo)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="absorcion_almas", name="Absorción de Almas", skill_type="COMBAT", req_level=8, allowed_classes=["WLK"]
+)
+def absorcion_almas(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] and caster.current_hp < caster.max_hp else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(15, 30) + caster.get_stat_modifiers()['cha'] * 2
+    target['hp'] -= dmg
+    
+    heal_amount = caster.level * 2 + caster.get_stat_modifiers()['cha'] * 3
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"💀 {caster.name} masacra a [bold red]{target['name']}[/bold red] ({dmg} daño) y ejerce su Absorción de Almas arrancándole su fuerza vital."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> 🩸 El Brujo consume la esencia, ganando vitalidad oscura ({heal_amount} HP restaurados como vida temporal)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="trance_vacio", name="Trance del Vacío", skill_type="SESSION", req_level=9, allowed_classes=["WLK"]
+)
+def trance_vacio(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 85 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌌 Entrando en el Trance del Vacío, {caster.name} se comunica con entidades superiores (El DM) obteniendo secretos prohibidos sobre la mazmorra."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(25, 45) + caster.get_stat_modifiers()['int'] * 2 + caster.get_stat_modifiers()['wis'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> El atajo revelado evita toda una legión de monstruos ({heal_amount} HP de letalidad masiva evitada por {adv.name})."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="resiliencia_entidad", name="Resiliencia de la Entidad", skill_type="SESSION", req_level=10, allowed_classes=["WLK"]
+)
+def resiliencia_entidad(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if caster.current_hp < caster.max_hp else 0
+
+    heal_amount = random.randint(40, 80) + caster.get_stat_modifiers()['cha'] * 5
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🧟 Su cuerpo es apenas humano. Mediante la Resiliencia de la Entidad, {caster.name} muta pasivamente para ignorar el daño ambiental extremo."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> Las células oscuras suturan por completo cualquier mutilación letal ({heal_amount} HP recuperados)."})
     return True
