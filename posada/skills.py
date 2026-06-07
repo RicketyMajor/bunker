@@ -1366,3 +1366,211 @@ def inmunidad_naturaleza(context):
             context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
                                    "message": f"🌿 Su Inmunidad de la Naturaleza exuda una fragancia purificadora, erradicando todas las toxinas de {adv.name} y restaurando {heal_amount} HP."})
     return cleansed
+
+# ==========================================
+# RANGER SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="enemigo_favorecido", name="Enemigo Favorecido", skill_type="SESSION", req_level=1, allowed_classes=["RGR"]
+)
+def enemigo_favorecido(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 45
+
+    coins = random.randint(3, 8) * 5 # 15 a 40 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🐾 Al rastrear los restos de su Enemigo Favorecido, {caster.name} extrae trofeos invaluables (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="estilo_combate", name="Estilo de Combate", skill_type="COMBAT", req_level=2, allowed_classes=["RGR"]
+)
+def estilo_combate(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 65 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(2, 12) + max(adv_mods['dex'], adv_mods['str']) * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🏹 {caster.name} aplica su Estilo de Combate, asestando un golpe preciso y letal a [bold red]{target['name']}[/bold red] por {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="conciencia_primal", name="Conciencia Primal", skill_type="SESSION", req_level=3, allowed_classes=["RGR"]
+)
+def conciencia_primal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 60 if allies_hurt >= 2 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"👁️ La Conciencia Primal de {caster.name} le alerta de aberraciones cercanas, permitiendo al grupo rodear el peligro."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(1, 6) + caster.get_stat_modifiers()['wis']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} evita un desgaste innecesario ({heal_amount} HP preservados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="superviviente_frontera", name="Superviviente de la Frontera", skill_type="SESSION", req_level=4, allowed_classes=["RGR"]
+)
+def superviviente_frontera(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 65 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🏕️ Como Superviviente de la Frontera, {caster.name} encuentra el único sendero seguro en el pantano."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(2, 8) + caster.get_stat_modifiers()['wis'] * 2
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} avanza sin agotarse ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="ataque_extra_rgr", name="Ataque Extra (Cazador)", skill_type="COMBAT", req_level=5, allowed_classes=["RGR"]
+)
+def ataque_extra_rgr(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 8) for _ in range(4)) + max(caster.get_stat_modifiers()['dex'], caster.get_stat_modifiers()['str']) * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"⚔️ {caster.name} se mueve como una sombra y realiza un Ataque Extra. Dos impactos letales conectan contra [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="explorador_tierras", name="Explorador de Tierras", skill_type="SESSION", req_level=6, allowed_classes=["RGR"]
+)
+def explorador_tierras(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        for status_list in adv_status.values():
+            if any(s in status_list for s in ['PSN', 'BRN', 'BLD']):
+                return 80
+        return 0
+
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        bad_status = [s for s in status_list if s in ['PSN', 'BRN', 'BLD']]
+        if bad_status:
+            for s in bad_status:
+                adv_status[adv.id].remove(s)
+            
+            heal_amount = random.randint(1, 10) + caster.get_stat_modifiers()['wis']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"🌿 Como Explorador de Tierras, {caster.name} aplica antídotos naturales, limpiando los estados de {adv.name} y curándole {heal_amount} HP."})
+            return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="tactica_defensiva", name="Táctica Defensiva", skill_type="COMBAT", req_level=7, allowed_classes=["RGR"]
+)
+def tactica_defensiva(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.25)]
+        return 85 if critical_allies and context['enemies'] else 0
+
+    critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.25)]
+    if critical_allies and context['enemies']:
+        target_ally = random.choice(critical_allies)
+        target_enemy = random.choice(context['enemies'])
+        
+        heal_amount = max(5, random.randint(5, 15) + caster.get_stat_modifiers()['dex'] * 2)
+        dmg = random.randint(1, 12) + caster.get_stat_modifiers()['dex']
+        
+        target_enemy['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target_ally.id, "amount": heal_amount,
+                               "message": f"🛡️ ¡Táctica Defensiva! {caster.name} distrae a los enemigos, permitiendo que {target_ally.name} respire ({heal_amount} HP recuperados)..."})
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 🏹 ...y en el proceso, dispara de vuelta a [bold red]{target_enemy['name']}[/bold red] por {dmg} daño."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="camuflaje_campo", name="Camuflaje de Campo", skill_type="SESSION", req_level=8, allowed_classes=["RGR"]
+)
+def camuflaje_campo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 100 # Drop de ítem garantizado, siempre prioridad máxima.
+
+    from .models import Item, ItemRarity
+    items_db = list(Item.objects.filter(rarity__in=['COM', 'UNC']))
+    if items_db:
+        drop_item = random.choice(items_db)
+        context['log'].append({"second": context['current_second'], "type": "item_loot", "item_id": drop_item.id, "adventurer_id": caster.id,
+                               "message": f"🥷 Usando Camuflaje de Campo, {caster.name} saquea el campamento de unos monstruos dormidos: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
+    else:
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"🥷 {caster.name} se camufla y acecha, pero el terreno está vacío."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="flecha_rastreo", name="Flecha de Rastreo", skill_type="COMBAT", req_level=9, allowed_classes=["RGR"]
+)
+def flecha_rastreo(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 10) for _ in range(5)) + max(caster.get_stat_modifiers()['dex'], caster.get_stat_modifiers()['wis']) * 3
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🎯 {caster.name} marca el punto débil con una Flecha de Rastreo. ¡Un impacto ineludible desgarra a [bold red]{target['name']}[/bold red] ({dmg} daño)!"})
+    return True
+
+@SkillRegistry.register(
+    skill_id="desvanecerse", name="Desvanecerse", skill_type="COMBAT", req_level=10, allowed_classes=["RGR"]
+)
+def desvanecerse(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 95 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target = random.choice(context['enemies'])
+    
+    dmg = random.randint(10, 50) + adv_mods['dex'] * 4
+    heal_amount = random.randint(10, 30) + adv_mods['wis'] * 2
+    
+    target['hp'] -= dmg
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌫️ {caster.name} utiliza Desvanecerse para volverse indetectable en las sombras."})
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"    -> 🗡️ Asesta un golpe catastrófico desde el sigilo a [bold red]{target['name']}[/bold red] ({dmg} daño)."})
+    context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                           "message": f"    -> 🛡️ Estando oculto, recupera la calma y sana sus heridas ({heal_amount} HP recuperados)."})
+    return True
