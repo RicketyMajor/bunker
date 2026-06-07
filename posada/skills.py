@@ -1172,3 +1172,197 @@ def intervencion_divina(context):
         context['log'].append({"second": context['current_second'], "type": "flavor",
                                "message": f"    -> ⚡ Los dioses no bajan, pero otorgan fuerza. [bold red]{target['name']}[/bold red] sufre {dmg} de daño celestial."})
     return True
+
+# ==========================================
+# DRUID SKILLS
+# ==========================================
+
+@SkillRegistry.register(
+    skill_id="druidico", name="Druídico", skill_type="SESSION", req_level=1, allowed_classes=["DRD"]
+)
+def druidico(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 45
+
+    coins = random.randint(2, 6) * 5 # 10 a 30 cobres
+    context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
+                           "message": f"🌿 Leyendo las marcas en Druídico dejadas en un árbol subterráneo, {caster.name} descubre un alijo escondido (+{coins} cobres)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="forma_salvaje", name="Forma Salvaje", skill_type="COMBAT", req_level=2, allowed_classes=["DRD"]
+)
+def forma_salvaje(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 65 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    
+    adv_mods = caster.get_stat_modifiers()
+    target = random.choice(context['enemies'])
+    
+    # Curación temporal por convertirse en bestia
+    heal_amount = random.randint(2, 8) + adv_mods['wis']
+    caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+    
+    # Ataque de la bestia
+    dmg = random.randint(1, 10) + max(adv_mods['str'], adv_mods['wis'])
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🐻 {caster.name} usa Forma Salvaje, recuperando vigor ({heal_amount} HP) y desgarrando a [bold red]{target['name']}[/bold red] por {dmg} daño."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="circulo_druidico", name="Círculo Druídico", skill_type="SESSION", req_level=3, allowed_classes=["DRD"]
+)
+def circulo_druidico(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 60 if allies_hurt >= 2 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌱 {caster.name} recurre al conocimiento milenario de su Círculo Druídico para revitalizar al grupo."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(1, 6) + caster.get_stat_modifiers()['wis']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} absorbe la magia natural ({heal_amount} HP recuperados)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="paso_forestal", name="Paso Forestal", skill_type="SESSION", req_level=4, allowed_classes=["DRD"]
+)
+def paso_forestal(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
+        return 50 if allies_hurt >= 1 else 0
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🍃 Con su Paso Forestal, {caster.name} guía al grupo con seguridad a través de un denso matorral de espinas ponzoñosas."})
+    
+    for adv in context['allies']:
+        if adv.current_hp < adv.max_hp:
+            heal_amount = random.randint(2, 6) + caster.get_stat_modifiers()['wis']
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"    -> {adv.name} llega ileso ({heal_amount} HP de daño evitado)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="comunion_tierra", name="Comunión con la Tierra", skill_type="SESSION", req_level=5, allowed_classes=["DRD"]
+)
+def comunion_tierra(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 70 if caster.current_hp <= (caster.max_hp * 0.5) else 0
+
+    if caster.current_hp < caster.max_hp:
+        heal_amount = random.randint(5, 20) + caster.get_stat_modifiers()['wis'] * 3
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
+                               "message": f"🌍 {caster.name} entra en Comunión con la Tierra descansando descalzo sobre el suelo, regenerando velozmente {heal_amount} HP."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="formas_legendarias", name="Formas Legendarias", skill_type="COMBAT", req_level=6, allowed_classes=["DRD"]
+)
+def formas_legendarias(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 75 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 10) for _ in range(3)) + caster.get_stat_modifiers()['wis'] * 2
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🐅 Gracias a sus Formas Legendarias, el ataque de {caster.name} ignora por completo la armadura de [bold red]{target['name']}[/bold red] ({dmg} daño mágico)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="piel_roble", name="Piel de Roble Natural", skill_type="SESSION", req_level=7, allowed_classes=["DRD"]
+)
+def piel_roble(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.4)]
+        return 65 if critical_allies else 0
+
+    critical_allies = [a for a in context['allies'] if a.current_hp <= (a.max_hp * 0.4)]
+    if critical_allies:
+        target = random.choice(critical_allies)
+        heal_amount = random.randint(4, 12) + caster.get_stat_modifiers()['wis'] * 2
+        context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": target.id, "amount": heal_amount,
+                               "message": f"🛡️ {caster.name} extiende su Piel de Roble Natural para proteger a {target.name} de las inclemencias del camino (amortigua {heal_amount} HP de desgaste)."})
+        return True
+    return False
+
+@SkillRegistry.register(
+    skill_id="vuelo_halcon", name="Vuelo de Halcón", skill_type="COMBAT", req_level=8, allowed_classes=["DRD"]
+)
+def vuelo_halcon(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 80 if context['enemies'] else 0
+
+    if not context['enemies']: return False
+    target = random.choice(context['enemies'])
+    
+    dmg = sum(random.randint(1, 12) for _ in range(3)) + caster.get_stat_modifiers()['wis']
+    target['hp'] -= dmg
+    
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🦅 {caster.name} usa Forma Salvaje: Vuelo de Halcón, cayendo en picado sobre [bold red]{target['name']}[/bold red] y destrozándolo con sus garras ({dmg} daño)."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="transmutacion_ambiental", name="Transmutación Ambiental", skill_type="COMBAT", req_level=9, allowed_classes=["DRD"]
+)
+def transmutacion_ambiental(context):
+    caster = context['caster']
+    if context.get('eval_mode'):
+        return 90 if len(context['enemies']) >= 2 else 45
+
+    context['log'].append({"second": context['current_second'], "type": "flavor",
+                           "message": f"🌪️ {caster.name} realiza una Transmutación Ambiental violenta. ¡La sala se llena de ráfagas heladas y relámpagos!"})
+    
+    for target in context['enemies']:
+        dmg = sum(random.randint(1, 6) for _ in range(3)) + caster.get_stat_modifiers()['wis'] # 3d6
+        target['hp'] -= dmg
+        context['log'].append({"second": context['current_second'], "type": "flavor",
+                               "message": f"    -> 🌩️ [bold red]{target['name']}[/bold red] es electrocutado por {dmg} de daño elemental."})
+    return True
+
+@SkillRegistry.register(
+    skill_id="inmunidad_naturaleza", name="Inmunidad de la Naturaleza", skill_type="SESSION", req_level=10, allowed_classes=["DRD"]
+)
+def inmunidad_naturaleza(context):
+    caster = context['caster']
+    adv_status = context.get('adv_status', {})
+    
+    if context.get('eval_mode'):
+        for status_list in adv_status.values():
+            if any(s in status_list for s in ['PSN', 'BRN', 'BLD']):
+                return 100
+        return 0
+
+    cleansed = False
+    for adv in context['allies']:
+        status_list = adv_status.get(adv.id, [])
+        bad_status = [s for s in status_list if s in ['PSN', 'BRN', 'BLD']]
+        if bad_status:
+            cleansed = True
+            for s in bad_status:
+                adv_status[adv.id].remove(s)
+            
+            heal_amount = random.randint(5, 15) + caster.get_stat_modifiers()['wis'] * 3
+            context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": adv.id, "amount": heal_amount,
+                                   "message": f"🌿 Su Inmunidad de la Naturaleza exuda una fragancia purificadora, erradicando todas las toxinas de {adv.name} y restaurando {heal_amount} HP."})
+    return cleansed
