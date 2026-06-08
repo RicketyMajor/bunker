@@ -440,7 +440,7 @@ def complete_habit(request):
                     g_slot.quantity += 1
                     g_slot.save()
                     color = ItemRarity.get_color(drop.rarity)
-                    drop_msg += f"\n🎁 ¡Racha de {habit.current_streak} días! Cofre: [[{color}]{drop.name}[/]]"
+                    drop_msg += f"\n🎁 ¡Racha de {habit.current_streak} días! Cofre: \\[[{color}]{drop.name}[/]\\]"
 
             # --- LÓGICA DEL TABLÓN PATROCINADO ---
             if habit.difficulty == 'S':
@@ -455,7 +455,7 @@ def complete_habit(request):
                         g_slot.quantity += 1
                         g_slot.save()
                         color = ItemRarity.get_color(drop.rarity)
-                        drop_msg = f"\n¡El Tablón Patrocinado te envió [[{color}]{drop.name}[/]] al cofre!"
+                        drop_msg = f"\n¡El Tablón Patrocinado te envió \\[[{color}]{drop.name}[/]\\] al cofre!"
 
             return Response({"status": "success", "message": f"¡'{habit.name}' completado! +{r['prestige']} Prestigio.{lvl_msg}{drop_msg}"})
 
