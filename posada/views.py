@@ -167,7 +167,7 @@ def start_session(request):
         adventurers = []
 
     # el Oráculo genera el destino
-    script, _ = generate_session_script(session.id, duration, adventurers)
+    script = generate_session_script(session.id, duration, adventurers)
 
     return Response({
         "status": "success",
