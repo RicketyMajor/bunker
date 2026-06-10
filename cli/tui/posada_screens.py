@@ -1047,6 +1047,173 @@ class NewCalendarEventModal(ModalScreen[dict]):
                 "is_important": self.query_one("#event_important", Select).value == "True"
             })
 
+class EditKanbanTaskModal(ModalScreen[dict]):
+    CSS = """
+    #edit_task_dialog { width: 55; height: auto; padding: 1 2; border: solid $accent; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    .date_row { height: 4; }
+    .date_row Select { width: 1fr; margin: 0 1; }
+    .date_label { margin-top: 1; text-style: bold; color: $accent; }
+    """
+    def __init__(self, task_data: dict, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.task_data = task_data
+
+    def compose(self) -> ComposeResult:
+        t_due = self.task_data.get('due_date')
+        if t_due:
+            from datetime import date as dt_date
+            try:
+                today = dt_date.fromisoformat(t_due)
+            except:
+                today = _dt.date.today()
+        else:
+            today = _dt.date.today()
+            
+        with Vertical(id="edit_task_dialog"):
+            yield Label("Editar Tarea", classes="modal_title")
+            yield Input(value=self.task_data.get('title', ''), placeholder="Título de la tarea", id="task_title")
+            yield Label("Prioridad:")
+            yield Select((("Baja", "LOW"), ("Media", "MED"), ("Alta", "HGH"), ("Crítica", "CRT")), id="task_priority", value=self.task_data.get('priority_code', 'MED'))
+            yield Input(value=self.task_data.get('description', ''), placeholder="Descripción (Opcional)", id="task_desc")
+            yield Label("Fecha Límite (Opcional):", classes="date_label")
+            with Horizontal(classes="date_row"):
+                yield Select(_build_year_options(), id="task_due_year", value=today.year, prompt="Año")
+                yield Select(MONTH_NAMES, id="task_due_month", value=today.month, prompt="Mes")
+                yield Select(_build_day_options(today.month, today.year), id="task_due_day", value=today.day, prompt="Día")
+            with Horizontal(classes="btn_row"):
+                yield Button("Guardar", variant="success", id="btn_save_task")
+                yield Button("Sin Fecha", variant="warning", id="btn_save_task_no_date")
+                yield Button("Cancelar", variant="error", id="btn_cancel_task")
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id in ("task_due_month", "task_due_year"):
+            try:
+                year = int(self.query_one("#task_due_year", Select).value)
+                month = int(self.query_one("#task_due_month", Select).value)
+                day_select = self.query_one("#task_due_day", Select)
+                current_day = day_select.value
+                new_options = _build_day_options(month, year)
+                day_select.set_options(new_options)
+                max_day = new_options[-1][1]
+                if isinstance(current_day, int) and current_day <= max_day:
+                    day_select.value = current_day
+                else:
+                    day_select.value = max_day
+            except (ValueError, TypeError):
+                pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_task":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_task_no_date":
+            title = self.query_one("#task_title", Input).value
+            if not title:
+                self.app.notify("El título es obligatorio.", severity="error")
+                return
+            self.dismiss({
+                "task_id": self.task_data['id'],
+                "title": title,
+                "description": self.query_one("#task_desc", Input).value,
+                "priority": self.query_one("#task_priority", Select).value,
+                "due_date": None
+            })
+        elif event.button.id == "btn_save_task":
+            date_str = _assemble_date(
+                self.query_one("#task_due_year", Select).value,
+                self.query_one("#task_due_month", Select).value,
+                self.query_one("#task_due_day", Select).value,
+            )
+            title = self.query_one("#task_title", Input).value
+            if not title:
+                self.app.notify("El título es obligatorio.", severity="error")
+                return
+            self.dismiss({
+                "task_id": self.task_data['id'],
+                "title": title,
+                "description": self.query_one("#task_desc", Input).value,
+                "priority": self.query_one("#task_priority", Select).value,
+                "due_date": date_str
+            })
+
+class EditCalendarEventModal(ModalScreen[dict]):
+    CSS = """
+    #edit_event_dialog { width: 55; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    .modal_title { text-style: bold; color: $primary; text-align: center; margin-bottom: 1; width: 100%; }
+    .btn_row { height: 3; align: center middle; margin-top: 1; }
+    .btn_row Button { margin: 0 1; }
+    .date_row { height: 4; }
+    .date_row Select { width: 1fr; margin: 0 1; }
+    .date_label { margin-top: 1; text-style: bold; color: $accent; }
+    """
+    def __init__(self, event_data: dict, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.event_data = event_data
+
+    def compose(self) -> ComposeResult:
+        from datetime import date as dt_date
+        try:
+            today = dt_date.fromisoformat(self.event_data.get('date', ''))
+        except:
+            today = _dt.date.today()
+            
+        with Vertical(id="edit_event_dialog"):
+            yield Label("Editar Evento", classes="modal_title")
+            yield Label("Fecha del Evento:", classes="date_label")
+            with Horizontal(classes="date_row"):
+                yield Select(_build_year_options(), id="event_year", value=today.year, prompt="Año")
+                yield Select(MONTH_NAMES, id="event_month", value=today.month, prompt="Mes")
+                yield Select(_build_day_options(today.month, today.year), id="event_day", value=today.day, prompt="Día")
+            yield Input(value=self.event_data.get('title', ''), placeholder="Evento o Nota", id="event_title")
+            yield Input(value=self.event_data.get('description', ''), placeholder="Detalles (Opcional)", id="event_desc")
+            with Horizontal():
+                yield Label("¿Importante? ")
+                is_imp = "True" if self.event_data.get('is_important') else "False"
+                yield Select((("No", "False"), ("Sí", "True")), id="event_important", value=is_imp)
+            with Horizontal(classes="btn_row"):
+                yield Button("Guardar", variant="success", id="btn_save_event")
+                yield Button("Cancelar", variant="error", id="btn_cancel_event")
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id in ("event_month", "event_year"):
+            try:
+                year = int(self.query_one("#event_year", Select).value)
+                month = int(self.query_one("#event_month", Select).value)
+                day_select = self.query_one("#event_day", Select)
+                current_day = day_select.value
+                new_options = _build_day_options(month, year)
+                day_select.set_options(new_options)
+                max_day = new_options[-1][1]
+                if isinstance(current_day, int) and current_day <= max_day:
+                    day_select.value = current_day
+                else:
+                    day_select.value = max_day
+            except (ValueError, TypeError):
+                pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_event":
+            self.dismiss(None)
+        elif event.button.id == "btn_save_event":
+            date_str = _assemble_date(
+                self.query_one("#event_year", Select).value,
+                self.query_one("#event_month", Select).value,
+                self.query_one("#event_day", Select).value,
+            )
+            title = self.query_one("#event_title", Input).value
+            if not date_str or not title:
+                self.app.notify("Fecha y Título son obligatorios.", severity="error")
+                return
+            self.dismiss({
+                "event_id": self.event_data['id'],
+                "date": date_str,
+                "title": title,
+                "description": self.query_one("#event_desc", Input).value,
+                "is_important": self.query_one("#event_important", Select).value == "True"
+            })
+
 # --- MODALES DE DETALLE ---
 
 class DeleteConfirmationModal(ModalScreen[bool]):
@@ -1252,8 +1419,8 @@ class TimerTab(TabPane):
 
 class GuildTab(TabPane):
     can_focus = True
-    BINDINGS = [("d", "show_details", "Detalles"), ("x", "delete_adventurer",
-                                                    "Eliminar"), ("n", "new_adventurer", "Nuevo Avatar")]
+    BINDINGS = [("d", "show_details", "Detalles"), ("x", "delete_adventurer", "Eliminar"), 
+                ("n", "new_adventurer", "Nuevo Avatar"), ("c", "open_guild_chest", "Abrir Cofre")]
 
 
 class TavernTab(TabPane):
@@ -1286,7 +1453,9 @@ class KanbanTab(TabPane):
         ("left", "move_left", "Mover a Izq"),
         ("right", "move_right", "Mover a Der"),
         ("c", "new_col", "Nueva Columna"),
-        ("e", "new_event", "Nuevo Evento"),
+        ("e", "new_calendar_event", "Nuevo Evento"),
+        ("E", "handle_e", "Editar Tarea/Evento"),
+        ("x", "handle_x", "Borrar Tarea/Evento"),
         ("i", "inspect_kanban", "Detalle"),
     ]
 
@@ -1338,8 +1507,9 @@ class PosadaMainScreen(Screen):
         Binding("i", "handle_i", "Inspeccionar", show=False),
         Binding("I", "inspect_habit", "Detalle Hábito", show=False),
         Binding("t", "new_kanban_task", "Nueva Tarea", show=False),
-        Binding("delete", "handle_x", "Borrar Tarea", show=False),
+        Binding("delete", "handle_x", "Borrar Tarea/Evento", show=False),
         Binding("e", "new_calendar_event", "Nuevo Evento", show=False),
+        Binding("E", "handle_e", "Editar Tarea/Evento", show=False),
         Binding("w", "write_journal", "Escribir Diario", show=False),
         
         # Conflict Resolution Bindings
@@ -1466,7 +1636,7 @@ class PosadaMainScreen(Screen):
                             yield DataTable(id="kanban_col_1", classes="kanban_table")
                             yield DataTable(id="kanban_col_2", classes="kanban_table")
                             yield DataTable(id="kanban_col_3", classes="kanban_table")
-                        yield Label("Calendario de Eventos (e Nuevo | Supr Borrar)", id="lbl_calendar_title", classes="section_title")
+                        yield Label("Calendario de Eventos (e Nuevo | E Editar | x/Supr Borrar)", id="lbl_calendar_title", classes="section_title")
                         yield DataTable(id="calendar_table", classes="calendar_table")
 
                 with JournalTab("Diario de Viaje", id="tab_journal"):
@@ -1523,7 +1693,7 @@ class PosadaMainScreen(Screen):
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.render_guild_status, resp.json())
-        except Exception as e:
+        except Exception:
             pass
 
     @work(thread=True)
@@ -1748,6 +1918,24 @@ class PosadaMainScreen(Screen):
             self.app.push_screen(GuildUpgradesModal(),
                                  lambda _: self.sync_guild_status())
 
+    def action_delete_adventurer(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_guild":
+            return
+        table = self.query_one("#guild_table", DataTable)
+        try:
+            row_key = table.coordinate_to_cell_key(
+                table.cursor_coordinate).row_key
+            self.app.push_screen(DeleteConfirmationModal(
+                "¿Despedir Aventurero?"), lambda confirm: self.execute_delete_adv(confirm, row_key.value))
+        except Exception:
+            self.app.notify(
+                "Selecciona un aventurero de la tabla primero.", severity="warning")
+
+    def action_open_guild_chest(self) -> None:
+        if self.query_one(TabbedContent).active != "tab_guild":
+            return
+        self.app.push_screen(InventoryModal("guild", 1, "Cofre del Gremio (Items y Recursos)"), lambda _: self.sync_guild_status())
+
     def action_show_details(self) -> None:
         """Abre la ficha del personaje seleccionado en la tabla del Gremio."""
         if self.query_one(TabbedContent).active != "tab_guild":
@@ -1775,7 +1963,7 @@ class PosadaMainScreen(Screen):
                 "Sala de Enfoque -> [c] Configurar Expedición  |  [p] Pausar / Seguir  |  [s] Detener / Huir")
         elif pane_id == "tab_guild":
             lbl.update(
-                "El Gremio -> [d] Ver Detalles y Equipo  |  [x] Eliminar Aventurero  |  [n] Reclutar Avatar Inicial")
+                "El Gremio -> [d] Detalles y Equipo | [c] Abrir Cofre | [x] Despedir | [n] Avatar Inicial")
         elif pane_id == "tab_tavern":
             lbl.update(
                 "La Taberna -> [r] Reclutar Seleccionado  |  [f] Pagar Rondas de Cerveza (Refrescar)")
@@ -1787,7 +1975,7 @@ class PosadaMainScreen(Screen):
                 "Diario de Viaje -> [w] Escribir Pensamiento  |  [◀] Página Anterior  |  [▶] Página Siguiente")
         elif pane_id == "tab_kanban":
             lbl.update(
-                "Kanban -> [t] Tarea | [c] Columna | [◀/▶] Mover | [x/Supr] Borrar | [i] Detalle | [e] Evento")
+                "Kanban -> [t] Tarea | [c] Columna | [e] Nuevo Evento | [E] Editar | [x/Supr] Borrar | [i] Detalle")
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Permite navegar súper rápido entre pestañas presionando 1, 2, 3 o 4."""
@@ -1993,8 +2181,8 @@ class PosadaMainScreen(Screen):
         for idx, r in enumerate(recruits):
             s = r["stats"]
             stats_str = f"F:{s['str']} D:{s['dex']} C:{s['con']} I:{s['int']} S:{s['wis']} Ca:{s['cha']} Lu:{s['luk']}"
-            cost_str = f"{r.get('cost_in_copper', 0)} Cobre"
-            eq_str = r.get("equipment", "Ninguno")
+            cost_str = f"{r.get('cost_in_silver', 0)} SP"
+            eq_str = r.get("equipment_desc", "Ninguno")
             lvl_str = str(r.get("level", 1))
             table.add_row(r["name"], r["adv_class_display"],
                           r["race_display"], lvl_str, cost_str, eq_str, stats_str, key=str(idx))
@@ -2388,6 +2576,61 @@ class PosadaMainScreen(Screen):
             self.app.notify(
                 "Selecciona un hábito de la tabla primero.", severity="warning")
 
+    def action_delete_kanban_task(self):
+        if self.query_one(TabbedContent).active != "tab_kanban":
+            return
+        # Intentamos obtener la tarea o columna
+        for i in range(4):
+            try:
+                table = self.query_one(f"#kanban_col_{i}", DataTable)
+                if table.has_focus:
+                    row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                    task_id = int(row_key.value.split("_")[0])
+                    self.app.push_screen(DeleteConfirmationModal("¿Borrar esta tarea?"), lambda res: self.execute_delete_task(res, task_id))
+                    return
+            except Exception:
+                pass
+        
+        # Check calendar
+        try:
+            table = self.query_one("#calendar_table", DataTable)
+            if table.has_focus:
+                row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                event_id = int(row_key.value)
+                self.app.push_screen(DeleteConfirmationModal("¿Borrar este evento?"), lambda res: self.execute_delete_event(res, event_id))
+                return
+        except Exception:
+            pass
+
+    def action_edit_kanban_task(self):
+        if self.query_one(TabbedContent).active != "tab_kanban":
+            return
+        for i in range(4):
+            try:
+                table = self.query_one(f"#kanban_col_{i}", DataTable)
+                if table.has_focus:
+                    row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                    task_id = int(row_key.value.split("_")[0])
+                    columns = getattr(self, 'kanban_data', {}).get("columns", [])
+                    for col in columns:
+                        for task in col.get("tasks", []):
+                            if task["id"] == task_id:
+                                self.app.push_screen(EditKanbanTaskModal(task), self.submit_kanban_edit)
+                                return
+            except Exception:
+                pass
+
+    @work(thread=True)
+    def submit_kanban_edit(self, edit_data: dict | None):
+        if edit_data:
+            try:
+                task_id = edit_data.pop("task_id")
+                resp = httpx.put(f"{API_POSADA_BASE}kanban/task/edit/{task_id}/", json=edit_data, timeout=5.0)
+                if resp.status_code == 200:
+                    self.app.call_from_thread(self.fetch_kanban_data)
+            except Exception:
+                pass
+
     def action_inspect_kanban(self) -> None:
         """Abre el panel de detalle de la tarea Kanban seleccionada o del evento del calendario."""
         if self.query_one(TabbedContent).active != "tab_kanban":
@@ -2561,6 +2804,12 @@ class PosadaMainScreen(Screen):
         if active_tab == "tab_missions": self.action_inspect_chart()
         elif active_tab == "tab_kanban": self.action_inspect_kanban()
 
+    def action_handle_e(self):
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab_kanban":
+            self.action_edit_kanban_task()
+            self.action_edit_calendar_event()
+
     def action_handle_left(self):
         active_tab = self.query_one(TabbedContent).active
         if active_tab == "tab_kanban": self.action_move_kanban_left()
@@ -2696,14 +2945,29 @@ class PosadaMainScreen(Screen):
             pass
 
     def render_calendar(self, data: dict):
+        self.calendar_data = data
         events = data.get("events", [])
         table = self.query_one("#calendar_table", DataTable)
         table.clear(columns=True)
-        table.add_columns("Fecha", "Evento", "Descripción")
-        for e in events:
-            date_col = f"[{e['color']}]{e['date']}[/]"
-            title_col = f"[bold yellow]★ {e['title']}[/]" if e['is_important'] else e['title']
-            table.add_row(date_col, title_col, e['description'], key=str(e['id']))
+        table.add_columns("📅 Fecha", "✨ Evento", "📝 Descripción")
+        
+        from datetime import date as dt_date
+        dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+        for e in sorted(events, key=lambda x: x['date']):
+            try:
+                d = dt_date.fromisoformat(e['date'])
+                day_name = dias_semana[d.weekday()]
+                fecha_str = f"[{e['color']}]{day_name} {d.day:02d}[/]"
+            except:
+                fecha_str = f"[{e['color']}]{e['date']}[/]"
+                
+            if e['is_important']:
+                title_col = f"[bold yellow]⭐ {e['title']}[/bold yellow]"
+            else:
+                title_col = f"[white]🔹 {e['title']}[/white]"
+                
+            table.add_row(fecha_str, title_col, f"[dim]{e['description']}[/dim]", key=str(e['id']))
 
     def action_new_calendar_event(self):
         if self.query_one(TabbedContent).active != "tab_kanban": return
@@ -2718,5 +2982,43 @@ class PosadaMainScreen(Screen):
                 self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="success")
                 self.app.call_from_thread(self.fetch_calendar_data)
                 self.app.call_from_thread(self.sync_guild_status)
+        except Exception:
+            pass
+
+    def action_edit_calendar_event(self):
+        if self.query_one(TabbedContent).active != "tab_kanban": return
+        try:
+            table = self.query_one("#calendar_table", DataTable)
+            if table.has_focus:
+                row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                event_id = int(row_key.value)
+                # Find event data
+                events = getattr(self, 'calendar_data', {}).get("events", [])
+                for e in events:
+                    if e["id"] == event_id:
+                        self.app.push_screen(EditCalendarEventModal(e), self.submit_calendar_edit)
+                        return
+        except Exception:
+            pass
+
+    @work(thread=True)
+    def submit_calendar_edit(self, edit_data: dict | None):
+        if edit_data:
+            try:
+                event_id = edit_data.pop("event_id")
+                resp = httpx.put(f"{API_POSADA_BASE}calendar/event/edit/{event_id}/", json=edit_data, timeout=5.0)
+                if resp.status_code == 200:
+                    self.app.call_from_thread(self.fetch_calendar_data)
+            except Exception:
+                pass
+
+    @work(thread=True)
+    def execute_delete_event(self, confirm: bool, event_id: int):
+        if not confirm: return
+        try:
+            resp = httpx.delete(f"{API_POSADA_BASE}calendar/event/delete/{event_id}/", timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="warning")
+                self.app.call_from_thread(self.fetch_calendar_data)
         except Exception:
             pass

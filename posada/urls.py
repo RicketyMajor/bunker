@@ -42,11 +42,13 @@ urlpatterns = [
     path('api/kanban/column/create/', views.create_kanban_column, name='create_kanban_column'),
     path('api/kanban/task/create/', views.create_kanban_task, name='create_kanban_task'),
     path('api/kanban/task/move/', views.move_kanban_task, name='move_kanban_task'),
+    path('api/kanban/task/edit/<int:task_id>/', views.edit_kanban_task, name='edit_kanban_task'),
     path('api/kanban/task/delete/<int:task_id>/', views.delete_kanban_task, name='delete_kanban_task'),
     path('api/kanban/column/delete/<int:col_id>/', views.delete_kanban_column, name='delete_kanban_column'),
 
     # Calendar URLs
     path('api/calendar/<int:year>/<int:month>/', views.list_calendar_events, name='list_calendar_events'),
     path('api/calendar/event/create/', views.create_calendar_event, name='create_calendar_event'),
+    path('api/calendar/event/edit/<int:event_id>/', views.edit_calendar_event, name='edit_calendar_event'),
     path('api/calendar/event/delete/<int:event_id>/', views.delete_calendar_event, name='delete_calendar_event'),
 ]

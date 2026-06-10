@@ -213,21 +213,21 @@ def create_adventurer(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data
-    cost_copper = data.get('cost_in_copper', 0)
-    if cost_copper > 0:
+    cost_silver = data.get('cost_in_silver', 0)
+    if cost_silver > 0:
         from posada.engine import pay_with_change
         class DummyItem:
             pass
         dummy = DummyItem()
         dummy.cost_marco = dummy.cost_real = dummy.cost_talento = dummy.cost_sueldo = 0
         dummy.cost_iota = dummy.cost_drabin = dummy.cost_ardite = 0
-        dummy.cost_silver_penny = dummy.cost_iron_penny = dummy.cost_iron_half_penny = 0
-        dummy.cost_copper_penny = cost_copper
+        dummy.cost_silver_penny = cost_silver
+        dummy.cost_iron_penny = dummy.cost_iron_half_penny = dummy.cost_copper_penny = 0
         
         if not pay_with_change(guild, dummy):
             return Response({
                 "status": "error",
-                "message": f"Fondos insuficientes. El contrato cuesta {cost_copper} Monedas de Cobre (o equivalente)."
+                "message": f"Fondos insuficientes. El contrato cuesta {cost_silver} Peniques de Plata (o equivalente)."
             }, status=status.HTTP_400_BAD_REQUEST)
 
     stats = data.get('stats', None)
@@ -283,7 +283,7 @@ def tavern_recruits(request):
         gender_obj = random.choice(AdventurerGender.choices)
 
         recruit_lvl = random.randint(1, max_recruit_lvl)
-        cost_copper = recruit_lvl * 50
+        cost_silver = recruit_lvl * 15
         equipment_desc = f"Set Básico Nv. {recruit_lvl}" if recruit_lvl < 5 else f"Set Curtido Nv. {recruit_lvl}"
 
         # Reparto Procedural de los Puntos Base
@@ -302,8 +302,8 @@ def tavern_recruits(request):
             "gender": gender_obj[0],
             "stats": stats,
             "level": recruit_lvl,
-            "cost_in_copper": cost_copper,
-            "equipment": equipment_desc
+            "cost_in_silver": cost_silver,
+            "equipment_desc": equipment_desc
         })
     return Response({"recruits": recruits})
 
@@ -1047,6 +1047,25 @@ def move_kanban_task(request):
         return Response({"error": "Tarea no encontrada."}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+@api_view(['PUT'])
+def edit_kanban_task(request, task_id):
+    """Edita una tarea existente del tablero."""
+    from .models import KanbanTask
+    try:
+        task = KanbanTask.objects.get(id=task_id)
+        task.title = request.data.get('title', task.title)
+        task.description = request.data.get('description', task.description)
+        task.priority = request.data.get('priority', task.priority)
+        due_date = request.data.get('due_date')
+        if due_date is not None:
+            task.due_date = due_date if due_date else None
+        task.save()
+        return Response({"status": "success", "message": f"Tarea '{task.title}' editada."})
+    except KanbanTask.DoesNotExist:
+        return Response({"error": "Tarea no encontrada."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
 
 
 @api_view(['DELETE'])
@@ -1118,6 +1137,28 @@ def create_calendar_event(request):
         return Response({"status": "success", "message": f"Evento '{event.title}' creado (+{prestige_gain} Prestigio)."})
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+@api_view(['PUT'])
+def edit_calendar_event(request, event_id):
+    """Edita un evento existente del calendario."""
+    from .models import CalendarEvent
+    from datetime import date as dt_date
+    try:
+        event = CalendarEvent.objects.get(id=event_id)
+        date_str = request.data.get('date')
+        if date_str:
+            event.date = dt_date.fromisoformat(date_str)
+        event.title = request.data.get('title', event.title)
+        event.description = request.data.get('description', event.description)
+        if 'is_important' in request.data:
+            event.is_important = request.data.get('is_important')
+        event.color = request.data.get('color', event.color)
+        event.save()
+        return Response({"status": "success", "message": f"Evento '{event.title}' editado."})
+    except CalendarEvent.DoesNotExist:
+        return Response({"error": "Evento no encontrado."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
 
 
 @api_view(['DELETE'])

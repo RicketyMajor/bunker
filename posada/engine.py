@@ -538,7 +538,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                   "type": "flavor", "message": message_chosen})
             # --------------------------------------------------------
             # Tirada de Encuentro
-            if monsters_db and random.random() < 0.15:
+            if monsters_db and random.random() < 0.05:
                 # --- TABLAS DE ENCUENTRO PONDERADAS ---
                 # SML: 60%, MED: 30%, LRG: 8%, EPC: 2%
                 category_weights = {'SML': 60, 'MED': 30, 'LRG': 8, 'EPC': 2}
