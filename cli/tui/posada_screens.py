@@ -404,12 +404,12 @@ class InventoryModal(ModalScreen[None]):
     """Visor de mochilas y cofre del gremio."""
 
     CSS = """
-    #inv_dialog { width: 85; height: 35; padding: 1 2; border: heavy $accent; background: $surface; }
+    #inv_dialog { width: 100; height: 35; padding: 1 2; border: heavy $accent; background: $surface; }
     .inv_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
     #inventory_table { height: 1fr; border: solid $success; margin-bottom: 1; }
     .btn_row { height: 3; align: center middle; margin-top: 1; }
     .btn_row Button { margin: 0 1; }
-    #select_adv { width: 30; margin-right: 1; }
+    #select_adv { width: 20; margin-right: 1; }
     """
 
     def __init__(self, target_type: str, target_id: int, title: str, **kwargs):
@@ -1606,6 +1606,7 @@ class PosadaMainScreen(Screen):
                         yield Label("Cargando bóveda...", id="lbl_guild_vault")
                         yield Button("Consolidar Riqueza", id="btn_consolidate", classes="btn_consolidate", variant="warning")
                         yield Button("Mejoras de Infraestructura", id="btn_open_upgrades", classes="btn_consolidate", variant="success")
+                        yield Button("Cofre del Gremio", id="btn_open_chest", classes="btn_consolidate", variant="primary")
                     yield Label("Todos los Aventureros Reclutados:")
                     yield DataTable(id="all_adventurers_table")
 
@@ -1917,6 +1918,8 @@ class PosadaMainScreen(Screen):
             # Abre el modal y al cerrarlo sincroniza la bóveda del Gremio
             self.app.push_screen(GuildUpgradesModal(),
                                  lambda _: self.sync_guild_status())
+        elif event.button.id == "btn_open_chest":
+            self.action_open_guild_chest()
 
     def action_delete_adventurer(self) -> None:
         if self.query_one(TabbedContent).active != "tab_guild":
