@@ -213,21 +213,21 @@ def create_adventurer(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data
-    cost_silver = data.get('cost_in_silver', 0)
-    if cost_silver > 0:
+    cost_sueldos = data.get('cost_in_sueldos', 0)
+    if cost_sueldos > 0:
         from posada.engine import pay_with_change
         class DummyItem:
             pass
         dummy = DummyItem()
-        dummy.cost_marco = dummy.cost_real = dummy.cost_talento = dummy.cost_sueldo = 0
+        dummy.cost_marco = dummy.cost_real = dummy.cost_talento = dummy.cost_silver_penny = 0
         dummy.cost_iota = dummy.cost_drabin = dummy.cost_ardite = 0
-        dummy.cost_silver_penny = cost_silver
+        dummy.cost_sueldo = cost_sueldos
         dummy.cost_iron_penny = dummy.cost_iron_half_penny = dummy.cost_copper_penny = 0
         
         if not pay_with_change(guild, dummy):
             return Response({
                 "status": "error",
-                "message": f"Fondos insuficientes. El contrato cuesta {cost_silver} Peniques de Plata (o equivalente)."
+                "message": f"Fondos insuficientes. El contrato cuesta {cost_sueldos} Sueldos (o equivalente)."
             }, status=status.HTTP_400_BAD_REQUEST)
 
     stats = data.get('stats', None)
@@ -283,7 +283,7 @@ def tavern_recruits(request):
         gender_obj = random.choice(AdventurerGender.choices)
 
         recruit_lvl = random.randint(1, max_recruit_lvl)
-        cost_silver = recruit_lvl * 15
+        cost_sueldo = recruit_lvl * 6
         equipment_desc = f"Set Básico Nv. {recruit_lvl}" if recruit_lvl < 5 else f"Set Curtido Nv. {recruit_lvl}"
 
         # Reparto Procedural de los Puntos Base
@@ -302,7 +302,7 @@ def tavern_recruits(request):
             "gender": gender_obj[0],
             "stats": stats,
             "level": recruit_lvl,
-            "cost_in_silver": cost_silver,
+            "cost_in_sueldos": cost_sueldo,
             "equipment_desc": equipment_desc
         })
     return Response({"recruits": recruits})
@@ -496,7 +496,8 @@ def get_inventory(request, target_type, target_id):
             "color": ItemRarity.get_color(s.item.rarity),
             "type": s.item.get_item_type_display(),
             "qty": s.quantity,
-            "stats": f"DMG:{s.item.bonus_damage} | ARM:{s.item.bonus_armor}"
+            "stats": f"DMG:{s.item.bonus_damage} | ARM:{s.item.bonus_armor}",
+            "desc": f"[{ItemRarity.get_color(s.item.rarity)}]{s.item.name}[/]\n\n{s.item.description}\n[b]Material:[/b] {s.item.get_material_display()} | [b]Bonus:[/b] DMG +{s.item.bonus_damage} / ARM +{s.item.bonus_armor}"
         })
     return Response({"slots": data})
 
@@ -560,7 +561,7 @@ def inventory_action(request):
 
             slot_map = {
                 'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-                'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
+                'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs', 'LGS': 'equip_legs',
                 'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
                 'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
             }

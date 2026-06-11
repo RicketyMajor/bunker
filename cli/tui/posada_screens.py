@@ -223,7 +223,7 @@ class AdventurerDetailsModal(ModalScreen[None]):
     .section_title { color: $success; text-style: bold; margin-top: 1; margin-bottom: 1; }
     
     #equipment_table { height: 10; border: solid $success; margin-bottom: 1; }
-    #item_description { height: auto; min-height: 4; border: dashed $accent; padding: 1; color: $text-muted; margin-bottom: 1; background: $panel; }
+    #item_description { width: 100%; height: auto; min-height: 4; border: dashed $accent; padding: 1; color: $text-muted; margin-bottom: 1; background: $panel; }
     #grimoire_table { height: 1fr; border: solid $primary; margin-bottom: 1; }
     
     /* Obliga al contenedor de pestañas a respetar el límite de la ventana */
@@ -242,35 +242,22 @@ class AdventurerDetailsModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         a = self.adv_data
         with Vertical(id="adv_details_dialog"):
-            yield Label(f"📜 FICHA: {a.get('name')} | {a.get('class_name')} | {a.get('race')}", classes="title_bar")
+            yield Label("", id="lbl_title_bar", classes="title_bar")
 
             with TabbedContent():
                 # --- PESTAÑA 1: HOJA DE PERSONAJE (Scroll con todo lo físico) ---
                 with TabPane("Hoja de Personaje", id="tab_stats"):
                     with VerticalScroll():
-                        yield Label(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP)")
+                        yield Label("", id="lbl_top_info")
 
                         yield Label("Atributos Base:", classes="section_title")
-                        with Grid(classes="stats_grid"):
-                            yield Label(f"Fuerza: {a.get('str')}")
-                            yield Label(f"Inteligencia: {a.get('int')}")
-                            yield Label(f"Destreza: {a.get('dex')}")
-                            yield Label(f"Sabiduría: {a.get('wis')}")
-                            yield Label(f"Constitución: {a.get('con')}")
-                            yield Label(f"Carisma: {a.get('cha')}")
-                            yield Label(f"Suerte: {a.get('luk')}")
+                        yield Grid(id="grid_stats", classes="stats_grid")
 
                         yield Label("Talentos y Competencias (D&D):", classes="section_title")
-                        with Grid(classes="skills_grid"):
-                            for skill_name, skill_val in a.get('rpg_skills', {}).items():
-                                color = "bold green" if skill_val > 0 else (
-                                    "bold red" if skill_val < 0 else "white")
-                                yield Label(f"{skill_name}: [{color}]{skill_val:+d}[/]")
+                        yield Grid(id="grid_skills", classes="skills_grid")
 
                         yield Label("Efectividad en Combate:", classes="section_title")
-                        with Grid(classes="stats_grid"):
-                            yield Label(f"⚔️ Daño Total: {a.get('combat_damage')}")
-                            yield Label(f"🛡️ Armadura Total: {a.get('combat_armor')}")
+                        yield Grid(id="grid_combat", classes="stats_grid")
 
                         yield Label("Equipamiento Actual (Selecciona para Inspeccionar):", classes="section_title")
                         yield DataTable(id="equipment_table", cursor_type="row")
@@ -278,19 +265,7 @@ class AdventurerDetailsModal(ModalScreen[None]):
                         yield Button("Desequipar Objeto Seleccionado", variant="warning", id="btn_unequip")
 
                         yield Label("Tesoro Personal:", classes="section_title")
-                        w = a.get('wealth', {})
-                        with Grid(classes="wealth_grid"):
-                            yield Label(f"Marco: {w.get('marco', 0)}")
-                            yield Label(f"Real: {w.get('real', 0)}")
-                            yield Label(f"Talento: {w.get('talento', 0)}")
-                            yield Label(f"Sueldo: {w.get('sueldo', 0)}")
-                            yield Label(f"P. Plata: {w.get('silver_penny', 0)}")
-                            yield Label(f"Iota: {w.get('iota', 0)}")
-                            yield Label(f"P. Cobre: {w.get('copper_penny', 0)}")
-                            yield Label(f"Drabín: {w.get('drabin', 0)}")
-                            yield Label(f"Ardite: {w.get('ardite', 0)}")
-                            yield Label(f"P. Hierro: {w.get('iron_penny', 0)}")
-                            yield Label(f"1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
+                        yield Grid(id="grid_wealth", classes="wealth_grid")
 
                 # --- PESTAÑA 2: GRIMORIO ---
                 with TabPane("Grimorio Arcano/Marcial", id="tab_grimoire"):
@@ -313,6 +288,53 @@ class AdventurerDetailsModal(ModalScreen[None]):
         grim_table.add_columns("Habilidad", "Tipo / Gasto", "Nivel Req.")
 
         self.populate_tables()
+        self.update_ui()
+
+    def update_ui(self):
+        a = self.adv_data
+        self.query_one("#lbl_title_bar", Label).update(f"📜 FICHA: {a.get('name')} | {a.get('class_name')} | {a.get('race')}")
+        self.query_one("#lbl_top_info", Label).update(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP)")
+
+        # Update stats
+        g_stats = self.query_one("#grid_stats", Grid)
+        g_stats.remove_children()
+        g_stats.mount(
+            Label(f"Fuerza: {a.get('str')}"), Label(f"Inteligencia: {a.get('int')}"),
+            Label(f"Destreza: {a.get('dex')}"), Label(f"Sabiduría: {a.get('wis')}"),
+            Label(f"Constitución: {a.get('con')}"), Label(f"Carisma: {a.get('cha')}"),
+            Label(f"Suerte: {a.get('luk')}")
+        )
+
+        # Update skills
+        g_skills = self.query_one("#grid_skills", Grid)
+        g_skills.remove_children()
+        skill_labels = []
+        for skill_name, skill_val in a.get('rpg_skills', {}).items():
+            color = "bold green" if skill_val > 0 else ("bold red" if skill_val < 0 else "white")
+            skill_labels.append(Label(f"{skill_name}: [{color}]{skill_val:+d}[/]"))
+        if skill_labels:
+            g_skills.mount(*skill_labels)
+
+        # Update combat
+        g_combat = self.query_one("#grid_combat", Grid)
+        g_combat.remove_children()
+        g_combat.mount(
+            Label(f"⚔️ Daño Total: {a.get('combat_damage')}"),
+            Label(f"🛡️ Armadura Total: {a.get('combat_armor')}")
+        )
+
+        # Update wealth
+        g_wealth = self.query_one("#grid_wealth", Grid)
+        g_wealth.remove_children()
+        w = a.get('wealth', {})
+        g_wealth.mount(
+            Label(f"Marco: {w.get('marco', 0)}"), Label(f"Real: {w.get('real', 0)}"),
+            Label(f"Talento: {w.get('talento', 0)}"), Label(f"Sueldo: {w.get('sueldo', 0)}"),
+            Label(f"P. Plata: {w.get('silver_penny', 0)}"), Label(f"Iota: {w.get('iota', 0)}"),
+            Label(f"P. Cobre: {w.get('copper_penny', 0)}"), Label(f"Drabín: {w.get('drabin', 0)}"),
+            Label(f"Ardite: {w.get('ardite', 0)}"), Label(f"P. Hierro: {w.get('iron_penny', 0)}"),
+            Label(f"1/2 P. Hierro: {w.get('iron_half_penny', 0)}")
+        )
 
     def populate_tables(self):
         table = self.query_one("#equipment_table", DataTable)
@@ -352,6 +374,7 @@ class AdventurerDetailsModal(ModalScreen[None]):
                 if my_data:
                     self.adv_data = my_data
                     self.app.call_from_thread(self.populate_tables)
+                    self.app.call_from_thread(self.update_ui)
         except Exception:
             pass
 
@@ -407,6 +430,7 @@ class InventoryModal(ModalScreen[None]):
     #inv_dialog { width: 100; height: 35; padding: 1 2; border: heavy $accent; background: $surface; }
     .inv_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
     #inventory_table { height: 1fr; border: solid $success; margin-bottom: 1; }
+    #item_description_inv { width: 100%; height: auto; min-height: 4; border: dashed $accent; padding: 1; color: $text-muted; margin-bottom: 1; background: $panel; }
     .btn_row { height: 3; align: center middle; margin-top: 1; }
     .btn_row Button { margin: 0 1; }
     #select_adv { width: 20; margin-right: 1; }
@@ -423,6 +447,7 @@ class InventoryModal(ModalScreen[None]):
         with Vertical(id="inv_dialog"):
             yield Label(self.modal_title, classes="inv_title")
             yield DataTable(id="inventory_table", cursor_type="row")
+            yield Label("Selecciona un objeto de la tabla para analizarlo.", id="item_description_inv")
 
             with Horizontal(classes="btn_row"):
                 if self.target_type == "adv":
@@ -472,6 +497,17 @@ class InventoryModal(ModalScreen[None]):
             name_rich = f"[[{s['color']}]{s['item_name']}[/]]"
             table.add_row(str(s['qty']), name_rich, s['type'],
                           s['stats'], key=str(s['slot_id']))
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.data_table.id == "inventory_table":
+            try:
+                row_key = event.row_key.value
+                slot_id = int(row_key)
+                slot_data = next((s for s in self.slots_cache if s["slot_id"] == slot_id), None)
+                if slot_data:
+                    self.query_one("#item_description_inv", Label).update(slot_data.get("desc", "Sin descripción."))
+            except Exception:
+                pass
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "btn_close_inv":
@@ -2184,7 +2220,7 @@ class PosadaMainScreen(Screen):
         for idx, r in enumerate(recruits):
             s = r["stats"]
             stats_str = f"F:{s['str']} D:{s['dex']} C:{s['con']} I:{s['int']} S:{s['wis']} Ca:{s['cha']} Lu:{s['luk']}"
-            cost_str = f"{r.get('cost_in_silver', 0)} SP"
+            cost_str = f"{r.get('cost_in_sueldos', 0)} Sueldos"
             eq_str = r.get("equipment_desc", "Ninguno")
             lvl_str = str(r.get("level", 1))
             table.add_row(r["name"], r["adv_class_display"],
