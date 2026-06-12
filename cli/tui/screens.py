@@ -242,6 +242,15 @@ class BunkerDashboardScreen(Screen):
 class BunkerLauncherScreen(Screen):
     """La pantalla de bienvenida y centro de selección de operaciones."""
 
+    BINDINGS = [
+        ("1", "launch_lib", "Módulo 1"),
+        ("2", "launch_movie", "Módulo 2"),
+        ("3", "launch_music", "Módulo 3"),
+        ("4", "launch_posada", "Módulo 4"),
+        ("5", "launch_chess", "Módulo 5"),
+        ("6", "launch_dash", "Módulo 6"),
+    ]
+
     CSS = """
     #launcher_root { 
         align: center middle; 
@@ -391,6 +400,30 @@ class BunkerLauncherScreen(Screen):
             self.app.push_screen(EvacuationModal(), handle_evacuation)
         elif event.button.id == "btn_quit":
             self.app.exit()
+
+    def action_launch_lib(self) -> None:
+        from .library_screen import LibraryMainScreen
+        self.app.push_screen(LibraryMainScreen())
+
+    def action_launch_movie(self) -> None:
+        from .movie_screens import MovieMainScreen
+        self.app.push_screen(MovieMainScreen())
+
+    def action_launch_music(self) -> None:
+        from .music_screens import MusicMainScreen
+        self.app.push_screen(MusicMainScreen())
+
+    def action_launch_posada(self) -> None:
+        from .posada_screens import PosadaMainScreen
+        self.app.push_screen(PosadaMainScreen())
+
+    def action_launch_chess(self) -> None:
+        from .chess_screens import ChessMainScreen
+        self.app.push_screen(ChessMainScreen())
+
+    def action_launch_dash(self) -> None:
+        from .screens import BunkerDashboardScreen
+        self.app.push_screen(BunkerDashboardScreen())
 
     # --- FUNCIONES ASÍNCRONAS DE SEGURIDAD ---
     @work(thread=True)
