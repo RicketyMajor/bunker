@@ -5,6 +5,8 @@ from .models import AnnualRecord
 
 class BookSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.name', read_only=True)
+    author_input = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    genre_input = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     # Campo calculado para que el CLI lea los géneros
     genre_list = serializers.SerializerMethodField()
