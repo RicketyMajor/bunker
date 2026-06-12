@@ -1053,6 +1053,59 @@ class CreateGameModal(ModalScreen[dict]):
             self.dismiss(None)
 
 
+class CreateVariationModal(ModalScreen[str | None]):
+    """Modal para crear una bifurcación ingresando la jugada alternativa."""
+
+    def __init__(self, current_san: str, ply_number: int, **kwargs):
+        super().__init__(**kwargs)
+        self.current_san = current_san
+        self.ply_number = ply_number
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dir_dialog"):
+            yield Label(f"⑂ Crear Variante en Jugada: {self.current_san}", classes="modal_title")
+            yield Label(f"Ply {self.ply_number} — Ingresa la jugada alternativa:", classes="edit_label")
+            yield Input(id="inp_var_move", placeholder="Ej: c5, Nf6, d4...")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Crear Variante", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            val = self.query_one("#inp_var_move", Input).value.strip()
+            self.dismiss(val if val else None)
+        else:
+            self.dismiss(None)
+
+
+class SelectVariationModal(ModalScreen[int | None]):
+    """Modal para seleccionar una bifurcación existente."""
+
+    def __init__(self, variations: list, **kwargs):
+        super().__init__(**kwargs)
+        self.variations_list = variations
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dir_dialog"):
+            yield Label("⑂ Seleccionar Variante", classes="modal_title")
+            options = []
+            for i, v in enumerate(self.variations_list):
+                first_move = v['moves_san'][0] if v.get('moves_san') else '?'
+                preview = ' '.join(v['moves_san'][:4])
+                options.append((f"{i+1}. {first_move} ({preview}...)", i))
+            yield Select(options, id="sel_variation")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Entrar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            val = self.query_one("#sel_variation", Select).value
+            self.dismiss(val if val is not Select.BLANK else None)
+        else:
+            self.dismiss(None)
+
+
 class ChessNoteModal(ModalScreen[str]):
     """Editor dividido (estilo Obsidian) para la bitácora teórica."""
 

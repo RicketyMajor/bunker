@@ -63,8 +63,17 @@ def parse_pgn(request):
     de movimientos y estados de tablero (FEN).
     """
     pgn_text = request.data.get('pgn')
-    if not pgn_text:
-        return Response({"error": "No se detectó texto PGN en la transmisión."}, status=status.HTTP_400_BAD_REQUEST)
+    if not pgn_text or not pgn_text.strip():
+        # PGN vacío: devolver solo la posición inicial
+        return Response({
+            "headers": {},
+            "moves": [{
+                "ply": 0,
+                "san": "Posición Inicial",
+                "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "turn": "white"
+            }]
+        }, status=status.HTTP_200_OK)
 
     # Convierte el string a un stream para que python-chess pueda leerlo
     pgn_io = io.StringIO(pgn_text)
