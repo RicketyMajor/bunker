@@ -3,7 +3,7 @@ import chess
 import chess.pgn
 from stockfish import Stockfish
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from .models import ChessRoom, ChessNote, ChessDirectory, ChessVariation
 from .serializers import ChessRoomSerializer, ChessNoteSerializer, ChessDirectorySerializer, ChessVariationSerializer
@@ -19,6 +19,29 @@ class ChessRoomViewSet(viewsets.ModelViewSet):
     """Controlador para gestionar las Estancias de Ajedrez."""
     queryset = ChessRoom.objects.all().order_by('-created_at')
     serializer_class = ChessRoomSerializer
+
+    @action(detail=True, methods=['patch'])
+    def update_mainline(self, request, pk=None):
+        room = self.get_object()
+        moves_san = request.data.get('moves_san', [])
+        
+        game = chess.pgn.Game()
+        game.headers['Event'] = room.title
+        node = game
+        board = chess.Board()
+        
+        try:
+            for san in moves_san:
+                if san == "Inicial": continue
+                move = board.parse_san(san)
+                node = node.add_variation(move)
+                board.push(move)
+                
+            room.pgn_data = str(game)
+            room.save()
+            return Response({"status": "success"})
+        except ValueError as e:
+            return Response({"error": f"Movimiento inválido: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ChessNoteViewSet(viewsets.ModelViewSet):

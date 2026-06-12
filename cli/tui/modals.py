@@ -1019,6 +1019,40 @@ class ImportPGNModal(ModalScreen[dict]):
             self.dismiss(None)
 
 
+class CreateGameModal(ModalScreen[dict]):
+    """Diálogo para crear una partida de ajedrez desde cero."""
+
+    def __init__(self, dirs: list, **kwargs):
+        super().__init__(**kwargs)
+        self.dirs = dirs
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dir_dialog"):  # Usamos un CSS existente para modales de tamaño moderado
+            yield Label("♟️ Crear Partida en Blanco", classes="modal_title")
+            
+            yield Label("Título de la Estancia:", classes="edit_label")
+            yield Input(id="inp_title", placeholder="Ej: Laboratorio de Siciliana")
+
+            yield Label("Ubicación en el Explorador:", classes="edit_label")
+            options = [("Raíz (Ninguno)", "")] + \
+                [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
+            yield Select(options, id="sel_dir")
+
+            with Horizontal(classes="form_buttons"):
+                yield Button("Crear", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            dir_val = self.query_one("#sel_dir", Select).value
+            self.dismiss({
+                "title": self.query_one("#inp_title", Input).value,
+                "directory": int(dir_val) if dir_val else None,
+            })
+        else:
+            self.dismiss(None)
+
+
 class ChessNoteModal(ModalScreen[str]):
     """Editor dividido (estilo Obsidian) para la bitácora teórica."""
 

@@ -4,8 +4,9 @@ from textual.screen import Screen
 from textual.widgets import Header, Footer, Markdown, DataTable, Static, Tree, Input
 from textual.containers import Vertical, Grid, Horizontal
 from textual import work
+from textual.binding import Binding
 from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS, API_CHESS_EVALUATE, API_CHESS_VALIDATE, API_CHESS_VARIATIONS
-from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal, ConfirmModal
+from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal, ConfirmModal, CreateGameModal
 
 
 def render_eval_bar(percentage: float, height: int = 26) -> str:
@@ -82,15 +83,17 @@ class ChessMainScreen(Screen):
     """Laboratorio Táctico de Ajedrez."""
 
     BINDINGS = [
-        ("escape, q", "go_back", "Volver al Launcher"),
-        ("d", "add_dir", "Crear Carpeta"),
-        ("a", "add_pgn", "Importar PGN"),
-        ("n", "edit_note", "Anotar Jugada"),
-        ("delete, x", "delete_note", "Eliminar Nota"),
-        ("backspace", "delete_node", "Destruir Nodo (Árbol)"),
-        ("e", "evaluate_pos", "Oráculo (IA)"),
-        ("v", "show_variations", "Ver Bifurcaciones"),
-        ("b", "back_to_mainline", "Volver a Línea Principal"),
+        Binding("escape, q", "go_back", "Volver", show=False),
+        Binding("c", "create_game", "Nueva Partida"),
+        Binding("d", "add_dir", "Carpeta"),
+        Binding("a", "add_pgn", "Importar PGN"),
+        Binding("n", "edit_note", "Anotar"),
+        Binding("delete, x", "delete_note", "Borrar Nota"),
+        Binding("backspace", "delete_node", "Borrar Árbol"),
+        Binding("z", "undo_move", "Deshacer"),
+        Binding("e", "evaluate_pos", "Oráculo"),
+        Binding("v", "show_variations", "Variantes"),
+        Binding("b", "back_to_mainline", "Principal"),
     ]
 
     CSS = """
@@ -261,6 +264,42 @@ class ChessMainScreen(Screen):
             else:
                 self.app.call_from_thread(
                     self.app.notify, "Error al reconstruir la partida.", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error de red: {e}", severity="error")
+
+    def action_create_game(self) -> None:
+        def handle_create(payload: dict | None) -> None:
+            if payload and payload.get("title"):
+                self.app.notify(
+                    "Creando partida táctica...", title="Laboratorio")
+                self.process_create_game(payload)
+        self.app.push_screen(CreateGameModal(self.raw_dirs), handle_create)
+
+    @work(thread=True)
+    def process_create_game(self, payload: dict) -> None:
+        try:
+            room_resp = httpx.post(API_CHESS_ROOMS, json={
+                "title": payload["title"],
+                "directory": payload.get("directory"),
+                "pgn_data": ""
+            }, timeout=5.0)
+
+            if room_resp.status_code == 201:
+                room_data = room_resp.json()
+                # Posición inicial para la interfaz
+                moves = [{
+                    "ply": 0,
+                    "san": "Posición Inicial",
+                    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+                    "turn": "white"
+                }]
+                self.app.call_from_thread(
+                    self.load_game_into_ui, room_data["id"], moves)
+                self.app.call_from_thread(self.fetch_library)
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, f"Rechazo de BD: {room_resp.text}", severity="error", timeout=8)
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error de red: {e}", severity="error")
@@ -603,6 +642,51 @@ class ChessMainScreen(Screen):
         self.current_ply = new_ply
         self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
         self.refresh_moves_table()
+        self.save_mainline_to_db()
+
+    @work(thread=True)
+    def save_mainline_to_db(self) -> None:
+        if not self.current_room_id or not self.current_moves:
+            return
+        
+        # Obtenemos todas las jugadas SAN (excluyendo la inicial)
+        moves_san = [m["san"] for m in self.current_moves[1:]]
+        
+        try:
+            resp = httpx.patch(f"{API_CHESS_ROOMS}{self.current_room_id}/update_mainline/", json={
+                "moves_san": moves_san
+            }, timeout=5.0)
+            if resp.status_code != 200:
+                self.app.call_from_thread(
+                    self.app.notify, f"Error DB Principal: {resp.text}", severity="warning")
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Error red (guardado): {e}", severity="error")
+
+    def action_undo_move(self) -> None:
+        """Deshace el último movimiento de la línea activa si estamos en la punta."""
+        if self.active_variation:
+            if self.active_var_ply == len(self.active_var_moves) - 1 and self.active_var_ply > 1:
+                # Borramos la última jugada de la variación
+                self.active_var_moves.pop()
+                self.active_variation["moves_san"].pop()
+                self.active_var_ply -= 1
+                self.query_one("#board_view", Static).update(render_fen(self.active_var_moves[-1]["fen"]))
+                self.refresh_moves_table()
+                self.save_variation_to_db(self.active_variation)
+                self.app.notify("Jugada deshecha (Variación).", severity="information")
+            else:
+                self.app.notify("Solo puedes deshacer la última jugada de la rama activa.", severity="warning")
+        else:
+            if self.current_ply == len(self.current_moves) - 1 and self.current_ply > 0:
+                self.current_moves.pop()
+                self.current_ply -= 1
+                self.query_one("#board_view", Static).update(render_fen(self.current_moves[-1]["fen"]))
+                self.refresh_moves_table()
+                self.save_mainline_to_db()
+                self.app.notify("Jugada deshecha (Principal).", severity="information")
+            else:
+                self.app.notify("Solo puedes deshacer la última jugada de la línea.", severity="warning")
 
     def create_variation(self, parent_ply: int, san_move: str, data: dict) -> None:
         """Crea una bifurcación desde parent_ply con la nueva jugada."""
