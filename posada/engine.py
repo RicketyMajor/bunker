@@ -246,9 +246,8 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
             if current_second >= total_seconds:
                 break
 
-            adv = random.choice(adventurers)
-            luk_bonus = adv.base_luk + \
-                sum(item.bonus_luk for item in adv.get_equipped_items())
+            # Elige un aventurero al azar solo para eventos narrativos de consumibles
+            flavor_adv = random.choice(adventurers)
 
             # --- MICRO-EVENTOS NARRATIVOS DE EXPLORACIÓN ---
             if random.random() < 0.25:  # 25% de probabilidad de suceso narrativo
@@ -342,7 +341,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
             # --- EVENTOS DE CONSUMIBLES (INMERSIÓN FLAVOR EXTENDIDA) ---
             if random.random() < 0.15:
                 flavor_slots = list(InventorySlot.objects.filter(
-                    adventurer=adv, item__consumable_type='FLV', quantity__gt=0))
+                    adventurer=flavor_adv, item__consumable_type='FLV', quantity__gt=0))
                 if flavor_slots:
                     slot = random.choice(flavor_slots)
                     slot.quantity -= 1
@@ -357,169 +356,169 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                     # El motor buscará si el nombre del objeto contiene alguna de estas llaves
                     flavor_database = {
                         "cuerda de escalada mágica": [
-                            f"{adv.name} pronuncia una palabra de mando y la [bold cyan]{slot.item.name}[/bold cyan] se anuda sola en las alturas.",
-                            f"{adv.name} observa cómo la [bold cyan]{slot.item.name}[/bold cyan] trepa por la pared como si fuera una serpiente."
+                            f"{flavor_adv.name} pronuncia una palabra de mando y la [bold cyan]{slot.item.name}[/bold cyan] se anuda sola en las alturas.",
+                            f"{flavor_adv.name} observa cómo la [bold cyan]{slot.item.name}[/bold cyan] trepa por la pared como si fuera una serpiente."
                         ],
                         "cuerda": [
-                            f"{adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan] para asegurar el descenso del grupo por una pendiente.",
-                            f"{adv.name} lanza su [bold cyan]{slot.item.name}[/bold cyan] hacia una saliente alta, trepando para explorar un nivel superior.",
-                            f"{adv.name} usa una [bold cyan]{slot.item.name}[/bold cyan] para amarrar firmemente una puerta sospechosa y evitar emboscadas."
+                            f"{flavor_adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan] para asegurar el descenso del grupo por una pendiente.",
+                            f"{flavor_adv.name} lanza su [bold cyan]{slot.item.name}[/bold cyan] hacia una saliente alta, trepando para explorar un nivel superior.",
+                            f"{flavor_adv.name} usa una [bold cyan]{slot.item.name}[/bold cyan] para amarrar firmemente una puerta sospechosa y evitar emboscadas."
                         ],
                         "ración": [
-                            f"{adv.name} hace una pausa para consumir su [bold cyan]{slot.item.name}[/bold cyan], recuperando aliento.",
-                            f"{adv.name} comparte un pedazo de su [bold cyan]{slot.item.name}[/bold cyan] mientras revisa el mapa de la mazmorra."
+                            f"{flavor_adv.name} hace una pausa para consumir su [bold cyan]{slot.item.name}[/bold cyan], recuperando aliento.",
+                            f"{flavor_adv.name} comparte un pedazo de su [bold cyan]{slot.item.name}[/bold cyan] mientras revisa el mapa de la mazmorra."
                         ],
                         "antorcha": [
-                            f"{adv.name} enciende una [bold cyan]{slot.item.name}[/bold cyan], iluminando rincones oscuros y revelando un pasadizo.",
-                            f"{adv.name} blande su [bold cyan]{slot.item.name}[/bold cyan] encendida para ahuyentar a una bandada de murciélagos molestos."
+                            f"{flavor_adv.name} enciende una [bold cyan]{slot.item.name}[/bold cyan], iluminando rincones oscuros y revelando un pasadizo.",
+                            f"{flavor_adv.name} blande su [bold cyan]{slot.item.name}[/bold cyan] encendida para ahuyentar a una bandada de murciélagos molestos."
                         ],
                         "mapa": [
-                            f"{adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] antiguo sobre una roca, tratando de orientar la marcha de la party."
+                            f"{flavor_adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] antiguo sobre una roca, tratando de orientar la marcha de la party."
                         ],
                         "pala": [
-                            f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para remover unos escombros del camino, buscando pasajes secretos."
+                            f"{flavor_adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para remover unos escombros del camino, buscando pasajes secretos."
                         ],
                         "odre": [
-                            f"{adv.name} toma un largo trago de su [bold cyan]{slot.item.name}[/bold cyan], refrescando su reseca garganta.",
-                            f"{adv.name} vierte un poco de agua de su [bold cyan]{slot.item.name}[/bold cyan] para limpiar una vieja inscripción en la pared."
+                            f"{flavor_adv.name} toma un largo trago de su [bold cyan]{slot.item.name}[/bold cyan], refrescando su reseca garganta.",
+                            f"{flavor_adv.name} vierte un poco de agua de su [bold cyan]{slot.item.name}[/bold cyan] para limpiar una vieja inscripción en la pared."
                         ],
                         "yesquero": [
-                            f"{adv.name} hace saltar chispas de su [bold cyan]{slot.item.name}[/bold cyan] tratando de encender una fogata improvisada."
+                            f"{flavor_adv.name} hace saltar chispas de su [bold cyan]{slot.item.name}[/bold cyan] tratando de encender una fogata improvisada."
                         ],
                         "saco de dormir": [
-                            f"{adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan], preparando un sitio cómodo para el próximo descanso largo."
+                            f"{flavor_adv.name} desenrolla su [bold cyan]{slot.item.name}[/bold cyan], preparando un sitio cómodo para el próximo descanso largo."
                         ],
                         "mochila": [
-                            f"{adv.name} ajusta las correas de su [bold cyan]{slot.item.name}[/bold cyan] para distribuir mejor el peso del botín."
+                            f"{flavor_adv.name} ajusta las correas de su [bold cyan]{slot.item.name}[/bold cyan] para distribuir mejor el peso del botín."
                         ],
                         "alforjas": [
-                            f"{adv.name} revisa el contenido de sus [bold cyan]{slot.item.name}[/bold cyan], organizando sus provisiones con cuidado."
+                            f"{flavor_adv.name} revisa el contenido de sus [bold cyan]{slot.item.name}[/bold cyan], organizando sus provisiones con cuidado."
                         ],
                         "saco": [
-                            f"{adv.name} abre su [bold cyan]{slot.item.name}[/bold cyan] preparándolo para guardar las riquezas que encuentren."
+                            f"{flavor_adv.name} abre su [bold cyan]{slot.item.name}[/bold cyan] preparándolo para guardar las riquezas que encuentren."
                         ],
                         "tiza": [
-                            f"{adv.name} marca una 'X' en la pared con su [bold cyan]{slot.item.name}[/bold cyan] para no perderse en el laberinto."
+                            f"{flavor_adv.name} marca una 'X' en la pared con su [bold cyan]{slot.item.name}[/bold cyan] para no perderse en el laberinto."
                         ],
                         "espejo": [
-                            f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para espiar por la esquina del pasillo sin exponerse."
+                            f"{flavor_adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para espiar por la esquina del pasillo sin exponerse."
                         ],
                         "jabón": [
-                            f"{adv.name} se frota un poco de [bold cyan]{slot.item.name}[/bold cyan] en las manos para quitarse la mugre de la mazmorra."
+                            f"{flavor_adv.name} se frota un poco de [bold cyan]{slot.item.name}[/bold cyan] en las manos para quitarse la mugre de la mazmorra."
                         ],
                         "garfio": [
-                            f"{adv.name} lanza hábilmente el [bold cyan]{slot.item.name}[/bold cyan], enganchándolo en un balcón superior."
+                            f"{flavor_adv.name} lanza hábilmente el [bold cyan]{slot.item.name}[/bold cyan], enganchándolo en un balcón superior."
                         ],
                         "linterna": [
-                            f"{adv.name} enciende su [bold cyan]{slot.item.name}[/bold cyan], proyectando un cono de luz que perfora las tinieblas."
+                            f"{flavor_adv.name} enciende su [bold cyan]{slot.item.name}[/bold cyan], proyectando un cono de luz que perfora las tinieblas."
                         ],
                         "aceite": [
-                            f"{adv.name} vierte su [bold cyan]{slot.item.name}[/bold cyan] sobre unas bisagras oxidadas para abrir la puerta sin ruido."
+                            f"{flavor_adv.name} vierte su [bold cyan]{slot.item.name}[/bold cyan] sobre unas bisagras oxidadas para abrir la puerta sin ruido."
                         ],
                         "palanca": [
-                            f"{adv.name} hace fuerza con su [bold cyan]{slot.item.name}[/bold cyan] para forzar la apertura de un cofre bloqueado."
+                            f"{flavor_adv.name} hace fuerza con su [bold cyan]{slot.item.name}[/bold cyan] para forzar la apertura de un cofre bloqueado."
                         ],
                         "pitones": [
-                            f"{adv.name} clava unos [bold cyan]{slot.item.name}[/bold cyan] en la pared, creando asideros seguros para escalar."
+                            f"{flavor_adv.name} clava unos [bold cyan]{slot.item.name}[/bold cyan] en la pared, creando asideros seguros para escalar."
                         ],
                         "martillo": [
-                            f"{adv.name} da golpes precisos con su [bold cyan]{slot.item.name}[/bold cyan] comprobando la solidez del muro."
+                            f"{flavor_adv.name} da golpes precisos con su [bold cyan]{slot.item.name}[/bold cyan] comprobando la solidez del muro."
                         ],
                         "pluma": [
-                            f"{adv.name} saca su [bold cyan]{slot.item.name}[/bold cyan], preparándose para cartografiar el pasadizo."
+                            f"{flavor_adv.name} saca su [bold cyan]{slot.item.name}[/bold cyan], preparándose para cartografiar el pasadizo."
                         ],
                         "tinta": [
-                            f"{adv.name} destapa un [bold cyan]{slot.item.name}[/bold cyan] con cuidado de no manchar sus ropas."
+                            f"{flavor_adv.name} destapa un [bold cyan]{slot.item.name}[/bold cyan] con cuidado de no manchar sus ropas."
                         ],
                         "pergamino": [
-                            f"{adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] liso y comienza a trazar un esquema del lugar."
+                            f"{flavor_adv.name} extiende un [bold cyan]{slot.item.name}[/bold cyan] liso y comienza a trazar un esquema del lugar."
                         ],
                         "campana": [
-                            f"{adv.name} coloca una [bold cyan]{slot.item.name}[/bold cyan] atada a un hilo para alertar de cualquier movimiento nocturno."
+                            f"{flavor_adv.name} coloca una [bold cyan]{slot.item.name}[/bold cyan] atada a un hilo para alertar de cualquier movimiento nocturno."
                         ],
                         "catalejo": [
-                            f"{adv.name} despliega su [bold cyan]{slot.item.name}[/bold cyan] y observa con detalle una estructura a la distancia."
+                            f"{flavor_adv.name} despliega su [bold cyan]{slot.item.name}[/bold cyan] y observa con detalle una estructura a la distancia."
                         ],
                         "herramientas de ladrón": [
-                            f"{adv.name} saca sus [bold cyan]{slot.item.name}[/bold cyan] y se concentra en la compleja cerradura del portón."
+                            f"{flavor_adv.name} saca sus [bold cyan]{slot.item.name}[/bold cyan] y se concentra en la compleja cerradura del portón."
                         ],
                         "disfraz": [
-                            f"{adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para ponerse una barba falsa y pasar desapercibido."
+                            f"{flavor_adv.name} usa su [bold cyan]{slot.item.name}[/bold cyan] para ponerse una barba falsa y pasar desapercibido."
                         ],
                         "falsificación": [
-                            f"{adv.name} revisa los sellos de cera en su [bold cyan]{slot.item.name}[/bold cyan] preparando un documento engañoso."
+                            f"{flavor_adv.name} revisa los sellos de cera en su [bold cyan]{slot.item.name}[/bold cyan] preparando un documento engañoso."
                         ],
                         "envenenador": [
-                            f"{adv.name} extrae una aguja de su [bold cyan]{slot.item.name}[/bold cyan], recubriéndola con una toxina mortal."
+                            f"{flavor_adv.name} extrae una aguja de su [bold cyan]{slot.item.name}[/bold cyan], recubriéndola con una toxina mortal."
                         ],
                         "tienda": [
-                            f"{adv.name} arma rápidamente su [bold cyan]{slot.item.name}[/bold cyan], creando un refugio seguro para descansar."
+                            f"{flavor_adv.name} arma rápidamente su [bold cyan]{slot.item.name}[/bold cyan], creando un refugio seguro para descansar."
                         ],
                         "poción de trepar": [
-                            f"{adv.name} bebe la [bold cyan]{slot.item.name}[/bold cyan] y sus manos se vuelven pegajosas, permitiéndole subir por la pared."
+                            f"{flavor_adv.name} bebe la [bold cyan]{slot.item.name}[/bold cyan] y sus manos se vuelven pegajosas, permitiéndole subir por la pared."
                         ],
                         "fuego de alquimista": [
-                            f"{adv.name} agita el [bold cyan]{slot.item.name}[/bold cyan], amenazando con desatar un infierno de llamas verdes."
+                            f"{flavor_adv.name} agita el [bold cyan]{slot.item.name}[/bold cyan], amenazando con desatar un infierno de llamas verdes."
                         ],
                         "agua bendita": [
-                            f"{adv.name} rocía un poco de [bold cyan]{slot.item.name}[/bold cyan] sobre un altar profano, purificando la zona."
+                            f"{flavor_adv.name} rocía un poco de [bold cyan]{slot.item.name}[/bold cyan] sobre un altar profano, purificando la zona."
                         ],
                         "piedra brillante": [
-                            f"{adv.name} saca su [bold cyan]{slot.item.name}[/bold cyan] que emite una luz perpetua, guiando al grupo."
+                            f"{flavor_adv.name} saca su [bold cyan]{slot.item.name}[/bold cyan] que emite una luz perpetua, guiando al grupo."
                         ],
                         "bolso de trucos": [
-                            f"{adv.name} mete la mano en su [bold cyan]{slot.item.name}[/bold cyan] y extrae una pequeña bola peluda que pronto será un animal."
+                            f"{flavor_adv.name} mete la mano en su [bold cyan]{slot.item.name}[/bold cyan] y extrae una pequeña bola peluda que pronto será un animal."
                         ],
                         "bolsa de contención": [
-                            f"{adv.name} guarda un pesado escudo dentro de su [bold cyan]{slot.item.name}[/bold cyan] sin esfuerzo alguno."
+                            f"{flavor_adv.name} guarda un pesado escudo dentro de su [bold cyan]{slot.item.name}[/bold cyan] sin esfuerzo alguno."
                         ],
                         "escoba voladora": [
-                            f"{adv.name} monta su [bold cyan]{slot.item.name}[/bold cyan], flotando a un par de metros del suelo con elegancia."
+                            f"{flavor_adv.name} monta su [bold cyan]{slot.item.name}[/bold cyan], flotando a un par de metros del suelo con elegancia."
                         ],
                         "gema de visión": [
-                            f"{adv.name} mira a través de la [bold cyan]{slot.item.name}[/bold cyan], revelando auras invisibles y trucos mágicos."
+                            f"{flavor_adv.name} mira a través de la [bold cyan]{slot.item.name}[/bold cyan], revelando auras invisibles y trucos mágicos."
                         ],
                         "zurrón": [
-                            f"{adv.name} piensa en un objeto y lo saca de inmediato de su [bold cyan]{slot.item.name}[/bold cyan] sin tener que buscar."
+                            f"{flavor_adv.name} piensa en un objeto y lo saca de inmediato de su [bold cyan]{slot.item.name}[/bold cyan] sin tener que buscar."
                         ],
                         "piedra de enviar": [
-                            f"{adv.name} susurra un mensaje secreto a la [bold cyan]{slot.item.name}[/bold cyan], esperando respuesta telepática."
+                            f"{flavor_adv.name} susurra un mensaje secreto a la [bold cyan]{slot.item.name}[/bold cyan], esperando respuesta telepática."
                         ],
                         "manual de ganancia": [
-                            f"{adv.name} lee unas páginas del [bold cyan]{slot.item.name}[/bold cyan], sintiendo cómo sus músculos se tensan con nuevo vigor."
+                            f"{flavor_adv.name} lee unas páginas del [bold cyan]{slot.item.name}[/bold cyan], sintiendo cómo sus músculos se tensan con nuevo vigor."
                         ],
                         "tomo de entendimiento": [
-                            f"{adv.name} hojea el [bold cyan]{slot.item.name}[/bold cyan], sus ojos brillando con una sabiduría celestial."
+                            f"{flavor_adv.name} hojea el [bold cyan]{slot.item.name}[/bold cyan], sus ojos brillando con una sabiduría celestial."
                         ],
                         "agujero portátil": [
-                            f"{adv.name} extiende el [bold cyan]{slot.item.name}[/bold cyan] en el suelo, creando un pozo oscuro instantáneo."
+                            f"{flavor_adv.name} extiende el [bold cyan]{slot.item.name}[/bold cyan] en el suelo, creando un pozo oscuro instantáneo."
                         ],
                         "alfombra voladora": [
-                            f"{adv.name} se sienta cómodamente sobre su [bold cyan]{slot.item.name}[/bold cyan], planeando suavemente por el corredor."
+                            f"{flavor_adv.name} se sienta cómodamente sobre su [bold cyan]{slot.item.name}[/bold cyan], planeando suavemente por el corredor."
                         ],
                         "gema de control": [
-                            f"{adv.name} sostiene en alto la [bold cyan]{slot.item.name}[/bold cyan], que palpita con la furia reprimida de un elemental."
+                            f"{flavor_adv.name} sostiene en alto la [bold cyan]{slot.item.name}[/bold cyan], que palpita con la furia reprimida de un elemental."
                         ],
                         "grilletes": [
-                            f"{adv.name} hace sonar sus pesados [bold cyan]{slot.item.name}[/bold cyan], listos para apresar a un enemigo resbaladizo."
+                            f"{flavor_adv.name} hace sonar sus pesados [bold cyan]{slot.item.name}[/bold cyan], listos para apresar a un enemigo resbaladizo."
                         ],
                         "mazo de muchas cosas": [
-                            f"{adv.name} baraja el peligroso [bold cyan]{slot.item.name}[/bold cyan], tentando al destino con una leve sonrisa."
+                            f"{flavor_adv.name} baraja el peligroso [bold cyan]{slot.item.name}[/bold cyan], tentando al destino con una leve sonrisa."
                         ],
                         "esfera de aniquilación": [
-                            f"{adv.name} manipula la [bold cyan]{slot.item.name}[/bold cyan] con sumo cuidado, temiendo que trague hasta la luz."
+                            f"{flavor_adv.name} manipula la [bold cyan]{slot.item.name}[/bold cyan] con sumo cuidado, temiendo que trague hasta la luz."
                         ],
                         "piedra filosofal": [
-                            f"{adv.name} contempla la [bold cyan]{slot.item.name}[/bold cyan], la joya definitiva que puede transmutar la realidad."
+                            f"{flavor_adv.name} contempla la [bold cyan]{slot.item.name}[/bold cyan], la joya definitiva que puede transmutar la realidad."
                         ],
                         "amuleto de los planos": [
-                            f"{adv.name} ajusta el [bold cyan]{slot.item.name}[/bold cyan], cuyo cristal parpadea con colores de otros mundos."
+                            f"{flavor_adv.name} ajusta el [bold cyan]{slot.item.name}[/bold cyan], cuyo cristal parpadea con colores de otros mundos."
                         ],
                         "libro de la oscuridad vil": [
-                            f"{adv.name} pasa una página del [bold cyan]{slot.item.name}[/bold cyan], y las sombras de la habitación parecen susurrar."
+                            f"{flavor_adv.name} pasa una página del [bold cyan]{slot.item.name}[/bold cyan], y las sombras de la habitación parecen susurrar."
                         ],
                         "elixir de inmortalidad": [
-                            f"{adv.name} observa el dorado [bold cyan]{slot.item.name}[/bold cyan], la promesa de una vida sin fin burbujeando dentro."
+                            f"{flavor_adv.name} observa el dorado [bold cyan]{slot.item.name}[/bold cyan], la promesa de una vida sin fin burbujeando dentro."
                         ]
                     }
 
@@ -532,7 +531,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
                     # Fallback genérico por si creas un ítem flavor que no esté en el diccionario
                     if not message_chosen:
-                        message_chosen = f"Durante la marcha, {adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
+                        message_chosen = f"Durante la marcha, {flavor_adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
 
                     script.append({"second": current_second - 35,
                                   "type": "flavor", "message": message_chosen})
@@ -585,41 +584,45 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 state = "COMBAT"
                 continue
 
-            # Exploración (Botín)
-            hp_amount = random.randint(2, 5) + luk_bonus
-            script.append({"second": current_second - 30, "type": "loot", "coin": "iron_half_penny",
-                          "amount": hp_amount, "message": f"{adv.name} recogió {hp_amount} medio(s) penique(s) de hierro."})
-            if random.random() < (0.30 + (luk_bonus * 0.02)):
-                script.append({"second": current_second - 15, "type": "loot", "coin": "drabin",
-                              "amount": 1, "message": f"{adv.name} desenterró 1 Drabín."})
+            # Exploración (Botín) — Cada aventurero vivo busca por su cuenta
+            for explore_adv in adventurers:
+                if temp_hp[explore_adv.id] <= 0:
+                    continue
+                adv_luk = explore_adv.base_luk + sum(item.bonus_luk for item in explore_adv.get_equipped_items())
+                hp_amount = random.randint(2, 5) + adv_luk
+                script.append({"second": current_second - 30, "type": "loot", "coin": "iron_half_penny",
+                              "amount": hp_amount, "message": f"{explore_adv.name} recogió {hp_amount} medio(s) penique(s) de hierro."})
+                if random.random() < (0.30 + (adv_luk * 0.02)):
+                    script.append({"second": current_second - 15, "type": "loot", "coin": "drabin",
+                                  "amount": 1, "message": f"{explore_adv.name} desenterró 1 Drabín."})
 
-            # Drops aleatorios
-            if all_items_db and random.random() < (0.05 + (luk_bonus * 0.01)):
-                roll = random.random()
-                rarity = 'COM'
-                if roll < 0.05: rarity = 'RAR'
-                elif roll < 0.25: rarity = 'UNC'
-                
-                pool = [i for i in all_items_db if i.rarity == rarity]
-                if not pool:
-                    pool = all_items_db
-                drop_item = random.choice(pool)
-                script.append({"second": current_second - 5, "type": "item_loot", "item_id": drop_item.id, "adventurer_id": adv.id,
-                              "message": f"🎁 {adv.name} encontró algo brillando: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
+                # Drops aleatorios
+                if all_items_db and random.random() < (0.05 + (adv_luk * 0.01)):
+                    roll = random.random()
+                    rarity = 'COM'
+                    if roll < 0.05: rarity = 'RAR'
+                    elif roll < 0.25: rarity = 'UNC'
+                    
+                    pool = [i for i in all_items_db if i.rarity == rarity]
+                    if not pool:
+                        pool = all_items_db
+                    drop_item = random.choice(pool)
+                    script.append({"second": current_second - 5, "type": "item_loot", "item_id": drop_item.id, "adventurer_id": explore_adv.id,
+                                  "message": f"🎁 {explore_adv.name} encontró algo brillando: [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]"})
 
 
             # --- EVALUACIÓN DE HABILIDADES DE SESIÓN (EXPLORACIÓN) ---
-            for adv_idx, adv in enumerate(adventurers):
-                if temp_hp[adv.id] <= 0: continue
+            for skill_adv in adventurers:
+                if temp_hp[skill_adv.id] <= 0: continue
                 available_session_skills = []
                 for skill_id, skill_data in SkillRegistry.get_all_skills().items():
-                    if skill_data["type"] == "SESSION" and adv.adv_class in skill_data["allowed_classes"] and adv.level >= skill_data["req_level"]:
-                        if skill_id not in session_skills_tracker[adv.id]:
+                    if skill_data["type"] == "SESSION" and skill_adv.adv_class in skill_data["allowed_classes"] and skill_adv.level >= skill_data["req_level"]:
+                        if skill_id not in session_skills_tracker[skill_adv.id]:
                             available_session_skills.append(skill_data)
                 
                 if available_session_skills:
                     context = {
-                        'caster': adv,
+                        'caster': skill_adv,
                         'allies': adventurers,
                         'enemies': [], # No hay enemigos en exploración
                         'adv_status': adv_status_tracker,
@@ -644,7 +647,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         try:
                             success = best_action["execute"](context)
                             if success:
-                                session_skills_tracker[adv.id].add(best_action["id"])
+                                session_skills_tracker[skill_adv.id].add(best_action["id"])
                         except: pass
         elif state == "COMBAT":
             current_second += 15

@@ -206,6 +206,41 @@ class CharacterCreationModal(ModalScreen[dict]):
             self.dismiss({"name": name, "adv_class": cls,
                          "race": race, "gender": gen})
 
+# --- MODAL DE RENOMBRAR AVENTURERO ---
+
+
+class RenameAdventurerModal(ModalScreen[str | None]):
+    """Modal para cambiar el nombre de un aventurero."""
+
+    CSS = """
+    #rename_dialog { width: 50; height: auto; padding: 1 2; border: heavy $accent; background: $surface; }
+    .modal_title { text-style: bold; color: $warning; text-align: center; margin-bottom: 1; width: 100%; }
+    .form_buttons { height: 3; align: center middle; margin-top: 1; }
+    .form_buttons Button { margin: 0 1; }
+    """
+
+    def __init__(self, current_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.current_name = current_name
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="rename_dialog"):
+            yield Label("Renombrar Aventurero", classes="modal_title")
+            yield Input(value=self.current_name, placeholder="Nuevo nombre", id="input_new_name")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Confirmar", variant="success", id="btn_confirm_rename")
+                yield Button("Cancelar", variant="error", id="btn_cancel_rename")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_rename":
+            self.dismiss(None)
+        elif event.button.id == "btn_confirm_rename":
+            new_name = self.query_one("#input_new_name", Input).value.strip()
+            if new_name:
+                self.dismiss(new_name)
+            else:
+                self.app.notify("El nombre no puede estar vacío.", severity="warning")
+
 # --- MODAL DE DETALLES DEL AVENTURERO ---
 
 
@@ -276,6 +311,7 @@ class AdventurerDetailsModal(ModalScreen[None]):
             # --- BOTONES SIEMPRE VISIBLES EN LA RAÍZ DEL MODAL ---
             with Horizontal(classes="btn_row"):
                 yield Button("Abrir Mochila", variant="success", id="btn_open_backpack")
+                yield Button("Renombrar", variant="warning", id="btn_rename_adv")
                 yield Button("Cerrar Ficha", variant="primary", id="btn_close_details")
 
     def on_mount(self):
@@ -407,6 +443,26 @@ class AdventurerDetailsModal(ModalScreen[None]):
             except Exception:
                 self.app.notify(
                     "Selecciona un objeto para desequipar.", severity="warning")
+        elif event.button.id == "btn_rename_adv":
+            self.app.push_screen(
+                RenameAdventurerModal(self.adv_data["name"]),
+                self.handle_rename_result)
+
+    def handle_rename_result(self, new_name: str | None) -> None:
+        if new_name is not None:
+            self.request_rename(new_name)
+
+    @work(thread=True)
+    def request_rename(self, new_name: str):
+        resp = httpx.patch(
+            f"{API_POSADA_BASE}adventurer/{self.adv_data['id']}/rename/", json={"name": new_name})
+        if resp.status_code == 200:
+            self.app.call_from_thread(
+                self.app.notify, resp.json().get("message"), severity="success")
+            self.fetch_my_data_and_refresh()
+        else:
+            self.app.call_from_thread(
+                self.app.notify, "Error al renombrar el aventurero.", severity="error")
 
     @work(thread=True)
     def request_unequip(self, slot_type: str):

@@ -11,6 +11,8 @@ urlpatterns = [
          name='consolidate_wealth'),
     path('api/adventurer/delete/<int:adv_id>/',
          views.delete_adventurer, name='delete_adventurer'),
+    path('api/adventurer/<int:adv_id>/rename/',
+         views.rename_adventurer, name='rename_adventurer'),
     path('api/tavern/', views.tavern_recruits, name='tavern_recruits'),
     path('api/habits/', views.list_habits, name='list_habits'),
     path('api/habits/create/', views.create_habit, name='create_habit'),

@@ -320,6 +320,22 @@ def delete_adventurer(request, adv_id):
         return Response({"status": "error", "message": "Aventurero no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
 
+@api_view(['PATCH'])
+def rename_adventurer(request, adv_id):
+    """Renombra un aventurero."""
+    new_name = request.data.get('name', '').strip()
+    if not new_name:
+        return Response({"status": "error", "message": "El nombre no puede estar vacío."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        adv = Adventurer.objects.get(id=adv_id)
+        old_name = adv.name
+        adv.name = new_name
+        adv.save()
+        return Response({"status": "success", "message": f"{old_name} ahora se llama {new_name}."})
+    except Adventurer.DoesNotExist:
+        return Response({"status": "error", "message": "Aventurero no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+
 @api_view(['GET'])
 def list_habits(request):
     """Lista todos los hábitos y evalúa penalizaciones de días anteriores."""
