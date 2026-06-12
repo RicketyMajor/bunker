@@ -1713,8 +1713,10 @@ class PosadaMainScreen(Screen):
                     with Horizontal():
                         # Los Hábitos
                         with Vertical(id="habits_col", classes="half_width"):
-                            yield Label("Tareas Diarias (+ Añadir | m Marcar)")
-                            yield DataTable(id="missions_table")
+                            yield Label("Buenos Hábitos (+ Añadir | m Marcar)")
+                            yield DataTable(id="good_habits_table")
+                            yield Label("Malos Hábitos (+ Añadir | m Marcar)")
+                            yield DataTable(id="bad_habits_table")
 
                         # Gráfico Analítico
                         with Vertical(id="stats_col", classes="half_width"):
@@ -1753,8 +1755,11 @@ class PosadaMainScreen(Screen):
         table_adv = self.query_one("#all_adventurers_table", DataTable)
         table_adv.add_columns("Nombre", "Clase", "Nivel",
                               "XP", "Riqueza", "Equipamiento", "Estado")
-        self.query_one("#missions_table", DataTable).add_columns(
-            "Misión", "Recompensa Base", "Estado")
+        for table_id in ["#good_habits_table", "#bad_habits_table"]:
+            self.query_one(table_id, DataTable).add_columns(
+                "Misión", "Recompensa Base", "Estado"
+            )
+            self.query_one(table_id, DataTable).cursor_type = "row"
 
         self.query_one("#event_log", RichLog).write(
             "La taberna está silenciosa. Esperando órdenes del Maestro...")
@@ -2526,22 +2531,35 @@ class PosadaMainScreen(Screen):
             self.app.call_from_thread(
                 self.app.notify, "Fallo de conexión.", severity="error")
 
+    def _get_selected_habit_id(self) -> str | None:
+        """Helper para obtener el ID del hábito seleccionado en las tablas activas."""
+        for table_id in ["#good_habits_table", "#bad_habits_table"]:
+            try:
+                table = self.query_one(table_id, DataTable)
+                if table.has_focus:
+                    row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+                    return row_key.value
+            except Exception:
+                pass
+        return None
+
     def render_habits(self, habits):
         self.habits_cache = habits
-        table = self.query_one("#missions_table", DataTable)
-        table.clear()
+        good_table = self.query_one("#good_habits_table", DataTable)
+        bad_table = self.query_one("#bad_habits_table", DataTable)
+        good_table.clear()
+        bad_table.clear()
         for h in habits:
             if h.get("is_bad_habit"):
                 status = "[bold red]Recaída[/]" if h["completed_today"] else "[bold green]Evitado[/]"
                 estado_visual = f"🛡️ Resistencia: {h.get('current_streak', 0)} | {status}"
                 name_fmt = f"[red](Evitar)[/] {h['name']}"
+                bad_table.add_row(name_fmt, h["difficulty"], estado_visual, key=str(h["id"]))
             else:
                 status = "[bold green]Completado[/]" if h["completed_today"] else "[gray]Pendiente[/]"
                 estado_visual = f"🔥 Racha: {h.get('current_streak', 0)} | {status}"
                 name_fmt = h['name']
-
-            table.add_row(name_fmt, h["difficulty"],
-                          estado_visual, key=str(h["id"]))
+                good_table.add_row(name_fmt, h["difficulty"], estado_visual, key=str(h["id"]))
 
     def action_add_habit(self) -> None:
         if self.query_one(TabbedContent).active == "tab_missions":
@@ -2563,14 +2581,11 @@ class PosadaMainScreen(Screen):
     def action_complete_habit(self) -> None:
         if self.query_one(TabbedContent).active != "tab_missions":
             return
-        table = self.query_one("#missions_table", DataTable)
-        try:
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key
-            self.request_habit_completion(row_key.value)
-        except Exception:
-            self.app.notify("Selecciona un hábito primero.",
-                            severity="warning")
+        habit_id = self._get_selected_habit_id()
+        if habit_id:
+            self.request_habit_completion(habit_id)
+        else:
+            self.app.notify("Selecciona un hábito primero.", severity="warning")
 
     @work(thread=True)
     def request_habit_completion(self, habit_id: str) -> None:
@@ -2593,14 +2608,11 @@ class PosadaMainScreen(Screen):
         """Captura el ID del hábito y llama al hilo de borrado."""
         if self.query_one(TabbedContent).active != "tab_missions":
             return
-        table = self.query_one("#missions_table", DataTable)
-        try:
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key
-            self.request_habit_deletion(row_key.value)
-        except Exception:
-            self.app.notify(
-                "Selecciona un hábito de la tabla primero.", severity="warning")
+        habit_id = self._get_selected_habit_id()
+        if habit_id:
+            self.request_habit_deletion(habit_id)
+        else:
+            self.app.notify("Selecciona un hábito de la tabla primero.", severity="warning")
 
     @work(thread=True)
     def request_habit_deletion(self, habit_id: str) -> None:
@@ -2622,20 +2634,21 @@ class PosadaMainScreen(Screen):
     def action_undo_habit(self) -> None:
         if self.query_one(TabbedContent).active != "tab_missions":
             return
-        table = self.query_one("#missions_table", DataTable)
-        try:
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key
-            resp = httpx.post(f"{API_POSADA_BASE}habits/undo/",
-                              json={"habit_id": row_key.value})
-            if resp.status_code == 200:
-                self.app.notify(resp.json().get("message"), severity="warning")
-                self.fetch_missions_data()
-                self.sync_guild_status()
-            else:
-                self.app.notify(resp.json().get("message"), severity="error")
-        except Exception:
-            pass
+        habit_id = self._get_selected_habit_id()
+        if habit_id:
+            try:
+                resp = httpx.post(f"{API_POSADA_BASE}habits/undo/",
+                                  json={"habit_id": habit_id})
+                if resp.status_code == 200:
+                    self.app.notify(resp.json().get("message"), severity="warning")
+                    self.fetch_missions_data()
+                    self.sync_guild_status()
+                else:
+                    self.app.notify(resp.json().get("message"), severity="error")
+            except Exception:
+                pass
+        else:
+            self.app.notify("Selecciona un hábito primero.", severity="warning")
 
     def action_claim_chart(self) -> None:
         if self.query_one(TabbedContent).active != "tab_missions":
@@ -2660,16 +2673,16 @@ class PosadaMainScreen(Screen):
         """Abre el panel de detalle del hábito seleccionado."""
         if self.query_one(TabbedContent).active != "tab_missions":
             return
-        table = self.query_one("#missions_table", DataTable)
-        try:
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key
-            habit_data = next(h for h in getattr(
-                self, 'habits_cache', []) if str(h['id']) == row_key.value)
-            self.app.push_screen(HabitDetailsModal(habit_data))
-        except Exception:
-            self.app.notify(
-                "Selecciona un hábito de la tabla primero.", severity="warning")
+        habit_id = self._get_selected_habit_id()
+        if habit_id:
+            try:
+                habit_data = next(h for h in getattr(
+                    self, 'habits_cache', []) if str(h['id']) == habit_id)
+                self.app.push_screen(HabitDetailsModal(habit_data))
+            except Exception:
+                pass
+        else:
+            self.app.notify("Selecciona un hábito de la tabla primero.", severity="warning")
 
     def action_delete_kanban_task(self):
         if self.query_one(TabbedContent).active != "tab_kanban":
