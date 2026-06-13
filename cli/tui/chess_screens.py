@@ -239,6 +239,7 @@ class ChessMainScreen(Screen):
         tree.root.expand()
 
         self.raw_dirs = dirs
+        self.raw_rooms = rooms
         nodes = {None: tree.root}
 
         dirs_sorted = sorted(dirs, key=lambda x: x['parent'] or 0)
