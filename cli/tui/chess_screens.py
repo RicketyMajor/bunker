@@ -32,7 +32,7 @@ def render_eval_bar(percentage: float, height: int = 26) -> str:
     return "\n".join(lines)
 
 
-def render_fen(fen: str) -> str:
+def render_fen(fen: str, orientation: str = "white") -> str:
     """Dibuja un tablero de alta fidelidad con proporciones geométricas perfectas."""
     # TRUCO: Volvemos a las piezas rellenas para ambos bandos.
     # Para que las piezas blancas (#FFFFFF) no se camuflen en las casillas claras,
@@ -48,16 +48,22 @@ def render_fen(fen: str) -> str:
     dark_bg = "on #52663A"   # Verde bosque oscuro (antes #779556)
 
     rows = fen.split()[0].split('/')
+    if orientation == "black":
+        rows = rows[::-1]
+
     out = "\n"
 
     for r_idx, row in enumerate(rows):
-        rank = 8 - r_idx
+        rank = 8 - r_idx if orientation == "white" else r_idx + 1
         squares = []
         for char in row:
             if char.isdigit():
                 squares.extend([None] * int(char))
             else:
                 squares.append(char)
+                
+        if orientation == "black":
+            squares = squares[::-1]
 
         line1 = "   "
         line2 = f"[bold #A0A0A0]{rank}[/]  "
@@ -75,7 +81,8 @@ def render_fen(fen: str) -> str:
 
         out += line1 + "\n" + line2 + "\n" + line3 + "\n"
 
-    out += "      [bold #A0A0A0]a      b      c      d      e      f      g      h[/]\n"
+    letters = "a      b      c      d      e      f      g      h" if orientation == "white" else "h      g      f      e      d      c      b      a"
+    out += f"      [bold #A0A0A0]{letters}[/]\n"
     return out
 
 
@@ -206,6 +213,10 @@ class ChessMainScreen(Screen):
         # Cargamos el árbol apenas entramos
         self.fetch_library()
 
+    def _update_board_view(self, fen: str) -> None:
+        orientation = getattr(self, "current_orientation", "white")
+        self.query_one("#board_view", Static).update(render_fen(fen, orientation))
+
     def action_go_back(self) -> None:
         self.app.pop_screen()
 
@@ -283,7 +294,8 @@ class ChessMainScreen(Screen):
             room_resp = httpx.post(API_CHESS_ROOMS, json={
                 "title": payload["title"],
                 "directory": payload.get("directory"),
-                "pgn_data": ""
+                "pgn_data": "",
+                "orientation": payload.get("orientation", "white")
             }, timeout=5.0)
 
             if room_resp.status_code == 201:
@@ -295,6 +307,12 @@ class ChessMainScreen(Screen):
                     "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
                     "turn": "white"
                 }]
+                
+                # Para evitar el bug de orientación, insertamos la sala recién creada
+                if not hasattr(self, "raw_rooms"):
+                    self.raw_rooms = []
+                self.raw_rooms.append(room_data)
+
                 self.app.call_from_thread(
                     self.load_game_into_ui, room_data["id"], moves)
                 self.app.call_from_thread(self.fetch_library)
@@ -366,6 +384,11 @@ class ChessMainScreen(Screen):
 
     def load_game_into_ui(self, room_id: int, moves: list) -> None:
         self.current_room_id = room_id
+        
+        # Obtener orientación de la sala
+        room_data = next((r for r in getattr(self, "raw_rooms", []) if r["id"] == room_id), {})
+        self.current_orientation = room_data.get("orientation", "white")
+
         self.current_moves = moves
         self.current_notes = {}
         self.current_ply = 0
@@ -387,11 +410,9 @@ class ChessMainScreen(Screen):
         if len(self.current_moves) > 1:
             # Empezar en la primera jugada real, no en la posición inicial
             self.current_ply = 1
-            self.query_one("#board_view", Static).update(
-                render_fen(self.current_moves[1]["fen"]))
+            self._update_board_view(self.current_moves[1]["fen"])
         elif self.current_moves:
-            self.query_one("#board_view", Static).update(
-                render_fen(self.current_moves[0]["fen"]))
+            self._update_board_view(self.current_moves[0]["fen"])
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         if not self.current_moves:
@@ -418,7 +439,7 @@ class ChessMainScreen(Screen):
                 self.current_ply = len(self.current_moves) - 1
             fen = self.current_moves[self.current_ply]["fen"]
 
-        self.query_one("#board_view", Static).update(render_fen(fen))
+        self._update_board_view(fen)
         self.refresh_notes_panel()
 
     @work(thread=True)
@@ -623,7 +644,7 @@ class ChessMainScreen(Screen):
                 "fen": data["new_fen"], "turn": data["turn"]
             })
             self.active_var_ply = new_ply
-            self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
+            self._update_board_view(data["new_fen"])
             self.refresh_moves_table()
             self.save_variation_to_db(self.active_variation)
             return
@@ -643,7 +664,7 @@ class ChessMainScreen(Screen):
 
         self.current_moves.append(move_entry)
         self.current_ply = new_ply
-        self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
+        self._update_board_view(data["new_fen"])
         self.refresh_moves_table()
         self.save_mainline_to_db()
 
@@ -674,7 +695,7 @@ class ChessMainScreen(Screen):
                 self.active_var_moves.pop()
                 self.active_variation["moves_san"].pop()
                 self.active_var_ply -= 1
-                self.query_one("#board_view", Static).update(render_fen(self.active_var_moves[-1]["fen"]))
+                self._update_board_view(self.active_var_moves[-1]["fen"])
                 self.refresh_moves_table()
                 self.save_variation_to_db(self.active_variation)
                 self.app.notify("Jugada deshecha (Variación).", severity="information")
@@ -684,7 +705,7 @@ class ChessMainScreen(Screen):
             if self.current_ply == len(self.current_moves) - 1 and self.current_ply > 0:
                 self.current_moves.pop()
                 self.current_ply -= 1
-                self.query_one("#board_view", Static).update(render_fen(self.current_moves[-1]["fen"]))
+                self._update_board_view(self.current_moves[-1]["fen"])
                 self.refresh_moves_table()
                 self.save_mainline_to_db()
                 self.app.notify("Jugada deshecha (Principal).", severity="information")
@@ -794,7 +815,7 @@ class ChessMainScreen(Screen):
         ]
         self.active_var_ply = 1
 
-        self.query_one("#board_view", Static).update(render_fen(data["new_fen"]))
+        self._update_board_view(data["new_fen"])
         self.refresh_moves_table()
         self.refresh_notes_panel()
         self.save_variation_to_db(new_var)
@@ -912,8 +933,7 @@ class ChessMainScreen(Screen):
 
         self.active_var_ply = min(1, len(self.active_var_moves) - 1)
         if self.active_var_ply > 0:
-            self.query_one("#board_view", Static).update(
-                render_fen(self.active_var_moves[self.active_var_ply]["fen"]))
+            self._update_board_view(self.active_var_moves[self.active_var_ply]["fen"])
         self.refresh_moves_table()
         self.refresh_notes_panel()
 
@@ -933,8 +953,7 @@ class ChessMainScreen(Screen):
             self.active_variation = prev["variation"]
             self.active_var_moves = prev["var_moves"]
             self.active_var_ply = prev["var_ply"]
-            self.query_one("#board_view", Static).update(
-                render_fen(self.active_var_moves[self.active_var_ply]["fen"]))
+            self._update_board_view(self.active_var_moves[self.active_var_ply]["fen"])
             depth = len(self.variation_stack) + 1
             self.app.notify(f"Volviste al nivel {depth} de variación.", title="⑂")
         else:
@@ -942,8 +961,7 @@ class ChessMainScreen(Screen):
             self.active_variation = None
             self.active_var_moves = []
             self.active_var_ply = 0
-            self.query_one("#board_view", Static).update(
-                render_fen(self.current_moves[self.current_ply]["fen"]))
+            self._update_board_view(self.current_moves[self.current_ply]["fen"])
             self.app.notify("Volviste a la línea principal.", title="♟")
 
         self.refresh_moves_table()
