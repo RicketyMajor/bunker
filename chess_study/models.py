@@ -18,6 +18,8 @@ class ChessRoom(models.Model):
     directory = models.ForeignKey(
         ChessDirectory, on_delete=models.SET_NULL, null=True, blank=True, related_name='rooms')
     pgn_data = models.TextField(blank=True)
+    orientation = models.CharField(
+        max_length=5, choices=(('white', 'Blancas'), ('black', 'Negras')), default='white')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

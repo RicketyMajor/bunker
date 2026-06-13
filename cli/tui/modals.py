@@ -1038,6 +1038,9 @@ class CreateGameModal(ModalScreen[dict]):
                 [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
             yield Select(options, id="sel_dir")
 
+            yield Label("Orientación del Tablero:", classes="edit_label")
+            yield Select([("Jugar con Blancas", "white"), ("Jugar con Negras", "black")], value="white", id="sel_orientation")
+
             with Horizontal(classes="form_buttons"):
                 yield Button("Crear", variant="success", id="btn_save")
                 yield Button("Cancelar", variant="error", id="btn_cancel")
@@ -1045,9 +1048,11 @@ class CreateGameModal(ModalScreen[dict]):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_save":
             dir_val = self.query_one("#sel_dir", Select).value
+            orientation_val = self.query_one("#sel_orientation", Select).value
             self.dismiss({
                 "title": self.query_one("#inp_title", Input).value,
                 "directory": int(dir_val) if dir_val else None,
+                "orientation": orientation_val,
             })
         else:
             self.dismiss(None)
