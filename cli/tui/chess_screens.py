@@ -420,26 +420,35 @@ class ChessMainScreen(Screen):
             return
 
         coord = event.coordinate
-        # Columna 0 = "Turno", 1 = "Blancas", 2 = "Negras"
-        col = max(1, coord.column)  # Tratar col 0 como col 1
-        ply = (coord.row * 2) + 1 if col <= 1 else (coord.row * 2) + 2
 
         if self.active_variation:
-            # Navegamos dentro de la variación
+            start_ply = self.active_variation["parent_ply"]
             moves = self.active_var_moves
-            if ply < len(moves):
-                self.active_var_ply = ply
-            else:
-                self.active_var_ply = len(moves) - 1
-            fen = moves[self.active_var_ply]["fen"]
         else:
-            # Navegamos la línea principal
-            if ply < len(self.current_moves):
-                self.current_ply = ply
-            else:
-                self.current_ply = len(self.current_moves) - 1
-            fen = self.current_moves[self.current_ply]["fen"]
+            start_ply = 0
+            moves = self.current_moves
 
+        # Calcular el turno real basado en la fila de la tabla
+        turn_num = ((start_ply + 2) // 2) + coord.row
+        
+        # Columna 0 = "Turno", 1 = "Blancas", 2 = "Negras"
+        col = max(1, coord.column)  # Tratar col 0 como col 1
+        
+        # Calcular ply global absoluto
+        global_ply = (turn_num * 2) - 1 if col <= 1 else (turn_num * 2)
+
+        # Convertir a ply local dentro de la lista actual (moves)
+        local_ply = global_ply - start_ply
+        
+        # Limitar al tamaño del arreglo para evitar IndexError (ej. clics en celdas vacías)
+        local_ply = max(0, min(local_ply, len(moves) - 1))
+
+        if self.active_variation:
+            self.active_var_ply = local_ply
+        else:
+            self.current_ply = local_ply
+
+        fen = moves[local_ply]["fen"]
         self._update_board_view(fen)
         self.refresh_notes_panel()
 
