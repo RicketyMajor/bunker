@@ -1012,37 +1012,53 @@ class ChessMainScreen(Screen):
             color = ""
             prefix_symbol = ""
 
-        turn_number = 1
-        for i in range(1, len(moves), 2):
-            white_san = moves[i]["san"]
-            black_san = moves[i+1]["san"] if i + 1 < len(moves) else ""
+        if self.active_variation:
+            parent_ply = self.active_variation["parent_ply"]
+            start_ply = parent_ply
+        else:
+            start_ply = 0
+
+        rows_data = {}
+        for i in range(1, len(moves)):
+            global_ply = start_ply + i
+            turn_num = (global_ply + 1) // 2
+            
+            if turn_num not in rows_data:
+                rows_data[turn_num] = {"white": "", "black": ""}
+            
+            san = moves[i]["san"]
 
             # Añadir indicador de fork con conteo
             if not self.active_variation:
                 if i in self.variations:
                     count = len(self.variations[i])
-                    white_san = f"[cyan]⑂{count}[/] {white_san}"
-                if (i + 1) in self.variations:
-                    count = len(self.variations[i + 1])
-                    black_san = f"[cyan]⑂{count}[/] {black_san}"
+                    san = f"[cyan]⑂{count}[/] {san}"
 
-            # Prefijo de profundidad en la primera fila
-            if turn_number == 1 and self.active_variation:
-                white_san = f"[{color}]{prefix_symbol}[/] {white_san}"
+            # Prefijo de profundidad en la primera fila de la variación
+            if i == 1 and self.active_variation:
+                san = f"[{color}]{prefix_symbol}[/] {san}"
 
-            table.add_row(str(turn_number), white_san, black_san,
-                          key=str(turn_number))
-            turn_number += 1
+            if global_ply % 2 != 0:
+                rows_data[turn_num]["white"] = san
+            else:
+                rows_data[turn_num]["black"] = san
+
+        turn_list = sorted(rows_data.keys())
+        for t_num in turn_list:
+            table.add_row(str(t_num), rows_data[t_num]["white"], rows_data[t_num]["black"], key=str(t_num))
 
         # Desplaza el cursor automáticamente
         active_ply = self.active_var_ply if self.active_variation else self.current_ply
         if active_ply > 0:
-            row = (active_ply - 1) // 2
-            col = 1 if active_ply % 2 != 0 else 2
-            try:
-                table.move_cursor(row=row, column=col)
-            except Exception:
-                pass
+            global_active_ply = start_ply + active_ply
+            active_turn = (global_active_ply + 1) // 2
+            if active_turn in turn_list:
+                row_idx = turn_list.index(active_turn)
+                col = 1 if global_active_ply % 2 != 0 else 2
+                try:
+                    table.move_cursor(row=row_idx, column=col)
+                except Exception:
+                    pass
 
     # --- ORÁCULO DE STOCKFISH ---
 
