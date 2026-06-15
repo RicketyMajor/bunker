@@ -177,7 +177,14 @@ def calculate_save_dc(adv):
 
 def generate_session_script(session_id, duration_minutes, adventurers_qs):
     random.seed(session_id)
-    script = []
+    class ScriptList(list):
+        def append(self, item):
+            try:
+                item["state"] = state
+            except NameError:
+                item["state"] = "EXPLORING"
+            super().append(item)
+    script = ScriptList()
     total_seconds = duration_minutes * 60
     adventurers = list(adventurers_qs)
 

@@ -1935,10 +1935,24 @@ class PosadaMainScreen(Screen):
         # Revisa si hay un evento programado en este segundo
         for event in getattr(self, 'session_script', []):
             if event["second"] == elapsed:
-                # Formatea el timestamp para que se vea como [14:32] en el log
                 m, s = divmod(elapsed, 60)
+                state = event.get('state', 'EXPLORING')
+                
+                if state == 'COMBAT':
+                    prefix = "[bold red on #2C0000] ⚔️ COMBATE [/] "
+                    message = f"[red]{event['message']}[/red]"
+                elif state == 'CAMPFIRE':
+                    prefix = "[bold yellow on #2A2A00] 🏕️ CAMPAMENTO [/] "
+                    message = f"[yellow]{event['message']}[/yellow]"
+                else:
+                    prefix = "[bold cyan on #00222C] 🗺️ EXPLORANDO [/] "
+                    message = f"[white]{event['message']}[/white]"
+                
+                formatted_time = f"[dim][{m:02d}:{s:02d}][/dim]"
+                
                 self.query_one("#event_log", RichLog).write(
-                    f"[{m:02d}:{s:02d}] {event['message']}")
+                    f"{formatted_time} {prefix}{message}"
+                )
 
         # Lógica normal del reloj
         if self.is_countdown:
