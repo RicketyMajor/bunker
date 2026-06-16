@@ -2571,12 +2571,12 @@ class PosadaMainScreen(Screen):
         for h in habits:
             if h.get("is_bad_habit"):
                 status = "[bold red]Recaída[/]" if h["completed_today"] else "[bold green]Evitado[/]"
-                estado_visual = f"🛡️ Resistencia: {h.get('current_streak', 0)} | {status}"
+                estado_visual = f"🛡️ Resistencia: {h.get('current_streak', 0):>3} | {status}"
                 name_fmt = f"[red](Evitar)[/] {h['name']}"
                 bad_table.add_row(name_fmt, h["difficulty"], estado_visual, key=str(h["id"]))
             else:
                 status = "[bold green]Completado[/]" if h["completed_today"] else "[gray]Pendiente[/]"
-                estado_visual = f"🔥 Racha: {h.get('current_streak', 0)} | {status}"
+                estado_visual = f"🔥 Racha: {h.get('current_streak', 0):>3} | {status}"
                 name_fmt = h['name']
                 good_table.add_row(name_fmt, h["difficulty"], estado_visual, key=str(h["id"]))
 
