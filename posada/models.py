@@ -766,6 +766,7 @@ class CalendarEvent(models.Model):
     description = models.TextField(blank=True)
     is_important = models.BooleanField(default=False)
     color = models.CharField(max_length=20, default="white")
+    status = models.CharField(max_length=20, default="PENDING")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

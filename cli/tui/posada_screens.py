@@ -1616,13 +1616,12 @@ class PosadaMainScreen(Screen):
     CSS = """
     #posada_root { padding: 1 2; }
     
-    #focus_layout { height: 25; margin-top: 1; } 
-    #left_col { width: 45%; height: 100%; margin-right: 2; }
-    #right_col { width: 50%; height: 100%; }
+    #focus_layout { height: 1fr; margin-top: 1; } 
+    #focus_top_row { height: 15; margin-bottom: 1; }
     
-    .timer_panel { border: heavy $accent; align: center middle; height: 13; margin-bottom: 1; padding: 1; }
-    .party_panel { border: round $success; padding: 1; height: 1fr; }
-    .mud_log_panel { border: solid #888888; padding: 0 1; background: #0c0c0c; height: 100%; }
+    .party_panel { border: round $success; padding: 1; width: 45%; height: 100%; margin-right: 2; }
+    .timer_panel { border: heavy $accent; align: center middle; width: 50%; height: 100%; padding: 1; }
+    .mud_log_panel { border: solid #888888; padding: 0 1; background: #0c0c0c; height: 1fr; }
     
     #timer_display { text-style: bold; color: $warning; text-align: center; width: 100%; content-align: center middle; }
     .timer_buttons { height: 3; align: center middle; margin-top: 1; }
@@ -1669,26 +1668,24 @@ class PosadaMainScreen(Screen):
             with TabbedContent(initial="tab_timer"):
 
                 with TimerTab("Sala de Enfoque", id="tab_timer"):
-                    with Horizontal(id="focus_layout"):
-
-                        # Columna Izquierda
-                        with Vertical(id="left_col"):
+                    with Vertical(id="focus_layout"):
+                        
+                        # Fila Superior: Grupo a la izquierda, Reloj a la derecha
+                        with Horizontal(id="focus_top_row"):
+                            with Vertical(classes="party_panel"):
+                                yield Label("Grupo Activo (Max 5)")
+                                yield DataTable(id="active_party_table")
+                                
                             with Vertical(classes="timer_panel"):
-                                # Reloj Gigante
                                 yield Label(get_ascii_time("25:00"), id="timer_display")
                                 with Horizontal(classes="timer_buttons"):
                                     yield Button("Configurar y Partir", id="btn_setup_timer", variant="success")
-                                    # Los botones limpios, sin data_bind
                                     yield Button("Pausar", id="btn_pause_timer", variant="warning")
                                     yield Button("Continuar", id="btn_resume_timer", variant="success")
                                     yield Button("Detener / Huir", id="btn_stop_timer", variant="error")
 
-                            with Vertical(classes="party_panel"):
-                                yield Label("Grupo Activo (Max 5)")
-                                yield DataTable(id="active_party_table")
-
-                        # Columna Derecha (MUD Log)
-                        with Vertical(id="right_col", classes="mud_log_panel"):
+                        # Fila Inferior: Registro de Eventos (ocupando el resto de la pantalla)
+                        with Vertical(classes="mud_log_panel"):
                             yield Label("📜 Registro de Eventos")
                             yield RichLog(id="event_log", markup=True, highlight=True)
 
@@ -1937,8 +1934,12 @@ class PosadaMainScreen(Screen):
             if event["second"] == elapsed:
                 m, s = divmod(elapsed, 60)
                 state = event.get('state', 'EXPLORING')
+                event_type = event.get('type', 'flavor')
                 
-                if state == 'COMBAT':
+                if event_type in ['loot', 'item_loot']:
+                    prefix = "[bold yellow on #332200] 💰 BOTÍN [/] "
+                    message = f"[yellow]{event['message']}[/yellow]"
+                elif state == 'COMBAT':
                     prefix = "[bold red on #2C0000] ⚔️ COMBATE [/] "
                     message = f"[red]{event['message']}[/red]"
                 elif state == 'CAMPFIRE':
@@ -3071,7 +3072,7 @@ class PosadaMainScreen(Screen):
         events = data.get("events", [])
         table = self.query_one("#calendar_table", DataTable)
         table.clear(columns=True)
-        table.add_columns("📅 Fecha", "✨ Evento", "📝 Descripción")
+        table.add_columns("📅 Fecha", "✨ Evento", "📝 Descripción", "Estado")
         
         from datetime import date as dt_date
         dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -3089,7 +3090,15 @@ class PosadaMainScreen(Screen):
             else:
                 title_col = f"[white]🔹 {e['title']}[/white]"
                 
-            table.add_row(fecha_str, title_col, f"[dim]{e['description']}[/dim]", key=str(e['id']))
+            status = e.get('status', 'PENDING')
+            if status == 'TODAY':
+                status_str = "[bold magenta]⭐ Hoy[/bold magenta]"
+            elif status == 'DONE':
+                status_str = "[bold green]✅ Hecho[/bold green]"
+            else:
+                status_str = "[dim white]Pendiente[/dim white]"
+                
+            table.add_row(fecha_str, title_col, f"[dim]{e['description']}[/dim]", status_str, key=str(e['id']))
 
     def action_new_calendar_event(self):
         if self.query_one(TabbedContent).active != "tab_kanban": return

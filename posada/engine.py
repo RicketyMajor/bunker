@@ -2,7 +2,7 @@ import random
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum
-from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade, JournalEntry
+from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade, JournalEntry, CalendarEvent
 from .skills import SkillRegistry
 
 
@@ -1314,6 +1314,30 @@ def evaluate_daily_penalties():
 
             habit.last_evaluated_date = yesterday
             habit.save()
+
+    # --- EVALUACIÓN DEL CALENDARIO DE EVENTOS ---
+    events = CalendarEvent.objects.filter(status__in=['PENDING', 'TODAY'])
+    for event in events:
+        if event.date == today and event.status == 'PENDING':
+            event.status = 'TODAY'
+            event.save()
+            penalty_log.append(f"📅 El evento '{event.title}' es HOY.")
+        elif event.date < today:
+            event.status = 'DONE'
+            event.save()
+            
+            # Dynamic rewards
+            prestige_gain = random.randint(5, 15)
+            coins = ['iron_penny', 'iron_half_penny', 'copper_penny']
+            reward_coin = random.choice(coins)
+            reward_amt = random.randint(1, 10)
+            
+            total_prestige_change += prestige_gain
+            setattr(guild, reward_coin, getattr(guild, reward_coin) + reward_amt)
+            penalty_log.append(
+                f"✅ Evento completado: '{event.title}' (+{prestige_gain} Prestigio, +{reward_amt} {reward_coin.replace('_', ' ').title()})."
+            )
+
 
     if total_prestige_change != 0:
         guild.add_prestige(total_prestige_change)

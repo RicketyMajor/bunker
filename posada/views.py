@@ -1127,6 +1127,7 @@ def list_calendar_events(request, year, month):
         "description": e.description,
         "is_important": e.is_important,
         "color": e.color,
+        "status": e.status,
     } for e in events]
     return Response({"events": data, "year": year, "month": month})
 
