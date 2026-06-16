@@ -1119,6 +1119,9 @@ def delete_kanban_column(request, col_id):
 def list_calendar_events(request, year, month):
     """Lista todos los eventos de un mes específico."""
     from .models import CalendarEvent
+    from .engine import evaluate_daily_penalties
+    evaluate_daily_penalties()
+    
     events = CalendarEvent.objects.filter(date__year=year, date__month=month)
     data = [{
         "id": e.id,

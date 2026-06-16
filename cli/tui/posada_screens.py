@@ -1315,9 +1315,13 @@ class DeleteConfirmationModal(ModalScreen[bool]):
     .btn_row { height: 3; align: center middle; margin-top: 1; }
     .btn_row Button { margin: 0 1; }
     """
+    def __init__(self, message: str = "¿Eliminar aventurero permanentemente?", name: str | None = None, id: str | None = None, classes: str | None = None):
+        super().__init__(name=name, id=id, classes=classes)
+        self.message = message
+
     def compose(self) -> ComposeResult:
         with Vertical(id="del_confirm_dialog"):
-            yield Label("¿Eliminar aventurero permanentemente?", classes="modal_title")
+            yield Label(self.message, classes="modal_title")
             with Horizontal(classes="btn_row"):
                 yield Button("Sí, eliminar", variant="error", id="btn_confirm_del")
                 yield Button("Cancelar", variant="primary", id="btn_cancel_del")
@@ -1670,12 +1674,8 @@ class PosadaMainScreen(Screen):
                 with TimerTab("Sala de Enfoque", id="tab_timer"):
                     with Vertical(id="focus_layout"):
                         
-                        # Fila Superior: Grupo a la izquierda, Reloj a la derecha
+                        # Fila Superior: Reloj a la izquierda, Grupo a la derecha
                         with Horizontal(id="focus_top_row"):
-                            with Vertical(classes="party_panel"):
-                                yield Label("Grupo Activo (Max 5)")
-                                yield DataTable(id="active_party_table")
-                                
                             with Vertical(classes="timer_panel"):
                                 yield Label(get_ascii_time("25:00"), id="timer_display")
                                 with Horizontal(classes="timer_buttons"):
@@ -1683,6 +1683,10 @@ class PosadaMainScreen(Screen):
                                     yield Button("Pausar", id="btn_pause_timer", variant="warning")
                                     yield Button("Continuar", id="btn_resume_timer", variant="success")
                                     yield Button("Detener / Huir", id="btn_stop_timer", variant="error")
+
+                            with Vertical(classes="party_panel"):
+                                yield Label("Grupo Activo (Max 5)")
+                                yield DataTable(id="active_party_table")
 
                         # Fila Inferior: Registro de Eventos (ocupando el resto de la pantalla)
                         with Vertical(classes="mud_log_panel"):
