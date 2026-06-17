@@ -254,106 +254,135 @@ class BunkerLauncherScreen(Screen):
     CSS = """
     #launcher_root {
         background: $surface-darken-2;
+        align: center middle;
+        overflow-y: auto;
+    }
+
+    #main_container {
+        width: 100%;
+        max-width: 140;
+        height: auto;
         padding: 1 2;
     }
 
     /* ── HEADER ── */
-    #header_row { height: 8; margin-bottom: 1; }
-    #logo_compact { width: 1fr; color: $success; text-style: bold; content-align: left middle; padding: 0 1; }
-    #prestige_panel { width: 40; border: heavy $warning; padding: 0 2; content-align: center middle; background: $surface; }
+    #header_row { height: auto; margin-bottom: 1; align: center middle; }
+    #logo_compact { width: 1fr; color: $success; text-style: bold; content-align: center middle; }
+    #prestige_panel { width: 40; border: heavy $warning; padding: 0 1; content-align: center middle; background: $surface; }
     #prestige_label { text-style: bold; color: $warning; text-align: center; width: 100%; }
     #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; }
     ProgressBar { margin: 0; }
 
     /* ── BODY ── */
-    #body_row { height: 1fr; }
+    #body_row { 
+        height: auto; 
+        layout: grid;
+        grid-size: 3;
+        grid-columns: 1fr 1fr 1.2fr;
+        grid-gutter: 1 2;
+    }
     
-    #posada_panel { width: 34; border: round #8a2be2; padding: 1; background: $surface; margin-right: 1; }
+    .launcher_panel {
+        height: auto;
+        border: round $primary;
+        padding: 0 1;
+        background: $surface;
+    }
+    
+    #posada_panel { border: round #8a2be2; }
+    #feed_panel { border: round $accent; }
+    
     .panel_title { text-style: bold; color: $accent; text-align: center; width: 100%; margin-bottom: 1; border-bottom: solid $primary; }
     .metric_line { height: 1; color: $text; }
     
-    #collections_panel { width: 1fr; border: round $primary; padding: 1; background: $surface; margin-right: 1; }
     .collection_title { text-style: bold; margin-top: 1; }
-    .collection_stat { color: $success; text-style: bold; }
+    .collection_stat { color: $text-muted; }
+    .collection_live { color: $success; text-style: bold; }
     
-    #feed_panel { width: 42; border: round $accent; padding: 1; background: $surface; }
     .feed_item { height: 1; color: $text; }
 
     /* ── FOOTER ── */
     #modules_bar {
-        height: 3;
+        height: auto;
         margin-top: 1;
         border: heavy $primary;
         background: $surface;
         align: center middle;
-        content-align: center middle;
+        padding: 1;
     }
     #modules_bar Button { margin: 0 1; }
-    #btn_evac { margin-left: 3; }
     """
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="launcher_root"):
-            # ── HEADER: Logo + Prestigio ──
-            with Horizontal(id="header_row"):
-                yield Label(
-                    "██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗\n"
-                    "██████╔╝██║   ██║██╔██╗ ██║█████╔╝ █████╗  ██████╔╝\n"
-                    "╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝",
-                    id="logo_compact"
-                )
-                with Vertical(id="prestige_panel"):
-                    yield Label("⚜️  GREMIO Nv. ? — Prestigio: ?/?", id="prestige_label")
-                    yield ProgressBar(id="prestige_bar", show_eta=False)
-                    yield Label("SISTEMA: CONECTANDO...", id="prestige_bar_label")
+            with Vertical(id="main_container"):
+                # ── HEADER: Logo + Prestigio ──
+                with Horizontal(id="header_row"):
+                    yield Label(
+                        "██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗ \n"
+                        "██████╔╝██║   ██║██╔██╗ ██║█████╔╝ █████╗  ██████╔╝\n"
+                        "╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝\n"
+                        "[dim]Centro de Operaciones y Control Estratégico[/dim]",
+                        id="logo_compact"
+                    )
+                    with Vertical(id="prestige_panel"):
+                        yield Label("⚜️  GREMIO Nv. ? — Prestigio: ?/?", id="prestige_label")
+                        yield ProgressBar(id="prestige_bar", show_eta=False)
+                        yield Label("SISTEMA: CONECTANDO...", id="prestige_bar_label")
 
-            # ── BODY: 3 Columnas ──
-            with Horizontal(id="body_row"):
+                # ── BODY: 3 Columnas en Grid ──
+                with Horizontal(id="body_row"):
 
-                # Columna Izquierda: Estado de la Posada
-                with Vertical(id="posada_panel"):
-                    yield Label("⚔️  ESTADO DE LA POSADA", classes="panel_title")
-                    yield Label("⏱️  DW Hoy: —", id="metric_dw", classes="metric_line")
-                    yield Label("👥 Aventureros: —", id="metric_advs", classes="metric_line")
-                    yield Label("🏆 Líder: —", id="metric_leader", classes="metric_line")
-                    yield Label("💰 Patrimonio: —", id="metric_wealth", classes="metric_line")
-                    yield Label("", id="metric_sep1", classes="metric_line")
-                    yield Label("✅ Hábitos: —", id="metric_habits", classes="metric_line")
-                    yield Label("🔥 Racha: —", id="metric_streak", classes="metric_line")
-                    yield Label("📋 Kanban: —", id="metric_kanban", classes="metric_line")
-                    yield Label("📅 Calendar: —", id="metric_calendar", classes="metric_line")
+                    # Columna Izquierda: Estado de la Posada
+                    with Vertical(id="posada_panel", classes="launcher_panel"):
+                        yield Label("⚔️  ESTADO DE LA POSADA", classes="panel_title")
+                        yield Label("⏱️  DW Hoy: —", id="metric_dw", classes="metric_line")
+                        yield Label("👥 Aventureros: —", id="metric_advs", classes="metric_line")
+                        yield Label("🏆 Líder: —", id="metric_leader", classes="metric_line")
+                        yield Label("💰 Patrimonio: —", id="metric_wealth", classes="metric_line")
+                        yield Label("", id="metric_sep1", classes="metric_line")
+                        yield Label("✅ Hábitos: —", id="metric_habits", classes="metric_line")
+                        yield Label("🔥 Racha: —", id="metric_streak", classes="metric_line")
+                        yield Label("📋 Kanban: —", id="metric_kanban", classes="metric_line")
+                        yield Label("📅 Calendar: —", id="metric_calendar", classes="metric_line")
 
-                # Columna Central: Barras de Colección
-                with Vertical(id="collections_panel"):
-                    yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
+                    # Columna Central: Barras de Colección
+                    with Vertical(id="collections_panel", classes="launcher_panel"):
+                        yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
 
-                    yield Label("📚 BIBLIOTECA", classes="collection_title", id="lib_title")
-                    yield Label("Calculando...", id="stat_books", classes="collection_stat")
+                        yield Label("📚 BIBLIOTECA", classes="collection_title", id="lib_title")
+                        yield ProgressBar(id="bar_books", show_eta=False)
+                        yield Label("Calculando...", id="stat_books", classes="collection_stat")
+                        yield Label("...", id="live_books", classes="collection_live")
 
-                    yield Label("🎬 VIDEOCLUB", classes="collection_title", id="mov_title")
-                    yield Label("Calculando...", id="stat_movies", classes="collection_stat")
+                        yield Label("🎬 VIDEOCLUB", classes="collection_title", id="mov_title")
+                        yield ProgressBar(id="bar_movies", show_eta=False)
+                        yield Label("Calculando...", id="stat_movies", classes="collection_stat")
+                        yield Label("...", id="live_movies", classes="collection_live")
 
-                    yield Label("🎵 DISQUERA", classes="collection_title", id="mus_title")
-                    yield Label("Calculando...", id="stat_music", classes="collection_stat")
+                        yield Label("🎵 DISQUERA", classes="collection_title", id="mus_title")
+                        yield ProgressBar(id="bar_music", show_eta=False)
+                        yield Label("Calculando...", id="stat_music", classes="collection_stat")
+                        yield Label("...", id="live_music", classes="collection_live")
 
-                    yield Label("♟️  AJEDREZ", classes="collection_title", id="chess_title")
-                    yield Label("Calculando...", id="stat_chess", classes="collection_stat")
+                        yield Label("♟️  AJEDREZ", classes="collection_title", id="chess_title")
+                        yield Label("Calculando...", id="stat_chess", classes="collection_stat")
 
-                # Columna Derecha: Feed de Actividad
-                with Vertical(id="feed_panel"):
-                    yield Label("📡  ACTIVIDAD EN VIVO", classes="panel_title")
-                    for i in range(10):
-                        yield Label("", id=f"feed_{i}", classes="feed_item")
+                    # Columna Derecha: Feed de Actividad
+                    with Vertical(id="feed_panel", classes="launcher_panel"):
+                        yield Label("📡  ACTIVIDAD EN VIVO", classes="panel_title")
+                        for i in range(12):
+                            yield Label("", id=f"feed_{i}", classes="feed_item")
 
-            # ── FOOTER: Módulos ──
-            with Horizontal(id="modules_bar"):
-                yield Button("[1] Biblioteca", id="btn_lib", variant="primary")
-                yield Button("[2] Videoclub", id="btn_movie", variant="primary")
-                yield Button("[3] Disquera", id="btn_music", variant="primary")
-                yield Button("[4] Posada", id="btn_posada", variant="primary")
-                yield Button("[5] Ajedrez", id="btn_chess", variant="primary")
-                yield Button("Backup", id="btn_evac", variant="success")
-                yield Button("Salir", id="btn_quit", variant="error")
+                # ── FOOTER: Módulos ──
+                with Horizontal(id="modules_bar"):
+                    yield Button("[1] Biblioteca", id="btn_lib", variant="primary")
+                    yield Button("[2] Videoclub", id="btn_movie", variant="primary")
+                    yield Button("[3] Disquera", id="btn_music", variant="primary")
+                    yield Button("[4] Posada", id="btn_posada", variant="primary")
+                    yield Button("[5] Ajedrez", id="btn_chess", variant="primary")
+                    yield Button("Backup", id="btn_evac", variant="success")
+                    yield Button("Salir", id="btn_quit", variant="error")
 
     def on_mount(self) -> None:
         self.fetch_dashboard()
@@ -429,24 +458,39 @@ class BunkerLauncherScreen(Screen):
 
         # ── COLECCIONES ──
         b = data.get("books", {})
+        bar_books = self.query_one("#bar_books", ProgressBar)
+        bar_books.total = max(b.get("total", 1), 1)
+        bar_books.progress = b.get("read", 0)
         self.query_one("#stat_books", Label).update(
+            f"{b.get('read', 0)}/{b.get('total', 0)} leídos • {b.get('hours', 0)}h est.")
+        self.query_one("#live_books", Label).update(
             f"Mes: {b.get('finished_this_month', 0)} • Año: {b.get('finished_this_year', 0)}")
 
         m = data.get("movies", {})
+        bar_movies = self.query_one("#bar_movies", ProgressBar)
+        bar_movies.total = max(m.get("total", 1), 1)
+        bar_movies.progress = m.get("watched", 0)
         self.query_one("#stat_movies", Label).update(
+            f"{m.get('watched', 0)}/{m.get('total', 0)} vistas • {m.get('hours', 0)}h")
+        self.query_one("#live_movies", Label).update(
             f"Mes: {m.get('watched_this_month', 0)} • Año: {m.get('watched_this_year', 0)}")
 
         mu = data.get("music", {})
+        bar_music = self.query_one("#bar_music", ProgressBar)
+        bar_music.total = max(mu.get("total", 1), 1)
+        bar_music.progress = mu.get("listened", 0)
         self.query_one("#stat_music", Label).update(
+            f"{mu.get('listened', 0)}/{mu.get('total', 0)} escuchados • {mu.get('hours', 0)}h")
+        self.query_one("#live_music", Label).update(
             f"Mes: {mu.get('listened_this_month', 0)} • Año: {mu.get('listened_this_year', 0)}")
 
         ch = data.get("chess", {})
         self.query_one("#stat_chess", Label).update(
-            f"Partidas: {ch.get('rooms', 0)}\nVariantes: {ch.get('variations', 0)}")
+            f"Partidas: {ch.get('rooms', 0)} • Variantes: {ch.get('variations', 0)}")
 
         # ── FEED ──
         feed = data.get("feed", [])
-        for i in range(10):
+        for i in range(12):
             lbl = self.query_one(f"#feed_{i}", Label)
             if i < len(feed):
                 lbl.update(feed[i])
