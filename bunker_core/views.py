@@ -10,83 +10,174 @@ from disquera.models import Album, MusicAnnualRecord
 
 
 def global_dashboard_view(request):
-    """BFF: Agrega datos de múltiples microservicios y devuelve un payload optimizado."""
+    """BFF: Agrega datos de TODOS los módulos del Bunker para el Launcher en vivo."""
 
-    # Agregaciones Cinematográficas
-    movies = Movie.objects.all()
-    total_movies = movies.count()
-    watched_movies = movies.filter(is_watched=True).count()
-    total_movie_minutes = sum((m.duration_minutes or 0) for m in movies)
+    today = localdate()
 
-    # Agregaciones Literarias
+    # ═══════════════════════════════════════════
+    # SECTOR LITERARIO
+    # ═══════════════════════════════════════════
     books = Book.objects.all()
     total_books = books.count()
     read_books = books.filter(is_read=True).count()
     total_pages = sum((b.page_count or 0) for b in books)
+    total_book_hours = round((total_pages * 1.5) / 60, 1)
 
-    # Agregaciones Musicales
+    pages_today = ReadingSession.objects.filter(date=today).aggregate(
+        Sum('pages_read'))['pages_read__sum'] or 0
+
+    from catalog.models import Loan, ScanInbox
+    active_loans = Loan.objects.filter(returned=False).count()
+    inbox_count = ScanInbox.objects.count()
+    books_this_year = AnnualRecord.objects.filter(date_finished__year=today.year).count()
+
+    # ═══════════════════════════════════════════
+    # SECTOR CINEMATOGRÁFICO
+    # ═══════════════════════════════════════════
+    movies = Movie.objects.all()
+    total_movies = movies.count()
+    watched_movies = movies.filter(is_watched=True).count()
+    total_movie_minutes = sum((m.duration_minutes or 0) for m in movies)
+    total_movie_hours = round(total_movie_minutes / 60, 1)
+
+    # ═══════════════════════════════════════════
+    # SECTOR MUSICAL
+    # ═══════════════════════════════════════════
     albums = Album.objects.all()
     total_albums = albums.count()
     listened_albums = albums.filter(is_listened=True).count()
     total_tracks = sum((a.track_count or 0) for a in albums)
+    total_music_hours = round((total_tracks * 4) / 60, 1)
 
-    # Métricas Cruzadas (Horas de Entretenimiento)
-    total_movie_hours = total_movie_minutes / 60
-    total_book_hours = (total_pages * 1.5) / 60
-    # Asumiendo 4 mins promedio por canción
-    total_music_hours = (total_tracks * 4) / 60
+    # ═══════════════════════════════════════════
+    # SECTOR POSADA (RPG)
+    # ═══════════════════════════════════════════
+    from posada.models import (
+        GuildProfile, Adventurer, DeepWorkSession, DailyHabit,
+        KanbanTask, CalendarEvent, JournalEntry
+    )
 
-    # Generación del Feed de Actividad Curado
+    guild = GuildProfile.objects.first()
+    guild_data = {}
+    if guild:
+        guild_data = {
+            "prestige_level": guild.prestige_level,
+            "prestige": guild.prestige,
+            "prestige_meta": guild.prestige_meta,
+            "net_worth": guild.net_worth_in_talents,
+        }
+
+    adventurers = Adventurer.objects.all()
+    active_adventurers = adventurers.filter(is_active=True)
+    top_adventurer = adventurers.order_by('-level').first()
+
+    dw_sessions_today = DeepWorkSession.objects.filter(
+        start_time__date=today, completed=True)
+    dw_minutes_today = sum(s.duration_minutes for s in dw_sessions_today)
+
+    habits = DailyHabit.objects.all()
+    total_habits = habits.count()
+    completed_habits = habits.filter(last_completed_date=today).count()
+    top_streak = habits.order_by('-current_streak').first()
+
+    pending_tasks = KanbanTask.objects.filter(completed_at=None).count()
+    today_events = CalendarEvent.objects.filter(status='TODAY').count()
+
+    posada_data = {
+        "guild": guild_data,
+        "active_adventurers": [
+            {"name": a.name, "level": a.level, "class": a.get_adv_class_display()}
+            for a in active_adventurers[:5]
+        ],
+        "top_adventurer": {
+            "name": top_adventurer.name,
+            "level": top_adventurer.level
+        } if top_adventurer else None,
+        "dw_minutes_today": dw_minutes_today,
+        "dw_sessions_today": dw_sessions_today.count(),
+        "habits_completed": completed_habits,
+        "habits_total": total_habits,
+        "top_streak": {
+            "name": top_streak.name,
+            "streak": top_streak.current_streak
+        } if top_streak and top_streak.current_streak > 0 else None,
+        "pending_tasks": pending_tasks,
+        "today_events": today_events,
+    }
+
+    # ═══════════════════════════════════════════
+    # SECTOR AJEDREZ
+    # ═══════════════════════════════════════════
+    from chess_study.models import ChessRoom, ChessVariation, ChessNote
+    chess_data = {
+        "rooms": ChessRoom.objects.count(),
+        "variations": ChessVariation.objects.count(),
+        "notes": ChessNote.objects.count(),
+    }
+
+    # ═══════════════════════════════════════════
+    # FEED DE ACTIVIDAD CRUZADO
+    # ═══════════════════════════════════════════
     feed_lines = []
 
-    today = localdate()
-    pages_today = ReadingSession.objects.filter(date=today).aggregate(
-        Sum('pages_read'))['pages_read__sum'] or 0
     if pages_today > 0:
-        feed_lines.append(f"**Páginas leídas hoy:** {pages_today}")
+        feed_lines.append(f"📖 Leíste {pages_today} páginas hoy.")
+
+    if dw_minutes_today > 0:
+        feed_lines.append(f"⚔️ Deep Work hoy: {dw_minutes_today} minutos.")
+
+    if completed_habits > 0:
+        feed_lines.append(f"✅ Hábitos completados: {completed_habits}/{total_habits}.")
+
+    if today_events > 0:
+        feed_lines.append(f"📅 Tienes {today_events} evento(s) programado(s) para HOY.")
+
+    if active_loans > 0:
+        feed_lines.append(f"📕 {active_loans} libro(s) prestado(s) activo(s).")
+
+    if inbox_count > 0:
+        feed_lines.append(f"📬 {inbox_count} ISBN(s) esperando en el Purgatorio.")
 
     last_movie = movies.order_by('-created_at').first()
     if last_movie:
-        feed_lines.append(
-            f"**Último ingreso al Videoclub:** {last_movie.title}")
+        feed_lines.append(f"🎬 Último ingreso: {last_movie.title}")
 
     last_book = books.order_by('-id').first()
     if last_book:
-        feed_lines.append(
-            f"**Último ingreso a Biblioteca:** {last_book.title}")
+        feed_lines.append(f"📚 Último libro: {last_book.title}")
 
     last_album = albums.order_by('-created_at').first()
     if last_album:
-        feed_lines.append(
-            f"**Último disco en la Disquera:** {last_album.title}")
+        feed_lines.append(f"🎵 Último disco: {last_album.title}")
 
-    last_watched = movies.filter(is_watched=True).order_by('-id').first()
-    if last_watched:
-        feed_lines.append(f"**Última película vista:** {last_watched.title}")
-
-    last_listened = MusicAnnualRecord.objects.order_by(
-        '-date_listened', '-id').first()
-    if last_listened:
-        feed_lines.append(
-            f"**Última sesión de escucha:** {last_listened.title}")
+    last_journal = JournalEntry.objects.order_by('-created_at').first()
+    if last_journal:
+        snippet = last_journal.content[:60] + "..." if len(last_journal.content) > 60 else last_journal.content
+        feed_lines.append(f"📝 Diario: \"{snippet}\"")
 
     return JsonResponse({
-        "movies": {
-            "total": total_movies,
-            "watched": watched_movies,
-            "hours": round(total_movie_hours, 1)
-        },
         "books": {
             "total": total_books,
             "read": read_books,
-            "hours": round(total_book_hours, 1)
+            "hours": total_book_hours,
+            "pages_today": pages_today,
+            "loans": active_loans,
+            "inbox": inbox_count,
+            "finished_this_year": books_this_year,
+        },
+        "movies": {
+            "total": total_movies,
+            "watched": watched_movies,
+            "hours": total_movie_hours,
         },
         "music": {
             "total": total_albums,
             "listened": listened_albums,
-            "hours": round(total_music_hours, 1)
+            "hours": total_music_hours,
         },
-        "feed": feed_lines[:6]
+        "posada": posada_data,
+        "chess": chess_data,
+        "feed": feed_lines[:10],
     })
 
 
