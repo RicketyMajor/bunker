@@ -26,28 +26,35 @@ def global_dashboard_view(request):
     pages_today = ReadingSession.objects.filter(date=today).aggregate(
         Sum('pages_read'))['pages_read__sum'] or 0
 
-    from catalog.models import Loan, ScanInbox
+    from catalog.models import Loan, ScanInbox, AnnualRecord
     active_loans = Loan.objects.filter(returned=False).count()
     inbox_count = ScanInbox.objects.count()
     books_this_year = AnnualRecord.objects.filter(date_finished__year=today.year).count()
+    books_this_month = AnnualRecord.objects.filter(date_finished__year=today.year, date_finished__month=today.month).count()
 
     # ═══════════════════════════════════════════
     # SECTOR CINEMATOGRÁFICO
     # ═══════════════════════════════════════════
+    from movies.models import MovieAnnualRecord
     movies = Movie.objects.all()
     total_movies = movies.count()
     watched_movies = movies.filter(is_watched=True).count()
     total_movie_minutes = sum((m.duration_minutes or 0) for m in movies)
     total_movie_hours = round(total_movie_minutes / 60, 1)
+    movies_this_year = MovieAnnualRecord.objects.filter(date_watched__year=today.year).count()
+    movies_this_month = MovieAnnualRecord.objects.filter(date_watched__year=today.year, date_watched__month=today.month).count()
 
     # ═══════════════════════════════════════════
     # SECTOR MUSICAL
     # ═══════════════════════════════════════════
+    from disquera.models import MusicAnnualRecord
     albums = Album.objects.all()
     total_albums = albums.count()
     listened_albums = albums.filter(is_listened=True).count()
     total_tracks = sum((a.track_count or 0) for a in albums)
     total_music_hours = round((total_tracks * 4) / 60, 1)
+    music_this_year = MusicAnnualRecord.objects.filter(date_listened__year=today.year).count()
+    music_this_month = MusicAnnualRecord.objects.filter(date_listened__year=today.year, date_listened__month=today.month).count()
 
     # ═══════════════════════════════════════════
     # SECTOR POSADA (RPG)
@@ -164,16 +171,21 @@ def global_dashboard_view(request):
             "loans": active_loans,
             "inbox": inbox_count,
             "finished_this_year": books_this_year,
+            "finished_this_month": books_this_month,
         },
         "movies": {
             "total": total_movies,
             "watched": watched_movies,
             "hours": total_movie_hours,
+            "watched_this_year": movies_this_year,
+            "watched_this_month": movies_this_month,
         },
         "music": {
             "total": total_albums,
             "listened": listened_albums,
             "hours": total_music_hours,
+            "listened_this_year": music_this_year,
+            "listened_this_month": music_this_month,
         },
         "posada": posada_data,
         "chess": chess_data,

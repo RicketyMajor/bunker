@@ -258,7 +258,7 @@ class BunkerLauncherScreen(Screen):
     }
 
     /* ── HEADER ── */
-    #header_row { height: 5; margin-bottom: 1; }
+    #header_row { height: 8; margin-bottom: 1; }
     #logo_compact { width: 1fr; color: $success; text-style: bold; content-align: left middle; padding: 0 1; }
     #prestige_panel { width: 40; border: heavy $warning; padding: 0 2; content-align: center middle; background: $surface; }
     #prestige_label { text-style: bold; color: $warning; text-align: center; width: 100%; }
@@ -268,15 +268,15 @@ class BunkerLauncherScreen(Screen):
     /* ── BODY ── */
     #body_row { height: 1fr; }
     
-    #posada_panel { width: 28; border: round #8a2be2; padding: 1; background: $surface; margin-right: 1; }
+    #posada_panel { width: 34; border: round #8a2be2; padding: 1; background: $surface; margin-right: 1; }
     .panel_title { text-style: bold; color: $accent; text-align: center; width: 100%; margin-bottom: 1; border-bottom: solid $primary; }
     .metric_line { height: 1; color: $text; }
     
     #collections_panel { width: 1fr; border: round $primary; padding: 1; background: $surface; margin-right: 1; }
     .collection_title { text-style: bold; margin-top: 1; }
-    .collection_stat { color: $text-muted; }
+    .collection_stat { color: $success; text-style: bold; }
     
-    #feed_panel { width: 38; border: round $accent; padding: 1; background: $surface; }
+    #feed_panel { width: 42; border: round $accent; padding: 1; background: $surface; }
     .feed_item { height: 1; color: $text; }
 
     /* ── FOOTER ── */
@@ -288,7 +288,7 @@ class BunkerLauncherScreen(Screen):
         align: center middle;
         content-align: center middle;
     }
-    #modules_bar Button { margin: 0 1; min-width: 16; }
+    #modules_bar Button { margin: 0 1; }
     #btn_evac { margin-left: 3; }
     """
 
@@ -328,15 +328,12 @@ class BunkerLauncherScreen(Screen):
                     yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
 
                     yield Label("📚 BIBLIOTECA", classes="collection_title", id="lib_title")
-                    yield ProgressBar(id="bar_books", show_eta=False)
                     yield Label("Calculando...", id="stat_books", classes="collection_stat")
 
                     yield Label("🎬 VIDEOCLUB", classes="collection_title", id="mov_title")
-                    yield ProgressBar(id="bar_movies", show_eta=False)
                     yield Label("Calculando...", id="stat_movies", classes="collection_stat")
 
                     yield Label("🎵 DISQUERA", classes="collection_title", id="mus_title")
-                    yield ProgressBar(id="bar_music", show_eta=False)
                     yield Label("Calculando...", id="stat_music", classes="collection_stat")
 
                     yield Label("♟️  AJEDREZ", classes="collection_title", id="chess_title")
@@ -393,7 +390,7 @@ class BunkerLauncherScreen(Screen):
             bar.progress = min(pres, meta)
 
         self.query_one("#prestige_bar_label", Label).update(
-            "SISTEMA: [green]ONLINE[/green] │ NÚCLEO: [green]ESTABLE[/green]")
+            "[blink]🔴 EN VIVO[/blink] │ SISTEMA: [green]ONLINE[/green] │ NÚCLEO: [green]ESTABLE[/green]")
 
         # ── POSADA ──
         dw_min = posada.get("dw_minutes_today", 0)
@@ -432,32 +429,20 @@ class BunkerLauncherScreen(Screen):
 
         # ── COLECCIONES ──
         b = data.get("books", {})
-        bar_books = self.query_one("#bar_books", ProgressBar)
-        bar_books.total = max(b.get("total", 1), 1)
-        bar_books.progress = b.get("read", 0)
-        pct_b = int((b.get("read", 0) / max(b.get("total", 1), 1)) * 100)
         self.query_one("#stat_books", Label).update(
-            f"{b.get('read', 0)}/{b.get('total', 0)} leídos ({pct_b}%) • {b.get('hours', 0)}h est.")
+            f"Mes: {b.get('finished_this_month', 0)} • Año: {b.get('finished_this_year', 0)}")
 
         m = data.get("movies", {})
-        bar_movies = self.query_one("#bar_movies", ProgressBar)
-        bar_movies.total = max(m.get("total", 1), 1)
-        bar_movies.progress = m.get("watched", 0)
-        pct_m = int((m.get("watched", 0) / max(m.get("total", 1), 1)) * 100)
         self.query_one("#stat_movies", Label).update(
-            f"{m.get('watched', 0)}/{m.get('total', 0)} vistas ({pct_m}%) • {m.get('hours', 0)}h")
+            f"Mes: {m.get('watched_this_month', 0)} • Año: {m.get('watched_this_year', 0)}")
 
         mu = data.get("music", {})
-        bar_music = self.query_one("#bar_music", ProgressBar)
-        bar_music.total = max(mu.get("total", 1), 1)
-        bar_music.progress = mu.get("listened", 0)
-        pct_mu = int((mu.get("listened", 0) / max(mu.get("total", 1), 1)) * 100)
         self.query_one("#stat_music", Label).update(
-            f"{mu.get('listened', 0)}/{mu.get('total', 0)} escuchados ({pct_mu}%) • {mu.get('hours', 0)}h")
+            f"Mes: {mu.get('listened_this_month', 0)} • Año: {mu.get('listened_this_year', 0)}")
 
         ch = data.get("chess", {})
         self.query_one("#stat_chess", Label).update(
-            f"{ch.get('rooms', 0)} partidas • {ch.get('variations', 0)} variantes • {ch.get('notes', 0)} notas")
+            f"Partidas: {ch.get('rooms', 0)}\nVariantes: {ch.get('variations', 0)}")
 
         # ── FEED ──
         feed = data.get("feed", [])
