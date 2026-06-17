@@ -5,6 +5,27 @@ from django.db.models import Sum
 from .models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade, JournalEntry, CalendarEvent
 from .skills import SkillRegistry
 
+COIN_COLORS = {
+    'iron_half_penny': '#8b5a2b',
+    'iron_penny': '#8b5a2b',
+    'copper_penny': '#cd7f32',
+    'ardite': '#b87333',
+    'silver_penny': '#c0c0c0',
+    'drabin': '#d3d3d3',
+    'sueldo': '#e5e4e2',
+    'iota': '#87ceeb',
+    'talento': '#4682b4',
+    'real': '#4169e1',
+    'marco': '#ffd700'
+}
+
+MONSTER_COLORS = {
+    'SML': 'dim white',
+    'MED': '#4169e1',
+    'LRG': '#8a2be2',
+    'EPC': 'bold red'
+}
+
 
 def safe_randint(a, b):
     """randint seguro que no falla si los rangos están invertidos."""
@@ -544,7 +565,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                                   "type": "flavor", "message": message_chosen})
             # --------------------------------------------------------
             # Tirada de Encuentro
-            if monsters_db and random.random() < 0.05:
+            if monsters_db and random.random() < 0.08:
                 # --- TABLAS DE ENCUENTRO PONDERADAS ---
                 # SML: 60%, MED: 30%, LRG: 8%, EPC: 2%
                 category_weights = {'SML': 60, 'MED': 30, 'LRG': 8, 'EPC': 2}
@@ -585,7 +606,8 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         'status': set()
                     })
 
-                msg = f"¡EMBOSCADA! Un grupo de {spawn_count} [bold red]{base_monster.name}s[/bold red] corta el paso." if spawn_count > 1 else f"¡PELIGRO! Un [bold red]{base_monster.name}[/bold red] bloquea el camino."
+                m_color = MONSTER_COLORS.get(base_monster.category, 'red')
+                msg = f"¡EMBOSCADA! Un grupo de {spawn_count} [[{m_color}]{base_monster.name}s[/]] corta el paso." if spawn_count > 1 else f"¡PELIGRO! Un [[{m_color}]{base_monster.name}[/]] bloquea el camino."
                 script.append({"second": current_second,
                               "type": "flavor", "message": msg})
                 state = "COMBAT"
@@ -596,12 +618,36 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 if temp_hp[explore_adv.id] <= 0:
                     continue
                 adv_luk = explore_adv.base_luk + sum(item.bonus_luk for item in explore_adv.get_equipped_items())
-                hp_amount = random.randint(2, 5) + adv_luk
-                script.append({"second": current_second - 30, "type": "loot", "coin": "iron_half_penny",
-                              "amount": hp_amount, "message": f"{explore_adv.name} recogió {hp_amount} medio(s) penique(s) de hierro."})
-                if random.random() < (0.30 + (adv_luk * 0.02)):
-                    script.append({"second": current_second - 15, "type": "loot", "coin": "drabin",
-                                  "amount": 1, "message": f"{explore_adv.name} desenterró 1 Drabín."})
+                
+                # Roll for coins
+                coin_pool = [
+                    ('marco', 0.0001), ('real', 0.0005), ('talento', 0.001),
+                    ('iota', 0.005), ('sueldo', 0.01), ('drabin', 0.05),
+                    ('silver_penny', 0.10), ('ardite', 0.15),
+                    ('copper_penny', 0.25), ('iron_penny', 0.50),
+                    ('iron_half_penny', 1.0)
+                ]
+                
+                found_coin = 'iron_half_penny'
+                roll = random.random()
+                for coin_name, prob in coin_pool:
+                    if roll < (prob + (adv_luk * 0.002)):
+                        found_coin = coin_name
+                        break
+                        
+                if found_coin in ['iron_half_penny', 'iron_penny', 'copper_penny']:
+                    amt = random.randint(2, 5) + adv_luk
+                elif found_coin in ['ardite', 'silver_penny', 'drabin']:
+                    amt = random.randint(1, 3) + (adv_luk // 2)
+                else:
+                    amt = 1
+                    
+                color = COIN_COLORS.get(found_coin, 'white')
+                display_name = found_coin.replace('_', ' ').title()
+                if found_coin == 'iron_half_penny': display_name = "Medio Penique de Hierro"
+                
+                script.append({"second": current_second - 30, "type": "loot", "coin": found_coin,
+                              "amount": amt, "message": f"{explore_adv.name} encontró {amt} [[{color}]{display_name}[/]]."})
 
                 # Drops aleatorios
                 if all_items_db and random.random() < (0.05 + (adv_luk * 0.01)):
@@ -904,16 +950,20 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         # Rescata la XP que otorga el monstruo y la sumamos al pozo
                         xp_ganada = getattr(m['base'], 'xp_reward', 0)
 
+                        m_color = MONSTER_COLORS.get(m['base'].category, 'red')
                         script.append({"second": current_second - 2, "type": "flavor",
-                                      "message": f"💀 [bold red]{m['name']}[/bold red] cae derrotado (+{xp_ganada} XP).", "xp_ganada": xp_ganada})
+                                      "message": f"💀 [[{m_color}]{m['name']}[/]] cae derrotado (+{xp_ganada} XP).", "xp_ganada": xp_ganada})
                         active_monsters_group.remove(m)
 
                         # Generar Monedas
                         for coin, max_amt, prob in coin_drops.get(m['base'].category, []):
                             if random.random() < prob:
                                 amt = random.randint(1, max_amt)
+                                c_color = COIN_COLORS.get(coin, 'white')
+                                display_name = coin.replace('_', ' ').title()
+                                if coin == 'iron_half_penny': display_name = "Medio Penique de Hierro"
                                 script.append({"second": current_second - 1, "type": "loot", "coin": coin, "amount": amt,
-                                              "message": f"El monstruo soltó {amt} {coin.replace('_', ' ').title()}."})
+                                              "message": f"El monstruo soltó {amt} [[{c_color}]{display_name}[/]]."})
 
                         # Generar Items Raros
                         for rarity, base_prob in item_drops.get(m['base'].category, []):
@@ -962,9 +1012,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
             for adv in adventurers:
                 if temp_hp[adv.id] < adv.max_hp:
                     all_healed = False
-                    heal = random.randint(1, 3 + adv.base_con)
+                    heal = random.randint(adv.level, (adv.level * 3) + adv.base_con)
                     temp_hp[adv.id] = min(adv.max_hp, temp_hp[adv.id] + heal)
-                    script.append({"second": current_second, "type": "heal", "adventurer_id": adv.id, "amount": heal, "message": f"🔥 {adv.name} descansa y recupera {heal} HP."})
+                    script.append({"second": current_second, "type": "heal", "adventurer_id": adv.id, "amount": heal, "message": f"🔥 {adv.name} descansa y recupera [bold green]{heal} HP[/]."})
             
             if all_healed:
                 script.append({"second": current_second, "type": "flavor", "message": "🔥 El grupo se ha recuperado por completo. ¡La aventura continúa!"})

@@ -1940,18 +1940,16 @@ class PosadaMainScreen(Screen):
                 state = event.get('state', 'EXPLORING')
                 event_type = event.get('type', 'flavor')
                 
-                if event_type in ['loot', 'item_loot']:
-                    prefix = "[bold yellow on #332200] 💰 BOTÍN [/] "
-                    message = f"[yellow]{event['message']}[/yellow]"
+                if event_type in ['loot', 'item_loot'] or state == 'EXPLORING':
+                    prefix = "[bold cyan] 🗺️ EXPLORANDO [/bold cyan] "
                 elif state == 'COMBAT':
-                    prefix = "[bold red on #2C0000] ⚔️ COMBATE [/] "
-                    message = f"[red]{event['message']}[/red]"
+                    prefix = "[bold red] ⚔️ COMBATE [/bold red] "
                 elif state == 'CAMPFIRE':
-                    prefix = "[bold yellow on #2A2A00] 🏕️ CAMPAMENTO [/] "
-                    message = f"[yellow]{event['message']}[/yellow]"
+                    prefix = "[bold yellow] 🏕️ CAMPAMENTO [/bold yellow] "
                 else:
-                    prefix = "[bold cyan on #00222C] 🗺️ EXPLORANDO [/] "
-                    message = f"[white]{event['message']}[/white]"
+                    prefix = "[bold cyan] 🗺️ EXPLORANDO [/bold cyan] "
+                    
+                message = f"[white]{event['message']}[/white]"
                 
                 formatted_time = f"[dim][{m:02d}:{s:02d}][/dim]"
                 
