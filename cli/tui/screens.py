@@ -2,6 +2,9 @@
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.widgets import Label, Button
 from textual.widgets import ProgressBar
+from datetime import datetime
+from textual.reactive import reactive
+from .posada_screens import ASCII_NUMS
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
@@ -242,6 +245,9 @@ class BunkerDashboardScreen(Screen):
 class BunkerLauncherScreen(Screen):
     """Centro de Mando en Vivo — Dashboard principal del Bunker (Estilo Abtop)."""
 
+    # ── VARIABLE REACTIVA: El corazón del Dashboard ──
+    dashboard_data = reactive({})
+
     BINDINGS = [
         ("1", "launch_lib", "Biblioteca"),
         ("2", "launch_movie", "Videoclub"),
@@ -257,7 +263,6 @@ class BunkerLauncherScreen(Screen):
         height: 100%;
         background: $surface;
         padding: 1 2;
-        /* Permitir scroll salva la interfaz en terminales pequeñas */
         overflow-y: auto; 
     }
 
@@ -266,12 +271,19 @@ class BunkerLauncherScreen(Screen):
         height: auto;
         margin-bottom: 1; 
         layout: horizontal;
+        align: center middle;
     }
     #logo_compact { 
         width: 1fr; 
         color: $success; 
         text-style: bold; 
         content-align: left middle; 
+    }
+    #ascii_clock {
+        width: 1fr;
+        color: $accent;
+        text-align: center;
+        text-style: bold;
     }
     #prestige_panel { 
         width: 45; 
@@ -284,7 +296,7 @@ class BunkerLauncherScreen(Screen):
     #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; margin-top: 1; }
     ProgressBar { margin: 0; }
 
-    /* ── BODY (Flexbox Horizontal en vez de Grid) ── */
+    /* ── BODY ── */
     #body_row { 
         height: auto; 
         min-height: 16;
@@ -293,7 +305,7 @@ class BunkerLauncherScreen(Screen):
     }
     
     .launcher_panel {
-        width: 1fr; /* Reparte el ancho equitativamente */
+        width: 1fr;
         height: 100%;
         border: round $primary;
         background: $surface-darken-1;
@@ -302,7 +314,7 @@ class BunkerLauncherScreen(Screen):
     }
     
     #posada_panel { border: round #8a2be2; }
-    #feed_panel { border: round $accent; width: 1.2fr; } /* El feed es ligeramente más ancho */
+    #feed_panel { border: round $accent; width: 1.2fr; }
     
     .panel_title { 
         text-style: bold; 
@@ -317,7 +329,6 @@ class BunkerLauncherScreen(Screen):
     
     .collection_title { text-style: bold; margin-top: 1; }
     .collection_stat { color: $text-muted; }
-    .collection_live { color: $success; text-style: bold; }
     
     .feed_item { margin-bottom: 1; color: $text; }
 
@@ -332,10 +343,9 @@ class BunkerLauncherScreen(Screen):
     """
 
     def compose(self) -> ComposeResult:
-        # Hacemos que toda la pantalla tenga scroll si es necesario
         with VerticalScroll(id="launcher_root"):
             
-            # ── HEADER: Logo + Prestigio ──
+            # ── HEADER: Logo + Reloj + Prestigio ──
             with Horizontal(id="header_row"):
                 yield Label(
                     "██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗ \n"
@@ -344,18 +354,18 @@ class BunkerLauncherScreen(Screen):
                     "██╔══██╗██║   ██║██║╚██╗██║██╔═██╗ ██╔══╝  ██╔══██╗\n"
                     "██████╔╝╚██████╔╝██║ ╚████║██║  ██╗███████╗██║  ██║\n"
                     "╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝\n"
-                    "[dim]Centro de Operaciones y Control Estratégico[/dim]",
+                    "[dim]Centro de Operaciones Estratégicas[/dim]",
                     id="logo_compact"
                 )
+                yield Label("", id="ascii_clock")
+                
                 with Vertical(id="prestige_panel"):
                     yield Label("⚜️  GREMIO Nv. -- — Prestigio: --/--", id="prestige_label")
                     yield ProgressBar(id="prestige_bar", show_eta=False, total=100)
                     yield Label("SISTEMA: ESPERANDO TELEMETRÍA...", id="prestige_bar_label")
 
-            # ── BODY: 3 Columnas Horizontal ──
+            # ── BODY ──
             with Horizontal(id="body_row"):
-
-                # Columna Izquierda: Estado de la Posada
                 with Vertical(id="posada_panel", classes="launcher_panel"):
                     yield Label("⚔️  MÉTRICAS DEL SISTEMA", classes="panel_title")
                     yield Label("⏱️  DW Hoy: [dim]-- min[/]", id="metric_dw", classes="metric_line")
@@ -368,7 +378,6 @@ class BunkerLauncherScreen(Screen):
                     yield Label("📋 Kanban: [dim]-- pendientes[/]", id="metric_kanban", classes="metric_line")
                     yield Label("📅 Calendar: [dim]-- eventos hoy[/]", id="metric_calendar", classes="metric_line")
 
-                # Columna Central: Barras de Colección
                 with Vertical(id="collections_panel", classes="launcher_panel"):
                     yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
 
@@ -384,13 +393,12 @@ class BunkerLauncherScreen(Screen):
                     yield ProgressBar(id="bar_music", show_eta=False, total=100)
                     yield Label("--/-- escuch. • --h", id="stat_music", classes="collection_stat")
 
-                # Columna Derecha: Feed de Actividad
                 with Vertical(id="feed_panel", classes="launcher_panel"):
                     yield Label("📡  TRÁFICO DE RED", classes="panel_title")
                     for i in range(12): 
                         yield Label("", id=f"feed_{i}", classes="feed_item")
 
-            # ── FOOTER: Módulos ──
+            # ── FOOTER ──
             with Horizontal(id="modules_bar"):
                 yield Button("[1] Biblioteca", id="btn_lib", variant="primary")
                 yield Button("[2] Videoclub", id="btn_movie", variant="primary")
@@ -401,21 +409,47 @@ class BunkerLauncherScreen(Screen):
                 yield Button("Salir", id="btn_quit", variant="error")
 
     def on_mount(self) -> None:
+        self.tick_clock()
+        self.set_interval(1.0, self.tick_clock) # Animación 1: Latido del reloj cada segundo
+        
         self.fetch_dashboard()
-        # Polling: Consulta la BD cada 30 segundos en segundo plano
-        self.set_interval(30, self.fetch_dashboard)
+        self.set_interval(15.0, self.fetch_dashboard) # Animación 2: Refresco de BD cada 15s
+
+    def tick_clock(self) -> None:
+        """Genera el Reloj ASCII en vivo reutilizando el diccionario de la Posada."""
+        now = datetime.now()
+        time_str = now.strftime("%H:%M:%S")
+        lines = ["", "", "", "", ""]
+        
+        for char in time_str:
+            if char == ':':
+                pattern = ["   ", " █ ", "   ", " █ ", "   "]
+            else:
+                pattern = ASCII_NUMS.get(char, ["   "] * 5)
+            for i in range(5):
+                lines[i] += pattern[i] + " "
+                
+        try:
+            self.query_one("#ascii_clock", Label).update("\n".join(lines))
+        except Exception:
+            pass
 
     @work(thread=True)
     def fetch_dashboard(self) -> None:
+        """Carga los datos en segundo plano y actualiza la variable reactiva."""
         try:
             from .constants import API_DASHBOARD
             resp = httpx.get(API_DASHBOARD, timeout=5.0)
             if resp.status_code == 200:
-                self.app.call_from_thread(self.render_dashboard, resp.json())
+                # Modificar el reactivo (debe hacerse en el hilo principal de la UI)
+                self.app.call_from_thread(self.update_reactive_data, resp.json())
             else:
                 self.app.call_from_thread(self.update_status, "SISTEMA: [yellow]API NO ENCONTRADA[/yellow]")
         except Exception:
             self.app.call_from_thread(self.update_status, "SISTEMA: [red]OFFLINE (ESPERANDO BACKEND)[/red]")
+
+    def update_reactive_data(self, data: dict) -> None:
+        self.dashboard_data = data # ¡Esto dispara watch_dashboard_data automáticamente!
 
     def update_status(self, text: str) -> None:
         try:
@@ -423,8 +457,11 @@ class BunkerLauncherScreen(Screen):
         except Exception:
             pass
 
-    def render_dashboard(self, data: dict) -> None:
-        """Renderiza los datos en vivo protegiendo contra nulos para evitar crasheos silenciosos."""
+    # ── MÁGIA DE TEXTUAL: Se ejecuta solo si dashboard_data cambia ──
+    def watch_dashboard_data(self, data: dict) -> None:
+        """Reactividad Pura: Anima las barras y actualiza labels cuando llegan datos nuevos."""
+        if not data: return
+        
         try:
             self.update_status("[blink]🔴 EN VIVO[/blink] │ SISTEMA: [bold green]ONLINE[/bold green] │ NÚCLEO: [bold green]ESTABLE[/bold green]")
 
@@ -438,7 +475,7 @@ class BunkerLauncherScreen(Screen):
             self.query_one("#prestige_label", Label).update(f"⚜️  GREMIO Nv. {lvl} — Prestigio: {pres}/{meta}")
             bar = self.query_one("#prestige_bar", ProgressBar)
             bar.total = max(meta, 1)
-            bar.progress = min(pres, meta)
+            bar.progress = min(pres, meta) # Textual anima automáticamente este cambio
 
             # ── POSADA ──
             dw_min = posada.get("dw_minutes_today") or 0
