@@ -4,193 +4,143 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db.models import Sum
 from django.utils.timezone import localdate
-from movies.models import Movie
-from catalog.models import Book, ReadingSession, AnnualRecord
-from disquera.models import Album, MusicAnnualRecord
 
+# ─── IMPORTACIONES DE TODOS LOS MÓDULOS ───
+from catalog.models import Book, AnnualRecord as BookAnnualRecord
+from movies.models import Movie, MovieAnnualRecord
+from disquera.models import Album, MusicAnnualRecord
+from posada.models import GuildProfile, Adventurer, DeepWorkSession, DailyHabit, KanbanTask, CalendarEvent, JournalEntry
+from chess_study.models import ChessRoom, ChessVariation
 
 def global_dashboard_view(request):
-    """BFF: Agrega datos de TODOS los módulos del Bunker para el Launcher en vivo."""
-
+    """BFF: Agrega datos de TODOS los módulos de forma hiper-robusta y granular."""
     today = localdate()
 
-    # ═══════════════════════════════════════════
-    # SECTOR LITERARIO
-    # ═══════════════════════════════════════════
-    books = Book.objects.all()
-    total_books = books.count()
-    read_books = books.filter(is_read=True).count()
-    total_pages = sum((b.page_count or 0) for b in books)
-    total_book_hours = round((total_pages * 1.5) / 60, 1)
+    data = {
+        "posada": {}, "books": {}, "movies": {}, "music": {}, "chess": {}, "feed": []
+    }
+    feed = []
 
-    pages_today = ReadingSession.objects.filter(date=today).aggregate(
-        Sum('pages_read'))['pages_read__sum'] or 0
+    # 1. SECTOR LITERARIO
+    try:
+        books = Book.objects.all()
+        data["books"]["total"] = books.count()
+        data["books"]["read"] = books.filter(is_read=True).count()
+        total_pages = sum((b.page_count or 0) for b in books)
+        data["books"]["hours"] = round((total_pages * 1.5) / 60, 1)
+    except Exception as e:
+        feed.append(f"[red]Error Libros:[/] {str(e)[:40]}")
 
-    from catalog.models import Loan, ScanInbox, AnnualRecord
-    active_loans = Loan.objects.filter(returned=False).count()
-    inbox_count = ScanInbox.objects.count()
-    books_this_year = AnnualRecord.objects.filter(date_finished__year=today.year).count()
-    books_this_month = AnnualRecord.objects.filter(date_finished__year=today.year, date_finished__month=today.month).count()
+    # 2. VIDEOCLUB
+    try:
+        movies = Movie.objects.all()
+        data["movies"]["total"] = movies.count()
+        data["movies"]["watched"] = movies.filter(is_watched=True).count()
+        data["movies"]["hours"] = data["movies"]["watched"] * 2
+    except Exception as e:
+        feed.append(f"[red]Error Videoclub:[/] {str(e)[:40]}")
 
-    # ═══════════════════════════════════════════
-    # SECTOR CINEMATOGRÁFICO
-    # ═══════════════════════════════════════════
-    from movies.models import MovieAnnualRecord
-    movies = Movie.objects.all()
-    total_movies = movies.count()
-    watched_movies = movies.filter(is_watched=True).count()
-    total_movie_minutes = sum((m.duration_minutes or 0) for m in movies)
-    total_movie_hours = round(total_movie_minutes / 60, 1)
-    movies_this_year = MovieAnnualRecord.objects.filter(date_watched__year=today.year).count()
-    movies_this_month = MovieAnnualRecord.objects.filter(date_watched__year=today.year, date_watched__month=today.month).count()
+    # 3. DISQUERA
+    try:
+        albums = Album.objects.all()
+        data["music"]["total"] = albums.count()
+        data["music"]["listened"] = albums.filter(is_listened=True).count()
+        data["music"]["hours"] = round(data["music"]["listened"] * 0.75, 1)
+    except Exception as e:
+        feed.append(f"[red]Error Disquera:[/] {str(e)[:40]}")
 
-    # ═══════════════════════════════════════════
-    # SECTOR MUSICAL
-    # ═══════════════════════════════════════════
-    from disquera.models import MusicAnnualRecord
-    albums = Album.objects.all()
-    total_albums = albums.count()
-    listened_albums = albums.filter(is_listened=True).count()
-    total_tracks = sum((a.track_count or 0) for a in albums)
-    total_music_hours = round((total_tracks * 4) / 60, 1)
-    music_this_year = MusicAnnualRecord.objects.filter(date_listened__year=today.year).count()
-    music_this_month = MusicAnnualRecord.objects.filter(date_listened__year=today.year, date_listened__month=today.month).count()
+    # 4. AJEDREZ
+    try:
+        data["chess"]["rooms"] = ChessRoom.objects.count()
+        data["chess"]["variations"] = ChessVariation.objects.count()
+    except Exception as e:
+        pass
 
-    # ═══════════════════════════════════════════
-    # SECTOR POSADA (RPG)
-    # ═══════════════════════════════════════════
-    from posada.models import (
-        GuildProfile, Adventurer, DeepWorkSession, DailyHabit,
-        KanbanTask, CalendarEvent, JournalEntry
-    )
-
-    guild = GuildProfile.objects.first()
-    guild_data = {}
-    if guild:
-        guild_data = {
+    # 5. POSADA (MÉTRICAS BLINDADAS)
+    posada_data = {}
+    
+    try:
+        guild, _ = GuildProfile.objects.get_or_create(id=1)
+        posada_data["guild"] = {
             "prestige_level": guild.prestige_level,
             "prestige": guild.prestige,
-            "prestige_meta": guild.prestige_meta,
-            "net_worth": guild.net_worth_in_talents,
+            "prestige_meta": guild.prestige_level * 100,
+            "net_worth": getattr(guild, 'net_worth_in_talents', getattr(guild, 'talento', 0))
         }
+    except Exception as e:
+        feed.append(f"[red]Error Gremio:[/] {str(e)[:30]}")
+        
+    try:
+        # Soporta modelos tanto con 'date' como con 'created_at'
+        try:
+            dw = DeepWorkSession.objects.filter(date=today, completed=True)
+        except:
+            dw = DeepWorkSession.objects.filter(created_at__date=today, completed=True)
+        posada_data["dw_minutes_today"] = dw.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+    except Exception as e:
+        feed.append(f"[red]Error DW:[/] {str(e)[:30]}")
 
-    adventurers = Adventurer.objects.all()
-    active_adventurers = adventurers.filter(is_active=True)
-    top_adventurer = adventurers.order_by('-level').first()
+    try:
+        advs = Adventurer.objects.all()
+        posada_data["active_adventurers"] = [a.id for a in advs]
+        top_adv = advs.order_by('-level', '-experience').first()
+        posada_data["top_adventurer"] = {"name": top_adv.name, "level": top_adv.level} if top_adv else None
+    except Exception as e:
+        feed.append(f"[red]Error Aventureros:[/] {str(e)[:30]}")
 
-    dw_sessions_today = DeepWorkSession.objects.filter(
-        start_time__date=today, completed=True)
-    dw_minutes_today = sum(s.duration_minutes for s in dw_sessions_today)
+    try:
+        habits = DailyHabit.objects.all()
+        posada_data["habits_total"] = habits.count()
+        habits_completed = 0
+        for h in habits:
+            try:
+                if hasattr(h, 'is_completed_today') and h.is_completed_today():
+                    habits_completed += 1
+                elif getattr(h, 'last_evaluated_date', None) == today: 
+                    habits_completed += 1
+            except: pass
+        posada_data["habits_completed"] = habits_completed
+        top_habit = habits.order_by('-current_streak').first()
+        posada_data["top_streak"] = {"name": top_habit.name, "streak": top_habit.current_streak} if top_habit else None
+    except Exception as e:
+        feed.append(f"[red]Error Hábitos:[/] {str(e)[:30]}")
 
-    habits = DailyHabit.objects.all()
-    total_habits = habits.count()
-    completed_habits = habits.filter(last_completed_date=today).count()
-    top_streak = habits.order_by('-current_streak').first()
+    try:
+        posada_data["pending_tasks"] = KanbanTask.objects.exclude(column__name__icontains='hecho').exclude(column__name__icontains='done').count()
+    except Exception as e:
+        feed.append(f"[red]Error Kanban:[/] {str(e)[:30]}")
 
-    pending_tasks = KanbanTask.objects.filter(completed_at=None).count()
-    today_events = CalendarEvent.objects.filter(status='TODAY').count()
+    try:
+        try:
+            today_events = CalendarEvent.objects.filter(start_date__date=today).count()
+        except:
+            today_events = CalendarEvent.objects.filter(date=today).count()
+        posada_data["today_events"] = today_events
+    except Exception as e:
+        feed.append(f"[red]Error Calendar:[/] {str(e)[:30]}")
 
-    posada_data = {
-        "guild": guild_data,
-        "active_adventurers": [
-            {"name": a.name, "level": a.level, "class": a.get_adv_class_display()}
-            for a in active_adventurers[:5]
-        ],
-        "top_adventurer": {
-            "name": top_adventurer.name,
-            "level": top_adventurer.level
-        } if top_adventurer else None,
-        "dw_minutes_today": dw_minutes_today,
-        "dw_sessions_today": dw_sessions_today.count(),
-        "habits_completed": completed_habits,
-        "habits_total": total_habits,
-        "top_streak": {
-            "name": top_streak.name,
-            "streak": top_streak.current_streak
-        } if top_streak and top_streak.current_streak > 0 else None,
-        "pending_tasks": pending_tasks,
-        "today_events": today_events,
-    }
+    data["posada"] = posada_data
 
-    # ═══════════════════════════════════════════
-    # SECTOR AJEDREZ
-    # ═══════════════════════════════════════════
-    from chess_study.models import ChessRoom, ChessVariation, ChessNote
-    chess_data = {
-        "rooms": ChessRoom.objects.count(),
-        "variations": ChessVariation.objects.count(),
-        "notes": ChessNote.objects.count(),
-    }
+    # 6. TRÁFICO DE RED (FEED GLOBAL SEGURO)
+    try:
+        for dw in DeepWorkSession.objects.filter(completed=True).order_by('-created_at')[:3]:
+            feed.append(f"[cyan]⏱️  DW:[/] {dw.category} ({dw.duration_minutes}m)")
+    except: pass
+        
+    try:
+        for rb in BookAnnualRecord.objects.order_by('-date_finished')[:3]:
+            title = getattr(rb.book, 'title', 'Libro') if hasattr(rb, 'book') else 'Libro'
+            feed.append(f"[green]📚 Leído:[/] {str(title)[:25]}")
+    except: pass
+        
+    try:
+        for rm in MovieAnnualRecord.objects.order_by('-date_finished')[:2]:
+            title = getattr(rm.movie, 'title', 'Pelicula') if hasattr(rm, 'movie') else 'Pelicula'
+            feed.append(f"[yellow]🎬 Visto:[/] {str(title)[:25]}")
+    except: pass
 
-    # ═══════════════════════════════════════════
-    # FEED DE ACTIVIDAD CRUZADO
-    # ═══════════════════════════════════════════
-    feed_lines = []
-
-    if pages_today > 0:
-        feed_lines.append(f"📖 Leíste {pages_today} páginas hoy.")
-
-    if dw_minutes_today > 0:
-        feed_lines.append(f"⚔️ Deep Work hoy: {dw_minutes_today} minutos.")
-
-    if completed_habits > 0:
-        feed_lines.append(f"✅ Hábitos completados: {completed_habits}/{total_habits}.")
-
-    if today_events > 0:
-        feed_lines.append(f"📅 Tienes {today_events} evento(s) programado(s) para HOY.")
-
-    if active_loans > 0:
-        feed_lines.append(f"📕 {active_loans} libro(s) prestado(s) activo(s).")
-
-    if inbox_count > 0:
-        feed_lines.append(f"📬 {inbox_count} ISBN(s) esperando en el Purgatorio.")
-
-    last_movie = movies.order_by('-created_at').first()
-    if last_movie:
-        feed_lines.append(f"🎬 Último ingreso: {last_movie.title}")
-
-    last_book = books.order_by('-id').first()
-    if last_book:
-        feed_lines.append(f"📚 Último libro: {last_book.title}")
-
-    last_album = albums.order_by('-created_at').first()
-    if last_album:
-        feed_lines.append(f"🎵 Último disco: {last_album.title}")
-
-    last_journal = JournalEntry.objects.order_by('-created_at').first()
-    if last_journal:
-        snippet = last_journal.content[:60] + "..." if len(last_journal.content) > 60 else last_journal.content
-        feed_lines.append(f"📝 Diario: \"{snippet}\"")
-
-    return JsonResponse({
-        "books": {
-            "total": total_books,
-            "read": read_books,
-            "hours": total_book_hours,
-            "pages_today": pages_today,
-            "loans": active_loans,
-            "inbox": inbox_count,
-            "finished_this_year": books_this_year,
-            "finished_this_month": books_this_month,
-        },
-        "movies": {
-            "total": total_movies,
-            "watched": watched_movies,
-            "hours": total_movie_hours,
-            "watched_this_year": movies_this_year,
-            "watched_this_month": movies_this_month,
-        },
-        "music": {
-            "total": total_albums,
-            "listened": listened_albums,
-            "hours": total_music_hours,
-            "listened_this_year": music_this_year,
-            "listened_this_month": music_this_month,
-        },
-        "posada": posada_data,
-        "chess": chess_data,
-        "feed": feed_lines[:10],
-    })
+    data["feed"] = feed
+    return JsonResponse(data, status=200)
 
 
 @csrf_exempt

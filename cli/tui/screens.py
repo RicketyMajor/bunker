@@ -256,7 +256,9 @@ class BunkerLauncherScreen(Screen):
         width: 100%;
         height: 100%;
         background: $surface;
-        padding: 1;
+        padding: 1 2;
+        /* Permitir scroll salva la interfaz en terminales pequeñas */
+        overflow-y: auto; 
     }
 
     /* ── HEADER ── */
@@ -276,29 +278,31 @@ class BunkerLauncherScreen(Screen):
         border: tall $warning; 
         background: $surface-darken-1; 
         padding: 0 1; 
+        height: auto;
     }
     #prestige_label { text-style: bold; color: $warning; text-align: center; width: 100%; }
     #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; margin-top: 1; }
     ProgressBar { margin: 0; }
 
-    /* ── BODY (Grid Rígido) ── */
+    /* ── BODY (Flexbox Horizontal en vez de Grid) ── */
     #body_row { 
-        height: 1fr; /* Ocupa todo el espacio restante automáticamente */
-        layout: grid;
-        grid-size: 3;
-        grid-columns: 1fr 1fr 1.2fr;
-        grid-gutter: 1 2;
+        height: auto; 
+        min-height: 16;
+        margin-bottom: 1;
+        layout: horizontal;
     }
     
     .launcher_panel {
+        width: 1fr; /* Reparte el ancho equitativamente */
         height: 100%;
         border: round $primary;
         background: $surface-darken-1;
         padding: 0 1;
+        margin: 0 1;
     }
     
     #posada_panel { border: round #8a2be2; }
-    #feed_panel { border: round $accent; }
+    #feed_panel { border: round $accent; width: 1.2fr; } /* El feed es ligeramente más ancho */
     
     .panel_title { 
         text-style: bold; 
@@ -319,7 +323,7 @@ class BunkerLauncherScreen(Screen):
 
     /* ── FOOTER ── */
     #modules_bar {
-        height: 3;
+        height: auto;
         margin-top: 1;
         align: center middle;
         layout: horizontal;
@@ -328,7 +332,8 @@ class BunkerLauncherScreen(Screen):
     """
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="launcher_root"):
+        # Hacemos que toda la pantalla tenga scroll si es necesario
+        with VerticalScroll(id="launcher_root"):
             
             # ── HEADER: Logo + Prestigio ──
             with Horizontal(id="header_row"):
@@ -344,10 +349,10 @@ class BunkerLauncherScreen(Screen):
                 )
                 with Vertical(id="prestige_panel"):
                     yield Label("⚜️  GREMIO Nv. -- — Prestigio: --/--", id="prestige_label")
-                    yield ProgressBar(id="prestige_bar", show_eta=False) # <- CORREGIDO
+                    yield ProgressBar(id="prestige_bar", show_eta=False, total=100)
                     yield Label("SISTEMA: ESPERANDO TELEMETRÍA...", id="prestige_bar_label")
 
-            # ── BODY: 3 Columnas en Grid ──
+            # ── BODY: 3 Columnas Horizontal ──
             with Horizontal(id="body_row"):
 
                 # Columna Izquierda: Estado de la Posada
@@ -368,21 +373,21 @@ class BunkerLauncherScreen(Screen):
                     yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
 
                     yield Label("📚 BIBLIOTECA", classes="collection_title", id="lib_title")
-                    yield ProgressBar(id="bar_books", show_eta=False) # <- CORREGIDO
+                    yield ProgressBar(id="bar_books", show_eta=False, total=100)
                     yield Label("--/-- leídos • --h est.", id="stat_books", classes="collection_stat")
 
                     yield Label("🎬 VIDEOCLUB", classes="collection_title", id="mov_title")
-                    yield ProgressBar(id="bar_movies", show_eta=False) # <- CORREGIDO
+                    yield ProgressBar(id="bar_movies", show_eta=False, total=100)
                     yield Label("--/-- vistas • --h", id="stat_movies", classes="collection_stat")
 
                     yield Label("🎵 DISQUERA", classes="collection_title", id="mus_title")
-                    yield ProgressBar(id="bar_music", show_eta=False) # <- CORREGIDO
-                    yield Label("--/-- escuchados • --h", id="stat_music", classes="collection_stat")
+                    yield ProgressBar(id="bar_music", show_eta=False, total=100)
+                    yield Label("--/-- escuch. • --h", id="stat_music", classes="collection_stat")
 
-                # Columna Derecha: Feed de Actividad (El único con Scroll interno)
-                with VerticalScroll(id="feed_panel", classes="launcher_panel"):
+                # Columna Derecha: Feed de Actividad
+                with Vertical(id="feed_panel", classes="launcher_panel"):
                     yield Label("📡  TRÁFICO DE RED", classes="panel_title")
-                    for i in range(15): 
+                    for i in range(12): 
                         yield Label("", id=f"feed_{i}", classes="feed_item")
 
             # ── FOOTER: Módulos ──
@@ -397,12 +402,11 @@ class BunkerLauncherScreen(Screen):
 
     def on_mount(self) -> None:
         self.fetch_dashboard()
-        # En la fase 3 ajustaremos el temporizador de polling
+        # Polling: Consulta la BD cada 30 segundos en segundo plano
         self.set_interval(30, self.fetch_dashboard)
 
     @work(thread=True)
     def fetch_dashboard(self) -> None:
-        """Función temporal para la Fase 1. Previene bloqueos si la API no existe."""
         try:
             from .constants import API_DASHBOARD
             resp = httpx.get(API_DASHBOARD, timeout=5.0)
@@ -420,9 +424,85 @@ class BunkerLauncherScreen(Screen):
             pass
 
     def render_dashboard(self, data: dict) -> None:
-        """Lógica de renderizado que completaremos en la Fase 3."""
-        self.update_status("[blink]🔴 EN VIVO[/blink] │ SISTEMA: [green]ONLINE[/green] │ NÚCLEO: [green]ESTABLE[/green]")
-        pass
+        """Renderiza los datos en vivo protegiendo contra nulos para evitar crasheos silenciosos."""
+        try:
+            self.update_status("[blink]🔴 EN VIVO[/blink] │ SISTEMA: [bold green]ONLINE[/bold green] │ NÚCLEO: [bold green]ESTABLE[/bold green]")
+
+            # ── PRESTIGIO ──
+            posada = data.get("posada") or {}
+            guild = posada.get("guild") or {}
+            lvl = guild.get("prestige_level", 1)
+            pres = guild.get("prestige", 0)
+            meta = guild.get("prestige_meta", 100)
+            
+            self.query_one("#prestige_label", Label).update(f"⚜️  GREMIO Nv. {lvl} — Prestigio: {pres}/{meta}")
+            bar = self.query_one("#prestige_bar", ProgressBar)
+            bar.total = max(meta, 1)
+            bar.progress = min(pres, meta)
+
+            # ── POSADA ──
+            dw_min = posada.get("dw_minutes_today") or 0
+            dw_color = "green" if dw_min > 0 else "dim"
+            self.query_one("#metric_dw", Label).update(f"⏱️  DW Hoy: [{dw_color}]{dw_min} min[/]")
+
+            advs = posada.get("active_adventurers") or []
+            self.query_one("#metric_advs", Label).update(f"👥 Aventureros: [bold]{len(advs)}[/] activos")
+
+            top = posada.get("top_adventurer") or {}
+            top_name = top.get("name", "Nadie")
+            top_lvl = top.get("level", 0)
+            self.query_one("#metric_leader", Label).update(f"🏆 Líder: [bold cyan]{top_name}[/] (Nv.{top_lvl})")
+
+            nw = guild.get("net_worth") or 0
+            self.query_one("#metric_wealth", Label).update(f"💰 Patrimonio: [bold yellow]{nw}[/] Talentos")
+
+            hc = posada.get("habits_completed") or 0
+            ht = posada.get("habits_total") or 0
+            h_color = "green" if hc == ht and ht > 0 else "yellow" if hc > 0 else "dim"
+            self.query_one("#metric_habits", Label).update(f"✅ Hábitos: [{h_color}]{hc}/{ht}[/]")
+
+            streak = posada.get("top_streak") or {}
+            str_name = streak.get("name", "Ninguna")
+            str_val = streak.get("streak", 0)
+            self.query_one("#metric_streak", Label).update(f"🔥 Racha: [bold]{str_name}[/] ({str_val}d)")
+
+            pt = posada.get("pending_tasks") or 0
+            self.query_one("#metric_kanban", Label).update(f"📋 Kanban: [bold]{pt}[/] pendientes")
+
+            te = posada.get("today_events") or 0
+            cal_color = "bold magenta" if te > 0 else "dim"
+            self.query_one("#metric_calendar", Label).update(f"📅 Calendar: [{cal_color}]{te} hoy[/]")
+
+            # ── COLECCIONES ──
+            b = data.get("books") or {}
+            bar_books = self.query_one("#bar_books", ProgressBar)
+            bar_books.total = max(b.get("total", 1), 1)
+            bar_books.progress = b.get("read", 0)
+            self.query_one("#stat_books", Label).update(f"{b.get('read', 0)}/{b.get('total', 0)} leídos • {b.get('hours', 0)}h est.")
+
+            m = data.get("movies") or {}
+            bar_movies = self.query_one("#bar_movies", ProgressBar)
+            bar_movies.total = max(m.get("total", 1), 1)
+            bar_movies.progress = m.get("watched", 0)
+            self.query_one("#stat_movies", Label).update(f"{m.get('watched', 0)}/{m.get('total', 0)} vistas • {m.get('hours', 0)}h")
+
+            mu = data.get("music") or {}
+            bar_music = self.query_one("#bar_music", ProgressBar)
+            bar_music.total = max(mu.get("total", 1), 1)
+            bar_music.progress = mu.get("listened", 0)
+            self.query_one("#stat_music", Label).update(f"{mu.get('listened', 0)}/{mu.get('total', 0)} escuch. • {mu.get('hours', 0)}h")
+
+            # ── FEED DE ACTIVIDAD ──
+            feed = data.get("feed") or []
+            for i in range(12):
+                lbl = self.query_one(f"#feed_{i}", Label)
+                if i < len(feed):
+                    lbl.update(feed[i])
+                else:
+                    lbl.update("")
+
+        except Exception as e:
+            self.update_status(f"[blink]🔴 ERROR INTERNO UI[/blink] │ {str(e)[:40]}")
 
     # ── NAVEGACIÓN Y ACCIONES DE BOTONES ──
     def on_button_pressed(self, event: Button.Pressed) -> None:
