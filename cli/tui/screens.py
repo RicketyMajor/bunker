@@ -240,7 +240,7 @@ class BunkerDashboardScreen(Screen):
 
 
 class BunkerLauncherScreen(Screen):
-    """Centro de Mando en Vivo — Dashboard principal del Bunker."""
+    """Centro de Mando en Vivo — Dashboard principal del Bunker (Estilo Abtop)."""
 
     BINDINGS = [
         ("1", "launch_lib", "Biblioteca"),
@@ -253,29 +253,37 @@ class BunkerLauncherScreen(Screen):
 
     CSS = """
     #launcher_root {
-        background: $surface-darken-2;
-        align: center middle;
-        overflow-y: auto;
-    }
-
-    #main_container {
         width: 100%;
-        max-width: 140;
-        height: auto;
-        padding: 1 2;
+        height: 100%;
+        background: $surface;
+        padding: 1;
     }
 
     /* ── HEADER ── */
-    #header_row { height: auto; margin-bottom: 1; align: center middle; }
-    #logo_compact { width: 1fr; color: $success; text-style: bold; content-align: center middle; }
-    #prestige_panel { width: 40; border: heavy $warning; padding: 0 1; content-align: center middle; background: $surface; }
+    #header_row { 
+        height: auto;
+        margin-bottom: 1; 
+        layout: horizontal;
+    }
+    #logo_compact { 
+        width: 1fr; 
+        color: $success; 
+        text-style: bold; 
+        content-align: left middle; 
+    }
+    #prestige_panel { 
+        width: 45; 
+        border: tall $warning; 
+        background: $surface-darken-1; 
+        padding: 0 1; 
+    }
     #prestige_label { text-style: bold; color: $warning; text-align: center; width: 100%; }
-    #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; }
+    #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; margin-top: 1; }
     ProgressBar { margin: 0; }
 
-    /* ── BODY ── */
+    /* ── BODY (Grid Rígido) ── */
     #body_row { 
-        height: auto; 
+        height: 1fr; /* Ocupa todo el espacio restante automáticamente */
         layout: grid;
         grid-size: 3;
         grid-columns: 1fr 1fr 1.2fr;
@@ -283,120 +291,127 @@ class BunkerLauncherScreen(Screen):
     }
     
     .launcher_panel {
-        height: auto;
+        height: 100%;
         border: round $primary;
+        background: $surface-darken-1;
         padding: 0 1;
-        background: $surface;
     }
     
     #posada_panel { border: round #8a2be2; }
     #feed_panel { border: round $accent; }
     
-    .panel_title { text-style: bold; color: $accent; text-align: center; width: 100%; margin-bottom: 1; border-bottom: solid $primary; }
+    .panel_title { 
+        text-style: bold; 
+        color: $accent; 
+        text-align: center; 
+        width: 100%; 
+        margin-bottom: 1; 
+        border-bottom: solid $primary; 
+    }
+    
     .metric_line { height: 1; color: $text; }
     
     .collection_title { text-style: bold; margin-top: 1; }
     .collection_stat { color: $text-muted; }
     .collection_live { color: $success; text-style: bold; }
     
-    .feed_item { height: 1; color: $text; }
+    .feed_item { margin-bottom: 1; color: $text; }
 
     /* ── FOOTER ── */
     #modules_bar {
-        height: auto;
+        height: 3;
         margin-top: 1;
-        border: heavy $primary;
-        background: $surface;
         align: center middle;
-        padding: 1;
+        layout: horizontal;
     }
-    #modules_bar Button { margin: 0 1; }
+    #modules_bar Button { margin: 0 1; min-width: 12; }
     """
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="launcher_root"):
-            with Vertical(id="main_container"):
-                # ── HEADER: Logo + Prestigio ──
-                with Horizontal(id="header_row"):
-                    yield Label(
-                        "██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗ \n"
-                        "██████╔╝██║   ██║██╔██╗ ██║█████╔╝ █████╗  ██████╔╝\n"
-                        "╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝\n"
-                        "[dim]Centro de Operaciones y Control Estratégico[/dim]",
-                        id="logo_compact"
-                    )
-                    with Vertical(id="prestige_panel"):
-                        yield Label("⚜️  GREMIO Nv. ? — Prestigio: ?/?", id="prestige_label")
-                        yield ProgressBar(id="prestige_bar", show_eta=False)
-                        yield Label("SISTEMA: CONECTANDO...", id="prestige_bar_label")
+        with Vertical(id="launcher_root"):
+            
+            # ── HEADER: Logo + Prestigio ──
+            with Horizontal(id="header_row"):
+                yield Label(
+                    "██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗ \n"
+                    "██╔══██╗██║   ██║████╗  ██║██║ ██╔╝██╔════╝██╔══██╗\n"
+                    "██████╔╝██║   ██║██╔██╗ ██║█████╔╝ █████╗  ██████╔╝\n"
+                    "██╔══██╗██║   ██║██║╚██╗██║██╔═██╗ ██╔══╝  ██╔══██╗\n"
+                    "██████╔╝╚██████╔╝██║ ╚████║██║  ██╗███████╗██║  ██║\n"
+                    "╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝\n"
+                    "[dim]Centro de Operaciones y Control Estratégico[/dim]",
+                    id="logo_compact"
+                )
+                with Vertical(id="prestige_panel"):
+                    yield Label("⚜️  GREMIO Nv. -- — Prestigio: --/--", id="prestige_label")
+                    yield ProgressBar(id="prestige_bar", show_eta=False) # <- CORREGIDO
+                    yield Label("SISTEMA: ESPERANDO TELEMETRÍA...", id="prestige_bar_label")
 
-                # ── BODY: 3 Columnas en Grid ──
-                with Horizontal(id="body_row"):
+            # ── BODY: 3 Columnas en Grid ──
+            with Horizontal(id="body_row"):
 
-                    # Columna Izquierda: Estado de la Posada
-                    with Vertical(id="posada_panel", classes="launcher_panel"):
-                        yield Label("⚔️  ESTADO DE LA POSADA", classes="panel_title")
-                        yield Label("⏱️  DW Hoy: —", id="metric_dw", classes="metric_line")
-                        yield Label("👥 Aventureros: —", id="metric_advs", classes="metric_line")
-                        yield Label("🏆 Líder: —", id="metric_leader", classes="metric_line")
-                        yield Label("💰 Patrimonio: —", id="metric_wealth", classes="metric_line")
-                        yield Label("", id="metric_sep1", classes="metric_line")
-                        yield Label("✅ Hábitos: —", id="metric_habits", classes="metric_line")
-                        yield Label("🔥 Racha: —", id="metric_streak", classes="metric_line")
-                        yield Label("📋 Kanban: —", id="metric_kanban", classes="metric_line")
-                        yield Label("📅 Calendar: —", id="metric_calendar", classes="metric_line")
+                # Columna Izquierda: Estado de la Posada
+                with Vertical(id="posada_panel", classes="launcher_panel"):
+                    yield Label("⚔️  MÉTRICAS DEL SISTEMA", classes="panel_title")
+                    yield Label("⏱️  DW Hoy: [dim]-- min[/]", id="metric_dw", classes="metric_line")
+                    yield Label("👥 Aventureros: [dim]-- activos[/]", id="metric_advs", classes="metric_line")
+                    yield Label("🏆 Líder: [dim]--[/]", id="metric_leader", classes="metric_line")
+                    yield Label("💰 Patrimonio: [dim]-- Talentos[/]", id="metric_wealth", classes="metric_line")
+                    yield Label("", id="metric_sep1", classes="metric_line")
+                    yield Label("✅ Hábitos: [dim]--/--[/]", id="metric_habits", classes="metric_line")
+                    yield Label("🔥 Racha: [dim]--[/]", id="metric_streak", classes="metric_line")
+                    yield Label("📋 Kanban: [dim]-- pendientes[/]", id="metric_kanban", classes="metric_line")
+                    yield Label("📅 Calendar: [dim]-- eventos hoy[/]", id="metric_calendar", classes="metric_line")
 
-                    # Columna Central: Barras de Colección
-                    with Vertical(id="collections_panel", classes="launcher_panel"):
-                        yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
+                # Columna Central: Barras de Colección
+                with Vertical(id="collections_panel", classes="launcher_panel"):
+                    yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
 
-                        yield Label("📚 BIBLIOTECA", classes="collection_title", id="lib_title")
-                        yield ProgressBar(id="bar_books", show_eta=False)
-                        yield Label("Calculando...", id="stat_books", classes="collection_stat")
-                        yield Label("...", id="live_books", classes="collection_live")
+                    yield Label("📚 BIBLIOTECA", classes="collection_title", id="lib_title")
+                    yield ProgressBar(id="bar_books", show_eta=False) # <- CORREGIDO
+                    yield Label("--/-- leídos • --h est.", id="stat_books", classes="collection_stat")
 
-                        yield Label("🎬 VIDEOCLUB", classes="collection_title", id="mov_title")
-                        yield ProgressBar(id="bar_movies", show_eta=False)
-                        yield Label("Calculando...", id="stat_movies", classes="collection_stat")
-                        yield Label("...", id="live_movies", classes="collection_live")
+                    yield Label("🎬 VIDEOCLUB", classes="collection_title", id="mov_title")
+                    yield ProgressBar(id="bar_movies", show_eta=False) # <- CORREGIDO
+                    yield Label("--/-- vistas • --h", id="stat_movies", classes="collection_stat")
 
-                        yield Label("🎵 DISQUERA", classes="collection_title", id="mus_title")
-                        yield ProgressBar(id="bar_music", show_eta=False)
-                        yield Label("Calculando...", id="stat_music", classes="collection_stat")
-                        yield Label("...", id="live_music", classes="collection_live")
+                    yield Label("🎵 DISQUERA", classes="collection_title", id="mus_title")
+                    yield ProgressBar(id="bar_music", show_eta=False) # <- CORREGIDO
+                    yield Label("--/-- escuchados • --h", id="stat_music", classes="collection_stat")
 
-                        yield Label("♟️  AJEDREZ", classes="collection_title", id="chess_title")
-                        yield Label("Calculando...", id="stat_chess", classes="collection_stat")
+                # Columna Derecha: Feed de Actividad (El único con Scroll interno)
+                with VerticalScroll(id="feed_panel", classes="launcher_panel"):
+                    yield Label("📡  TRÁFICO DE RED", classes="panel_title")
+                    for i in range(15): 
+                        yield Label("", id=f"feed_{i}", classes="feed_item")
 
-                    # Columna Derecha: Feed de Actividad
-                    with Vertical(id="feed_panel", classes="launcher_panel"):
-                        yield Label("📡  ACTIVIDAD EN VIVO", classes="panel_title")
-                        for i in range(12):
-                            yield Label("", id=f"feed_{i}", classes="feed_item")
-
-                # ── FOOTER: Módulos ──
-                with Horizontal(id="modules_bar"):
-                    yield Button("[1] Biblioteca", id="btn_lib", variant="primary")
-                    yield Button("[2] Videoclub", id="btn_movie", variant="primary")
-                    yield Button("[3] Disquera", id="btn_music", variant="primary")
-                    yield Button("[4] Posada", id="btn_posada", variant="primary")
-                    yield Button("[5] Ajedrez", id="btn_chess", variant="primary")
-                    yield Button("Backup", id="btn_evac", variant="success")
-                    yield Button("Salir", id="btn_quit", variant="error")
+            # ── FOOTER: Módulos ──
+            with Horizontal(id="modules_bar"):
+                yield Button("[1] Biblioteca", id="btn_lib", variant="primary")
+                yield Button("[2] Videoclub", id="btn_movie", variant="primary")
+                yield Button("[3] Disquera", id="btn_music", variant="primary")
+                yield Button("[4] Posada", id="btn_posada", variant="primary")
+                yield Button("[5] Ajedrez", id="btn_chess", variant="primary")
+                yield Button("Backup", id="btn_evac", variant="warning")
+                yield Button("Salir", id="btn_quit", variant="error")
 
     def on_mount(self) -> None:
         self.fetch_dashboard()
+        # En la fase 3 ajustaremos el temporizador de polling
         self.set_interval(30, self.fetch_dashboard)
 
     @work(thread=True)
     def fetch_dashboard(self) -> None:
+        """Función temporal para la Fase 1. Previene bloqueos si la API no existe."""
         try:
             from .constants import API_DASHBOARD
             resp = httpx.get(API_DASHBOARD, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(self.render_dashboard, resp.json())
+            else:
+                self.app.call_from_thread(self.update_status, "SISTEMA: [yellow]API NO ENCONTRADA[/yellow]")
         except Exception:
-            self.app.call_from_thread(self.update_status, "SISTEMA: [red]OFFLINE[/red]")
+            self.app.call_from_thread(self.update_status, "SISTEMA: [red]OFFLINE (ESPERANDO BACKEND)[/red]")
 
     def update_status(self, text: str) -> None:
         try:
@@ -405,99 +420,11 @@ class BunkerLauncherScreen(Screen):
             pass
 
     def render_dashboard(self, data: dict) -> None:
-        # ── PRESTIGIO ──
-        posada = data.get("posada", {})
-        guild = posada.get("guild", {})
-        if guild:
-            lvl = guild.get("prestige_level", 1)
-            pres = guild.get("prestige", 0)
-            meta = guild.get("prestige_meta", 500)
-            self.query_one("#prestige_label", Label).update(
-                f"⚜️  GREMIO Nv. {lvl} — Prestigio: {pres}/{meta}")
-            bar = self.query_one("#prestige_bar", ProgressBar)
-            bar.total = max(meta, 1)
-            bar.progress = min(pres, meta)
+        """Lógica de renderizado que completaremos en la Fase 3."""
+        self.update_status("[blink]🔴 EN VIVO[/blink] │ SISTEMA: [green]ONLINE[/green] │ NÚCLEO: [green]ESTABLE[/green]")
+        pass
 
-        self.query_one("#prestige_bar_label", Label).update(
-            "[blink]🔴 EN VIVO[/blink] │ SISTEMA: [green]ONLINE[/green] │ NÚCLEO: [green]ESTABLE[/green]")
-
-        # ── POSADA ──
-        dw_min = posada.get("dw_minutes_today", 0)
-        dw_color = "green" if dw_min > 0 else "dim"
-        self.query_one("#metric_dw", Label).update(f"⏱️  DW Hoy: [{dw_color}]{dw_min} min[/]")
-
-        advs = posada.get("active_adventurers", [])
-        self.query_one("#metric_advs", Label).update(f"👥 Aventureros: [bold]{len(advs)}[/] activos")
-
-        top = posada.get("top_adventurer")
-        if top:
-            self.query_one("#metric_leader", Label).update(
-                f"🏆 Líder: [bold cyan]{top['name']}[/] (Nv.{top['level']})")
-
-        nw = guild.get("net_worth", 0)
-        self.query_one("#metric_wealth", Label).update(f"💰 Patrimonio: [bold yellow]{nw}[/] Talentos")
-
-        hc = posada.get("habits_completed", 0)
-        ht = posada.get("habits_total", 0)
-        h_color = "green" if hc == ht and ht > 0 else "yellow" if hc > 0 else "dim"
-        self.query_one("#metric_habits", Label).update(f"✅ Hábitos: [{h_color}]{hc}/{ht}[/]")
-
-        streak = posada.get("top_streak")
-        if streak:
-            self.query_one("#metric_streak", Label).update(
-                f"🔥 Racha: [bold]{streak['name']}[/] ({streak['streak']}d)")
-        else:
-            self.query_one("#metric_streak", Label).update("🔥 Racha: [dim]sin rachas[/]")
-
-        pt = posada.get("pending_tasks", 0)
-        self.query_one("#metric_kanban", Label).update(f"📋 Kanban: [bold]{pt}[/] pendientes")
-
-        te = posada.get("today_events", 0)
-        cal_color = "bold magenta" if te > 0 else "dim"
-        self.query_one("#metric_calendar", Label).update(f"📅 Calendar: [{cal_color}]{te} hoy[/]")
-
-        # ── COLECCIONES ──
-        b = data.get("books", {})
-        bar_books = self.query_one("#bar_books", ProgressBar)
-        bar_books.total = max(b.get("total", 1), 1)
-        bar_books.progress = b.get("read", 0)
-        self.query_one("#stat_books", Label).update(
-            f"{b.get('read', 0)}/{b.get('total', 0)} leídos • {b.get('hours', 0)}h est.")
-        self.query_one("#live_books", Label).update(
-            f"Mes: {b.get('finished_this_month', 0)} • Año: {b.get('finished_this_year', 0)}")
-
-        m = data.get("movies", {})
-        bar_movies = self.query_one("#bar_movies", ProgressBar)
-        bar_movies.total = max(m.get("total", 1), 1)
-        bar_movies.progress = m.get("watched", 0)
-        self.query_one("#stat_movies", Label).update(
-            f"{m.get('watched', 0)}/{m.get('total', 0)} vistas • {m.get('hours', 0)}h")
-        self.query_one("#live_movies", Label).update(
-            f"Mes: {m.get('watched_this_month', 0)} • Año: {m.get('watched_this_year', 0)}")
-
-        mu = data.get("music", {})
-        bar_music = self.query_one("#bar_music", ProgressBar)
-        bar_music.total = max(mu.get("total", 1), 1)
-        bar_music.progress = mu.get("listened", 0)
-        self.query_one("#stat_music", Label).update(
-            f"{mu.get('listened', 0)}/{mu.get('total', 0)} escuchados • {mu.get('hours', 0)}h")
-        self.query_one("#live_music", Label).update(
-            f"Mes: {mu.get('listened_this_month', 0)} • Año: {mu.get('listened_this_year', 0)}")
-
-        ch = data.get("chess", {})
-        self.query_one("#stat_chess", Label).update(
-            f"Partidas: {ch.get('rooms', 0)} • Variantes: {ch.get('variations', 0)}")
-
-        # ── FEED ──
-        feed = data.get("feed", [])
-        for i in range(12):
-            lbl = self.query_one(f"#feed_{i}", Label)
-            if i < len(feed):
-                lbl.update(feed[i])
-            else:
-                lbl.update("")
-
-    # ── NAVEGACIÓN ──
+    # ── NAVEGACIÓN Y ACCIONES DE BOTONES ──
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_lib":
             self.action_launch_lib()
@@ -510,19 +437,7 @@ class BunkerLauncherScreen(Screen):
         elif event.button.id == "btn_chess":
             self.action_launch_chess()
         elif event.button.id == "btn_evac":
-            def handle_evacuation(choice: str | None) -> None:
-                if choice == "backup":
-                    self.app.notify("Comprimiendo BD...", title="Evacuación")
-                    self.process_backup()
-                elif choice == "restore":
-                    def handle_restore_confirm(confirm: bool) -> None:
-                        if confirm:
-                            self.app.notify(
-                                "Descomprimiendo cápsula...", title="Restauración")
-                            self.process_restore()
-                    self.app.push_screen(ConfirmModal(
-                        "⚠️ ESTO SOBRESCRIBIRÁ TU BASE DE DATOS ACTUAL. ¿Continuar?"), handle_restore_confirm)
-            self.app.push_screen(EvacuationModal(), handle_evacuation)
+            self.app.notify("Sistema de evacuación temporalmente desactivado para mantenimiento.", severity="warning")
         elif event.button.id == "btn_quit":
             self.app.exit()
 
