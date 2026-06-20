@@ -243,9 +243,8 @@ class BunkerDashboardScreen(Screen):
 
 
 class BunkerLauncherScreen(Screen):
-    """Centro de Mando en Vivo — Dashboard principal del Bunker (Estilo Abtop)."""
+    """Centro de Mando en Vivo — Dashboard principal del Bunker (Estilo Abtop/Btop)."""
 
-    # ── VARIABLE REACTIVA: El corazón del Dashboard ──
     dashboard_data = reactive({})
 
     BINDINGS = [
@@ -261,42 +260,63 @@ class BunkerLauncherScreen(Screen):
     #launcher_root {
         width: 100%;
         height: 100%;
-        background: $surface;
+        background: #000000; /* Fondo puramente negro para resaltar los paneles */
         padding: 1 2;
-        overflow-y: auto; 
+        overflow-y: auto;
+        overflow-x: hidden; /* Evita que la terminal salte horizontalmente */
     }
 
-    /* ── HEADER ── */
-    #header_row { 
-        height: auto;
-        margin-bottom: 1; 
-        layout: horizontal;
+    /* ── FILA 1: LOGO CENTRADO ── */
+    #logo_row {
+        height: 8;
         align: center middle;
+        margin-bottom: 1;
     }
-    #logo_compact { 
-        width: 1fr; 
-        color: $success; 
-        text-style: bold; 
-        content-align: left middle; 
+    #logo_label {
+        color: $success;
+        text-style: bold;
+        text-align: center;
+        width: auto; /* CRÍTICO: Evita que el ASCII art se rompa por word-wrap */
+    }
+
+    /* ── FILA 2: PRESTIGIO Y RELOJ ── */
+    #system_row {
+        height: 7;
+        layout: horizontal;
+        margin-bottom: 1;
+    }
+    #prestige_panel {
+        width: 2fr;
+        height: 100%;
+        border: solid $warning;
+        background: $surface-darken-1;
+        padding: 0 2;
+        margin: 0 1;
+        content-align: center middle;
+    }
+    #prestige_label { text-style: bold; color: $warning; text-align: center; width: 100%; margin-bottom: 1; }
+    #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; margin-top: 1; }
+    
+    ProgressBar { margin: 0; }
+    ProgressBar > Bar { color: $success; }
+    ProgressBar > PercentageStatus { text-style: bold; color: $text; }
+
+    #clock_panel {
+        width: 1fr;
+        height: 100%;
+        border: solid $accent;
+        background: $surface-darken-1;
+        align: center middle;
+        margin: 0 1;
     }
     #ascii_clock {
-        width: 1fr;
-        color: $accent;
         text-align: center;
+        color: $accent;
         text-style: bold;
+        width: auto;
     }
-    #prestige_panel { 
-        width: 45; 
-        border: tall $warning; 
-        background: $surface-darken-1; 
-        padding: 0 1; 
-        height: auto;
-    }
-    #prestige_label { text-style: bold; color: $warning; text-align: center; width: 100%; }
-    #prestige_bar_label { color: $text-muted; text-align: center; width: 100%; margin-top: 1; }
-    ProgressBar { margin: 0; }
 
-    /* ── BODY ── */
+    /* ── FILA 3: BODY PANELS ── */
     #body_row { 
         height: auto; 
         min-height: 16;
@@ -307,14 +327,14 @@ class BunkerLauncherScreen(Screen):
     .launcher_panel {
         width: 1fr;
         height: 100%;
-        border: round $primary;
+        border: solid $primary; /* Bordes sólidos estilo terminal retro */
         background: $surface-darken-1;
         padding: 0 1;
         margin: 0 1;
     }
     
-    #posada_panel { border: round #8a2be2; }
-    #feed_panel { border: round $accent; width: 1.2fr; }
+    #posada_panel { border: solid #8a2be2; }
+    #feed_panel { border: solid $accent; width: 1.2fr; }
     
     .panel_title { 
         text-style: bold; 
@@ -322,17 +342,17 @@ class BunkerLauncherScreen(Screen):
         text-align: center; 
         width: 100%; 
         margin-bottom: 1; 
-        border-bottom: solid $primary; 
+        border-bottom: dashed $primary; 
     }
     
-    .metric_line { height: 1; color: $text; }
+    .metric_line { height: 1; color: $text; margin-bottom: 1;}
     
     .collection_title { text-style: bold; margin-top: 1; }
-    .collection_stat { color: $text-muted; }
+    .collection_stat { color: $text-muted; margin-bottom: 1; }
     
     .feed_item { margin-bottom: 1; color: $text; }
 
-    /* ── FOOTER ── */
+    /* ── FILA 4: FOOTER BOTONES ── */
     #modules_bar {
         height: auto;
         margin-top: 1;
@@ -345,38 +365,40 @@ class BunkerLauncherScreen(Screen):
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="launcher_root"):
             
-            # ── HEADER: Logo + Reloj + Prestigio ──
-            with Horizontal(id="header_row"):
+            # ── 1. LOGO ROW ──
+            with Horizontal(id="logo_row"):
                 yield Label(
-                    "██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗███████╗██████╗ \n"
-                    "██╔══██╗██║   ██║████╗  ██║██║ ██╔╝██╔════╝██╔══██╗\n"
-                    "██████╔╝██║   ██║██╔██╗ ██║█████╔╝ █████╗  ██████╔╝\n"
-                    "██╔══██╗██║   ██║██║╚██╗██║██╔═██╗ ██╔══╝  ██╔══██╗\n"
-                    "██████╔╝╚██████╔╝██║ ╚████║██║  ██╗███████╗██║  ██║\n"
-                    "╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝\n"
-                    "[dim]Centro de Operaciones Estratégicas[/dim]",
-                    id="logo_compact"
+                    "██████╗  ██╗   ██╗ ███╗   ██╗ ██╗  ██╗ ███████╗ ██████╗ \n"
+                    "██╔══██╗ ██║   ██║ ████╗  ██║ ██║ ██╔╝ ██╔════╝ ██╔══██╗\n"
+                    "██████╔╝ ██║   ██║ ██╔██╗ ██║ █████╔╝  █████╗   ██████╔╝\n"
+                    "██╔══██╗ ██║   ██║ ██║╚██╗██║ ██╔═██╗  ██╔══╝   ██╔══██╗\n"
+                    "██████╔╝ ╚██████╔╝ ██║ ╚████║ ██║  ██╗ ███████╗ ██║  ██║\n"
+                    "╚═════╝   ╚═════╝  ╚═╝  ╚═══╝ ╚═╝  ╚═╝ ╚══════╝ ╚═╝  ╚═╝",
+                    id="logo_label"
                 )
-                yield Label("", id="ascii_clock")
-                
+
+            # ── 2. SYSTEM ROW (Prestigio + Reloj) ──
+            with Horizontal(id="system_row"):
                 with Vertical(id="prestige_panel"):
                     yield Label("⚜️  GREMIO Nv. -- — Prestigio: --/--", id="prestige_label")
                     yield ProgressBar(id="prestige_bar", show_eta=False, total=100)
                     yield Label("SISTEMA: ESPERANDO TELEMETRÍA...", id="prestige_bar_label")
+                
+                with Vertical(id="clock_panel"):
+                    yield Label("", id="ascii_clock")
 
-            # ── BODY ──
+            # ── 3. BODY ROW (Métricas) ──
             with Horizontal(id="body_row"):
                 with Vertical(id="posada_panel", classes="launcher_panel"):
                     yield Label("⚔️  MÉTRICAS DEL SISTEMA", classes="panel_title")
-                    yield Label("⏱️  DW Hoy: [dim]-- min[/]", id="metric_dw", classes="metric_line")
-                    yield Label("👥 Aventureros: [dim]-- activos[/]", id="metric_advs", classes="metric_line")
-                    yield Label("🏆 Líder: [dim]--[/]", id="metric_leader", classes="metric_line")
-                    yield Label("💰 Patrimonio: [dim]-- Talentos[/]", id="metric_wealth", classes="metric_line")
-                    yield Label("", id="metric_sep1", classes="metric_line")
-                    yield Label("✅ Hábitos: [dim]--/--[/]", id="metric_habits", classes="metric_line")
-                    yield Label("🔥 Racha: [dim]--[/]", id="metric_streak", classes="metric_line")
-                    yield Label("📋 Kanban: [dim]-- pendientes[/]", id="metric_kanban", classes="metric_line")
-                    yield Label("📅 Calendar: [dim]-- eventos hoy[/]", id="metric_calendar", classes="metric_line")
+                    yield Label("⏱️  Actividad 7d: [dim]--[/]", id="metric_sparkline", classes="metric_line")
+                    yield Label("👥 Aventureros : [dim]-- activos[/]", id="metric_advs", classes="metric_line")
+                    yield Label("🏆 Héroe Líder : [dim]--[/]", id="metric_leader", classes="metric_line")
+                    yield Label("💰 Patrimonio  : [dim]-- Talentos[/]", id="metric_wealth", classes="metric_line")
+                    yield Label("✅ Hábitos     : [dim]--/--[/]", id="metric_habits", classes="metric_line")
+                    yield Label("🔥 Racha Act.  : [dim]--[/]", id="metric_streak", classes="metric_line")
+                    yield Label("📋 Kanban Pnd. : [dim]-- tareas[/]", id="metric_kanban", classes="metric_line")
+                    yield Label("📅 Eventos Hoy : [dim]-- eventos[/]", id="metric_calendar", classes="metric_line")
 
                 with Vertical(id="collections_panel", classes="launcher_panel"):
                     yield Label("📊  COLECCIONES EN VIVO", classes="panel_title")
@@ -398,7 +420,7 @@ class BunkerLauncherScreen(Screen):
                     for i in range(12): 
                         yield Label("", id=f"feed_{i}", classes="feed_item")
 
-            # ── FOOTER ──
+            # ── 4. MODULES BAR (Footer) ──
             with Horizontal(id="modules_bar"):
                 yield Button("[1] Biblioteca", id="btn_lib", variant="primary")
                 yield Button("[2] Videoclub", id="btn_movie", variant="primary")
@@ -410,13 +432,17 @@ class BunkerLauncherScreen(Screen):
 
     def on_mount(self) -> None:
         self.tick_clock()
-        self.set_interval(1.0, self.tick_clock) # Animación 1: Latido del reloj cada segundo
-        
+        self.set_interval(1.0, self.tick_clock) 
         self.fetch_dashboard()
-        self.set_interval(15.0, self.fetch_dashboard) # Animación 2: Refresco de BD cada 15s
+        self.set_interval(15.0, self.fetch_dashboard) 
 
     def tick_clock(self) -> None:
-        """Genera el Reloj ASCII en vivo reutilizando el diccionario de la Posada."""
+        from datetime import datetime
+        try:
+            from .posada_screens import ASCII_NUMS
+        except ImportError:
+            return
+
         now = datetime.now()
         time_str = now.strftime("%H:%M:%S")
         lines = ["", "", "", "", ""]
@@ -434,14 +460,35 @@ class BunkerLauncherScreen(Screen):
         except Exception:
             pass
 
+    def create_sparkline(self, data: list) -> str:
+        """Genera un minigráfico ASCII (Estilo Btop) basado en una serie temporal."""
+        if not data or max(data) == 0:
+            return "[dim]       (0m)[/dim]"
+        bars = [" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+        max_val = max(data)
+        sparkline = ""
+        for val in data:
+            idx = int((val / max_val) * 7) if max_val > 0 else 0
+            sparkline += bars[idx]
+        return f"[bold cyan]{sparkline}[/bold cyan] ({data[-1]}m)"
+
+    def create_gauge(self, current: int, total: int, width: int = 12) -> str:
+        """Genera una barra medidora ASCII tipo [████░░░░] 50%"""
+        if total == 0:
+            return f"[[dim]{'░' * width}[/dim]] 0%"
+        pct = current / total
+        filled = int(pct * width)
+        empty = width - filled
+        pct_str = f"{int(pct * 100)}%"
+        return f"[{'█' * filled}[dim]{'░' * empty}[/dim]] {pct_str}"
+
     @work(thread=True)
     def fetch_dashboard(self) -> None:
-        """Carga los datos en segundo plano y actualiza la variable reactiva."""
         try:
             from .constants import API_DASHBOARD
+            import httpx
             resp = httpx.get(API_DASHBOARD, timeout=5.0)
             if resp.status_code == 200:
-                # Modificar el reactivo (debe hacerse en el hilo principal de la UI)
                 self.app.call_from_thread(self.update_reactive_data, resp.json())
             else:
                 self.app.call_from_thread(self.update_status, "SISTEMA: [yellow]API NO ENCONTRADA[/yellow]")
@@ -449,7 +496,7 @@ class BunkerLauncherScreen(Screen):
             self.app.call_from_thread(self.update_status, "SISTEMA: [red]OFFLINE (ESPERANDO BACKEND)[/red]")
 
     def update_reactive_data(self, data: dict) -> None:
-        self.dashboard_data = data # ¡Esto dispara watch_dashboard_data automáticamente!
+        self.dashboard_data = data 
 
     def update_status(self, text: str) -> None:
         try:
@@ -457,9 +504,7 @@ class BunkerLauncherScreen(Screen):
         except Exception:
             pass
 
-    # ── MÁGIA DE TEXTUAL: Se ejecuta solo si dashboard_data cambia ──
     def watch_dashboard_data(self, data: dict) -> None:
-        """Reactividad Pura: Anima las barras y actualiza labels cuando llegan datos nuevos."""
         if not data: return
         
         try:
@@ -475,59 +520,59 @@ class BunkerLauncherScreen(Screen):
             self.query_one("#prestige_label", Label).update(f"⚜️  GREMIO Nv. {lvl} — Prestigio: {pres}/{meta}")
             bar = self.query_one("#prestige_bar", ProgressBar)
             bar.total = max(meta, 1)
-            bar.progress = min(pres, meta) # Textual anima automáticamente este cambio
+            bar.progress = min(pres, meta)
 
-            # ── POSADA ──
-            dw_min = posada.get("dw_minutes_today") or 0
-            dw_color = "green" if dw_min > 0 else "dim"
-            self.query_one("#metric_dw", Label).update(f"⏱️  DW Hoy: [{dw_color}]{dw_min} min[/]")
+            # ── POSADA MÉTRICAS FINAS (Gauges y Sparklines) ──
+            dw_history = posada.get("dw_history", [])
+            sparkline_str = self.create_sparkline(dw_history)
+            self.query_one("#metric_sparkline", Label).update(f"⏱️  Actividad 7d: {sparkline_str}")
 
             advs = posada.get("active_adventurers") or []
-            self.query_one("#metric_advs", Label).update(f"👥 Aventureros: [bold]{len(advs)}[/] activos")
+            self.query_one("#metric_advs", Label).update(f"👥 Aventureros : [bold]{len(advs)}[/] desplegados")
 
             top = posada.get("top_adventurer") or {}
             top_name = top.get("name", "Nadie")
             top_lvl = top.get("level", 0)
-            self.query_one("#metric_leader", Label).update(f"🏆 Líder: [bold cyan]{top_name}[/] (Nv.{top_lvl})")
+            self.query_one("#metric_leader", Label).update(f"🏆 Héroe Líder : [bold cyan]{top_name}[/] (Nv.{top_lvl})")
 
             nw = guild.get("net_worth") or 0
-            self.query_one("#metric_wealth", Label).update(f"💰 Patrimonio: [bold yellow]{nw}[/] Talentos")
+            self.query_one("#metric_wealth", Label).update(f"💰 Patrimonio  : [bold yellow]{nw}[/] Talentos")
 
             hc = posada.get("habits_completed") or 0
             ht = posada.get("habits_total") or 0
-            h_color = "green" if hc == ht and ht > 0 else "yellow" if hc > 0 else "dim"
-            self.query_one("#metric_habits", Label).update(f"✅ Hábitos: [{h_color}]{hc}/{ht}[/]")
+            gauge_str = self.create_gauge(hc, ht)
+            self.query_one("#metric_habits", Label).update(f"✅ Hábitos     : {gauge_str}")
 
             streak = posada.get("top_streak") or {}
             str_name = streak.get("name", "Ninguna")
             str_val = streak.get("streak", 0)
-            self.query_one("#metric_streak", Label).update(f"🔥 Racha: [bold]{str_name}[/] ({str_val}d)")
+            self.query_one("#metric_streak", Label).update(f"🔥 Racha Act.  : [bold]{str_name}[/] ({str_val}d)")
 
             pt = posada.get("pending_tasks") or 0
-            self.query_one("#metric_kanban", Label).update(f"📋 Kanban: [bold]{pt}[/] pendientes")
+            self.query_one("#metric_kanban", Label).update(f"📋 Kanban Pnd. : [bold]{pt}[/] tareas")
 
             te = posada.get("today_events") or 0
             cal_color = "bold magenta" if te > 0 else "dim"
-            self.query_one("#metric_calendar", Label).update(f"📅 Calendar: [{cal_color}]{te} hoy[/]")
+            self.query_one("#metric_calendar", Label).update(f"📅 Eventos Hoy : [{cal_color}]{te} programados[/]")
 
             # ── COLECCIONES ──
             b = data.get("books") or {}
             bar_books = self.query_one("#bar_books", ProgressBar)
             bar_books.total = max(b.get("total", 1), 1)
             bar_books.progress = b.get("read", 0)
-            self.query_one("#stat_books", Label).update(f"{b.get('read', 0)}/{b.get('total', 0)} leídos • {b.get('hours', 0)}h est.")
+            self.query_one("#stat_books", Label).update(f"{b.get('read', 0)}/{b.get('total', 0)} completados • {b.get('hours', 0)}h est.")
 
             m = data.get("movies") or {}
             bar_movies = self.query_one("#bar_movies", ProgressBar)
             bar_movies.total = max(m.get("total", 1), 1)
             bar_movies.progress = m.get("watched", 0)
-            self.query_one("#stat_movies", Label).update(f"{m.get('watched', 0)}/{m.get('total', 0)} vistas • {m.get('hours', 0)}h")
+            self.query_one("#stat_movies", Label).update(f"{m.get('watched', 0)}/{m.get('total', 0)} vistas • {m.get('hours', 0)}h est.")
 
             mu = data.get("music") or {}
             bar_music = self.query_one("#bar_music", ProgressBar)
             bar_music.total = max(mu.get("total", 1), 1)
             bar_music.progress = mu.get("listened", 0)
-            self.query_one("#stat_music", Label).update(f"{mu.get('listened', 0)}/{mu.get('total', 0)} escuch. • {mu.get('hours', 0)}h")
+            self.query_one("#stat_music", Label).update(f"{mu.get('listened', 0)}/{mu.get('total', 0)} escuchados • {mu.get('hours', 0)}h est.")
 
             # ── FEED DE ACTIVIDAD ──
             feed = data.get("feed") or []
@@ -541,22 +586,14 @@ class BunkerLauncherScreen(Screen):
         except Exception as e:
             self.update_status(f"[blink]🔴 ERROR INTERNO UI[/blink] │ {str(e)[:40]}")
 
-    # ── NAVEGACIÓN Y ACCIONES DE BOTONES ──
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn_lib":
-            self.action_launch_lib()
-        elif event.button.id == "btn_movie":
-            self.action_launch_movie()
-        elif event.button.id == "btn_music":
-            self.action_launch_music()
-        elif event.button.id == "btn_posada":
-            self.action_launch_posada()
-        elif event.button.id == "btn_chess":
-            self.action_launch_chess()
-        elif event.button.id == "btn_evac":
-            self.app.notify("Sistema de evacuación temporalmente desactivado para mantenimiento.", severity="warning")
-        elif event.button.id == "btn_quit":
-            self.app.exit()
+        if event.button.id == "btn_lib": self.action_launch_lib()
+        elif event.button.id == "btn_movie": self.action_launch_movie()
+        elif event.button.id == "btn_music": self.action_launch_music()
+        elif event.button.id == "btn_posada": self.action_launch_posada()
+        elif event.button.id == "btn_chess": self.action_launch_chess()
+        elif event.button.id == "btn_evac": self.app.notify("Mantenimiento.", severity="warning")
+        elif event.button.id == "btn_quit": self.app.exit()
 
     def action_launch_lib(self) -> None:
         from .library_screen import LibraryMainScreen

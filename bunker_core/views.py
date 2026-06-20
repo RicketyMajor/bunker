@@ -4,8 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db.models import Sum
 from django.utils.timezone import localdate
-
-# ─── IMPORTACIONES DE TODOS LOS MÓDULOS ───
+from datetime import timedelta
 from catalog.models import Book, AnnualRecord as BookAnnualRecord
 from movies.models import Movie, MovieAnnualRecord
 from disquera.models import Album, MusicAnnualRecord
@@ -71,12 +70,24 @@ def global_dashboard_view(request):
         feed.append(f"[red]Error Gremio:[/] {str(e)[:30]}")
         
     try:
-        # Soporta modelos tanto con 'date' como con 'created_at'
+        # Extraer DW de hoy
         try:
             dw = DeepWorkSession.objects.filter(date=today, completed=True)
         except:
             dw = DeepWorkSession.objects.filter(created_at__date=today, completed=True)
         posada_data["dw_minutes_today"] = dw.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+        
+        # --- NUEVO: Historial de 7 días para el Sparkline ---
+        dw_history = []
+        for i in range(7):
+            d = today - timedelta(days=6 - i)
+            try:
+                mins = DeepWorkSession.objects.filter(date=d, completed=True).aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+            except:
+                mins = DeepWorkSession.objects.filter(created_at__date=d, completed=True).aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+            dw_history.append(mins)
+        posada_data["dw_history"] = dw_history
+
     except Exception as e:
         feed.append(f"[red]Error DW:[/] {str(e)[:30]}")
 
