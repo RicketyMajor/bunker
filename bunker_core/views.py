@@ -63,7 +63,7 @@ def global_dashboard_view(request):
         posada_data["guild"] = {
             "prestige_level": guild.prestige_level,
             "prestige": guild.prestige,
-            "prestige_meta": guild.prestige_level * 100,
+            "prestige_meta": guild.prestige_meta,
             "net_worth": getattr(guild, 'net_worth_in_talents', getattr(guild, 'talento', 0))
         }
     except Exception as e:
@@ -71,20 +71,14 @@ def global_dashboard_view(request):
         
     try:
         # Extraer DW de hoy
-        try:
-            dw = DeepWorkSession.objects.filter(date=today, completed=True)
-        except:
-            dw = DeepWorkSession.objects.filter(created_at__date=today, completed=True)
+        dw = DeepWorkSession.objects.filter(start_time__date=today, completed=True)
         posada_data["dw_minutes_today"] = dw.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
         
         # --- NUEVO: Historial de 7 días para el Sparkline ---
         dw_history = []
         for i in range(7):
             d = today - timedelta(days=6 - i)
-            try:
-                mins = DeepWorkSession.objects.filter(date=d, completed=True).aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
-            except:
-                mins = DeepWorkSession.objects.filter(created_at__date=d, completed=True).aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+            mins = DeepWorkSession.objects.filter(start_time__date=d, completed=True).aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
             dw_history.append(mins)
         posada_data["dw_history"] = dw_history
 
@@ -117,7 +111,7 @@ def global_dashboard_view(request):
         feed.append(f"[red]Error Hábitos:[/] {str(e)[:30]}")
 
     try:
-        posada_data["pending_tasks"] = KanbanTask.objects.exclude(column__name__icontains='hecho').exclude(column__name__icontains='done').count()
+        posada_data["pending_tasks"] = KanbanTask.objects.exclude(column__title__icontains='hecho').exclude(column__title__icontains='done').count()
     except Exception as e:
         feed.append(f"[red]Error Kanban:[/] {str(e)[:30]}")
 
@@ -134,7 +128,7 @@ def global_dashboard_view(request):
 
     # 6. TRÁFICO DE RED (FEED GLOBAL SEGURO)
     try:
-        for dw in DeepWorkSession.objects.filter(completed=True).order_by('-created_at')[:3]:
+        for dw in DeepWorkSession.objects.filter(completed=True).order_by('-start_time')[:3]:
             feed.append(f"[cyan]⏱️  DW:[/] {dw.category} ({dw.duration_minutes}m)")
     except: pass
         
