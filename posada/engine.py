@@ -1054,18 +1054,18 @@ def _seed_items_if_empty():
 def _seed_guild_upgrades():
     """Forja los planos de las mejoras de Gremio (Niveles 1 al 10)."""
     upgrades = [
-        {'key': 'mensajeria_arcana', 'name': 'Mensajería Arcana', 'description': 'Envía el excedente de botín al cofre por 1 Drabín.', 'cost_coin': 'sueldo', 'cost_amount': 5, 'req_prestige_level': 1},
-        {'key': 'taberna_ampliada', 'name': 'Taberna Ampliada', 'description': 'Mayor afluencia de reclutas (Inmersión).', 'cost_coin': 'talento', 'cost_amount': 1, 'req_prestige_level': 2},
-        {'key': 'mochila_lv2', 'name': 'Mochilas de Contención', 'description': 'Aumenta la mochila de los aventureros a 15 ranuras.', 'cost_coin': 'talento', 'cost_amount': 2, 'req_prestige_level': 2},
-        {'key': 'tablon_patroc', 'name': 'Tablón Patrocinado', 'description': '5% prob. de ítem épico al completar hábitos Rango S.', 'cost_coin': 'marco', 'cost_amount': 1, 'req_prestige_level': 3},
-        {'key': 'herreria_basica', 'name': 'Herrería Básica', 'description': 'Los aventureros sufren menos daño pasivo (Inmersión/Defensa).', 'cost_coin': 'talento', 'cost_amount': 5, 'req_prestige_level': 3},
-        {'key': 'salon_cartografia', 'name': 'Salón de Cartografía', 'description': '+10% de ganancia de experiencia en Deep Work.', 'cost_coin': 'talento', 'cost_amount': 3, 'req_prestige_level': 4},
-        {'key': 'guardia_gremio', 'name': 'Guardia del Gremio', 'description': 'La Posada está protegida contra asaltos nocturnos.', 'cost_coin': 'marco', 'cost_amount': 1, 'req_prestige_level': 5},
-        {'key': 'capilla_recuperacion', 'name': 'Capilla de Recuperación', 'description': 'Aumenta la curación pasiva de los aventureros.', 'cost_coin': 'talento', 'cost_amount': 5, 'req_prestige_level': 6},
-        {'key': 'red_informantes', 'name': 'Red de Informantes', 'description': 'Otorga ventajas al reclutar.', 'cost_coin': 'marco', 'cost_amount': 2, 'req_prestige_level': 7},
-        {'key': 'torreon_mago', 'name': 'Torreón del Mago', 'description': 'Aumenta la regeneración de maná global.', 'cost_coin': 'marco', 'cost_amount': 3, 'req_prestige_level': 8},
-        {'key': 'boveda_gremio', 'name': 'Bóveda de Gremio', 'description': 'Permite amasar grandes riquezas sin penalización.', 'cost_coin': 'talento', 'cost_amount': 10, 'req_prestige_level': 9},
-        {'key': 'ciudadela', 'name': 'Ciudadela del Gremio', 'description': 'El gremio se convierte en el gobernante de la región.', 'cost_coin': 'marco', 'cost_amount': 5, 'req_prestige_level': 10},
+        {'key': 'mensajeria_arcana', 'name': 'Mensajería Arcana', 'description': 'Envía el excedente de botín al cofre por 1 Drabín.', 'cost_coin': 'marco', 'cost_amount': 1, 'req_prestige_level': 1},
+        {'key': 'taberna_ampliada', 'name': 'Taberna Ampliada', 'description': 'Mayor afluencia de reclutas (Inmersión).', 'cost_coin': 'marco', 'cost_amount': 2, 'req_prestige_level': 2},
+        {'key': 'mochila_lv2', 'name': 'Mochilas de Contención', 'description': 'Aumenta la mochila de los aventureros a 15 ranuras.', 'cost_coin': 'marco', 'cost_amount': 2, 'req_prestige_level': 2},
+        {'key': 'tablon_patroc', 'name': 'Tablón Patrocinado', 'description': '5% prob. de ítem épico al completar hábitos Rango S.', 'cost_coin': 'marco', 'cost_amount': 3, 'req_prestige_level': 3},
+        {'key': 'herreria_basica', 'name': 'Herrería Básica', 'description': 'Los aventureros sufren menos daño pasivo (Inmersión/Defensa).', 'cost_coin': 'marco', 'cost_amount': 3, 'req_prestige_level': 3},
+        {'key': 'salon_cartografia', 'name': 'Salón de Cartografía', 'description': '+10% de ganancia de experiencia en Deep Work.', 'cost_coin': 'marco', 'cost_amount': 4, 'req_prestige_level': 4},
+        {'key': 'guardia_gremio', 'name': 'Guardia del Gremio', 'description': 'La Posada está protegida contra asaltos nocturnos.', 'cost_coin': 'marco', 'cost_amount': 5, 'req_prestige_level': 5},
+        {'key': 'capilla_recuperacion', 'name': 'Capilla de Recuperación', 'description': 'Aumenta la curación pasiva de los aventureros.', 'cost_coin': 'marco', 'cost_amount': 6, 'req_prestige_level': 6},
+        {'key': 'red_informantes', 'name': 'Red de Informantes', 'description': 'Otorga ventajas al reclutar.', 'cost_coin': 'marco', 'cost_amount': 8, 'req_prestige_level': 7},
+        {'key': 'torreon_mago', 'name': 'Torreón del Mago', 'description': 'Aumenta la regeneración de maná global.', 'cost_coin': 'marco', 'cost_amount': 10, 'req_prestige_level': 8},
+        {'key': 'boveda_gremio', 'name': 'Bóveda de Gremio', 'description': 'Permite amasar grandes riquezas sin penalización.', 'cost_coin': 'marco', 'cost_amount': 12, 'req_prestige_level': 9},
+        {'key': 'ciudadela', 'name': 'Ciudadela del Gremio', 'description': 'El gremio se convierte en el gobernante de la región.', 'cost_coin': 'marco', 'cost_amount': 15, 'req_prestige_level': 10},
     ]
     for up in upgrades:
         GuildUpgrade.objects.update_or_create(
@@ -1649,6 +1649,76 @@ def universal_consolidate(entity):
 
     entity.save()
     return log
+
+
+def calculate_sell_value(item, pct=0.50):
+    """Calcula el valor de venta de un item como porcentaje de su coste real.
+
+    Convierte todo el coste del item a unidades base (ardites = 32 u.b. para
+    la Mancomunidad, medios peniques para Imperial), aplica el porcentaje,
+    y redistribuye en denominaciones óptimas.
+
+    Returns:
+        dict con las 11 monedas y sus cantidades resultantes.
+    """
+    # --- Valor total en unidades base de la Mancomunidad ---
+    cw_total = (
+        item.cost_marco * 352000 +
+        item.cost_real * 88000 +
+        item.cost_talento * 35200 +
+        item.cost_sueldo * 1100 +
+        item.cost_iota * 3520 +
+        item.cost_drabin * 352 +
+        item.cost_ardite * 32
+    )
+    cw_sell = int(cw_total * pct)
+
+    # --- Valor total en unidades base Imperial (medios peniques de hierro) ---
+    imp_total = (
+        item.cost_silver_penny * 100 +
+        item.cost_copper_penny * 10 +
+        item.cost_iron_penny * 2 +
+        item.cost_iron_half_penny
+    )
+    imp_sell = int(imp_total * pct)
+
+    # --- Descomponer Mancomunidad en denominaciones óptimas ---
+    result = {}
+    cw_denominations = [
+        ('marco', 352000), ('real', 88000), ('talento', 35200),
+        ('sueldo', 1100), ('iota', 3520), ('drabin', 352), ('ardite', 32)
+    ]
+    remainder = cw_sell
+    for coin_name, value in cw_denominations:
+        if remainder >= value:
+            result[coin_name] = remainder // value
+            remainder %= value
+        else:
+            result[coin_name] = 0
+
+    # --- Descomponer Imperial en denominaciones óptimas ---
+    imp_denominations = [
+        ('silver_penny', 100), ('copper_penny', 10),
+        ('iron_penny', 2), ('iron_half_penny', 1)
+    ]
+    remainder = imp_sell
+    for coin_name, value in imp_denominations:
+        if remainder >= value:
+            result[coin_name] = remainder // value
+            remainder %= value
+        else:
+            result[coin_name] = 0
+
+    return result
+
+
+def add_wealth_from_dict(entity, wealth_dict):
+    """Suma un diccionario de monedas a una entidad (Aventurero o Gremio) y consolida."""
+    for coin, amount in wealth_dict.items():
+        if amount > 0:
+            setattr(entity, coin, getattr(entity, coin) + amount)
+    entity.save()
+    universal_consolidate(entity)
 
 
 def get_imperial_value(entity):

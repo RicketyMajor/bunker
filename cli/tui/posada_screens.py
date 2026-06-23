@@ -1824,8 +1824,10 @@ class PosadaMainScreen(Screen):
         # Color rojo si está en deuda, verde si está bien
         color_p = "bold red" if prest < 0 else "bold green"
 
+        max_adv = guild.get('max_adventurers', 1)
+        curr_adv = guild.get('current_adventurers', len(adventurers))
         self.query_one("#lbl_guild_level", Label).update(
-            f"Nivel de Gremio: {lvl} | Prestigio: [{color_p}]{prest} / {meta}[/]"
+            f"Nivel de Gremio: {lvl} | Prestigio: [{color_p}]{prest} / {meta}[/] | Aventureros: {curr_adv}/{max_adv}"
         )
 
         inv = guild.get("inventory", {})

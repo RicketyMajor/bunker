@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
 import random
-from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills
+from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills, calculate_sell_value, add_wealth_from_dict, pay_with_change
 from django.utils import timezone
 from datetime import timedelta
 from .skills import SkillRegistry
@@ -118,11 +118,14 @@ def guild_status(request):
             }
         })
 
+    max_adventurers = 1 + 2 * (guild.prestige_level - 1)
     guild_data = {
         "prestige_level": guild.prestige_level,
         "prestige": guild.prestige,
         "prestige_meta": guild.prestige_meta,
         "net_worth_talents": guild.net_worth_in_talents,
+        "max_adventurers": max_adventurers,
+        "current_adventurers": Adventurer.objects.count(),
         "inventory": {
             "iron_half_penny": guild.iron_half_penny, "iron_penny": guild.iron_penny,
             "ardite": guild.ardite, "drabin": guild.drabin, "copper_penny": guild.copper_penny,
@@ -205,17 +208,17 @@ def create_adventurer(request):
     """Crea un aventurero. Verifica el límite de cupos del Gremio."""
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
-    # 1 cupo por cada Nivel del Gremio
-    if Adventurer.objects.count() >= guild.prestige_level:
+    # Fórmula de cupos: 1 aventurero base + 2 por cada nivel después del 1
+    max_adventurers = 1 + 2 * (guild.prestige_level - 1)
+    if Adventurer.objects.count() >= max_adventurers:
         return Response({
             "status": "error",
-            "message": f"Gremio Nv. {guild.prestige_level} lleno. Estudia y sube de nivel para tener más cupos."
+            "message": f"Gremio Nv. {guild.prestige_level}: {max_adventurers} cupos llenos. Sube de nivel para reclutar más."
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data
     cost_sueldos = data.get('cost_in_sueldos', 0)
     if cost_sueldos > 0:
-        from posada.engine import pay_with_change
         class DummyItem:
             pass
         dummy = DummyItem()
@@ -259,8 +262,8 @@ def create_adventurer(request):
 def tavern_recruits(request):
     """Genera reclutas procedurales escalados al Gremio."""
     guild, _ = GuildProfile.objects.get_or_create(id=1)
-    # 3 reclutas base + 2 por cada nivel después del 1
-    num_recruits = 3 + (guild.prestige_level - 1) * 2
+    # Siempre se ofrecen 5 reclutas en la taberna; lo que limita es el cupo del gremio
+    num_recruits = 5
     
     # Calcular nivel máximo posible basado en los aventureros actuales
     max_lvl = 1
@@ -601,21 +604,16 @@ def inventory_action(request):
             return Response({"status": "success", "message": f"{item.name} equipado."})
 
         elif action == "sell":
-            # Extrae el valor del objeto y lo inyecta al Gremio
+            # Venta al 50% del valor real para no inflar la economía
             item = slot.item
-            guild.iron_half_penny += item.cost_iron_half_penny
-            guild.iron_penny += item.cost_iron_penny
-            guild.ardite += item.cost_ardite
-            guild.drabin += item.cost_drabin
-            guild.copper_penny += item.cost_copper_penny
-            guild.iota += item.cost_iota
-            guild.silver_penny += item.cost_silver_penny
-            guild.sueldo += item.cost_sueldo
-            guild.talento += item.cost_talento
-            guild.real += item.cost_real
-            guild.marco += item.cost_marco
-            guild.save()
-            universal_consolidate(guild)  # Ordena el dinero automáticamente
+            sell_value = calculate_sell_value(item, pct=0.50)
+
+            # El dinero va al dueño del item (aventurero o gremio)
+            if slot.adventurer:
+                recipient = slot.adventurer
+            else:
+                recipient = guild
+            add_wealth_from_dict(recipient, sell_value)
 
         if action in ["to_guild", "to_adv", "sell"]:
             slot.quantity -= 1
@@ -887,7 +885,7 @@ def list_upgrades(request):
 
 @api_view(['POST'])
 def buy_upgrade(request):
-    """Procesa la compra de una mejora de infraestructura."""
+    """Procesa la compra de una mejora de infraestructura con conversión y vuelto."""
     key = request.data.get('key')
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
@@ -902,16 +900,23 @@ def buy_upgrade(request):
     if guild.prestige_level < upgrade.req_prestige_level:
         return Response({"error": f"Requiere Gremio Nivel {upgrade.req_prestige_level}."}, status=400)
 
-    curr_coins = getattr(guild, upgrade.cost_coin)
-    if curr_coins < upgrade.cost_amount:
-        return Response({"error": f"Fondos insuficientes. Cuesta {upgrade.cost_amount} {upgrade.cost_coin.title()}."}, status=400)
+    # Construir un objeto dummy con los campos cost_* para pay_with_change
+    class UpgradeCost:
+        pass
+    cost_obj = UpgradeCost()
+    # Inicializar todos los costes a 0
+    for coin in ['marco', 'real', 'talento', 'sueldo', 'iota', 'drabin',
+                 'ardite', 'silver_penny', 'copper_penny', 'iron_penny', 'iron_half_penny']:
+        setattr(cost_obj, f'cost_{coin}', 0)
+    # Asignar el coste real de la mejora
+    setattr(cost_obj, f'cost_{upgrade.cost_coin}', upgrade.cost_amount)
 
-    # Descuenta los fondos y registra la compra
-    setattr(guild, upgrade.cost_coin, curr_coins - upgrade.cost_amount)
-    guild.save()
-    universal_consolidate(guild)
+    if not pay_with_change(guild, cost_obj):
+        return Response({
+            "error": f"Fondos insuficientes. Cuesta {upgrade.cost_amount} {upgrade.cost_coin.title()} (o equivalente)."
+        }, status=400)
+
     GuildUnlockedUpgrade.objects.create(guild=guild, upgrade=upgrade)
-
     return Response({"status": "success", "message": f"¡Mejora '{upgrade.name}' adquirida!"})
 
 
