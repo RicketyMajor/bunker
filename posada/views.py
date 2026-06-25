@@ -146,6 +146,47 @@ def consolidate_guild_wealth(request):
         return Response(result, status=status.HTTP_400_BAD_REQUEST)
     return Response(result)
 
+@api_view(['POST'])
+def consolidate_adventurer_wealth(request, adv_id):
+    """Consolida la riqueza personal de un aventurero."""
+    try:
+        adv = Adventurer.objects.get(id=adv_id)
+        log = universal_consolidate(adv)
+        return Response({
+            "status": "success", 
+            "message": "Bolsillo consolidado exitosamente.",
+            "log": log
+        })
+    except Adventurer.DoesNotExist:
+        return Response({"error": "Aventurero no encontrado"}, status=404)
+
+@api_view(['POST'])
+def reset_guild(request):
+    """Borra todos los datos de la Posada y reinicia el Gremio al nivel 1."""
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+    
+    # Borrar todos los aventureros (borra sus inventarios y grimorios en cascada)
+    Adventurer.objects.all().delete()
+    
+    # Borrar el inventario del Gremio
+    InventorySlot.objects.filter(guild=guild).delete()
+    
+    # Borrar las mejoras desbloqueadas
+    GuildUnlockedUpgrade.objects.filter(guild=guild).delete()
+    
+    # Reiniciar el perfil del Gremio
+    guild.prestige_level = 1
+    guild.prestige = 0
+    
+    # Resetear todas las monedas a 0
+    for coin in ['marco', 'real', 'talento', 'sueldo', 'iota', 'drabin',
+                 'ardite', 'silver_penny', 'copper_penny', 'iron_penny', 'iron_half_penny']:
+        setattr(guild, coin, 0)
+        
+    guild.save()
+    
+    return Response({"status": "success", "message": "Gremio reiniciado exitosamente. ¡Un nuevo comienzo!"})
+
 
 @api_view(['POST'])
 def start_session(request):

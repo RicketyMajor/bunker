@@ -241,6 +241,40 @@ class RenameAdventurerModal(ModalScreen[str | None]):
             else:
                 self.app.notify("El nombre no puede estar vacío.", severity="warning")
 
+# --- MODAL DE RENOMBRAR AVENTURERO ---
+
+
+class ConfirmResetModal(ModalScreen[bool]):
+    """Modal de confirmación para reiniciar el Gremio."""
+
+    CSS = """
+    #confirm_reset_dialog { width: 60; height: auto; padding: 1 2; border: heavy $error; background: $surface; }
+    .modal_title { text-style: bold; color: $error; text-align: center; margin-bottom: 1; width: 100%; }
+    .warning_text { color: $warning; text-align: center; margin-bottom: 1; }
+    .form_buttons { height: 3; align: center middle; margin-top: 1; }
+    .form_buttons Button { margin: 0 1; }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm_reset_dialog"):
+            yield Label("⚠️ ADVERTENCIA DE REINICIO ⚠️", classes="modal_title")
+            yield Label("¿Estás absolutamente seguro de que deseas borrar todos los Aventureros, el Cofre y las Mejoras? El Gremio volverá a Nivel 1. Esta acción NO se puede deshacer.", classes="warning_text")
+            yield Label("Escribe 'CONFIRMAR' para proceder:")
+            yield Input(placeholder="Escribe CONFIRMAR", id="input_confirm_reset")
+            with Horizontal(classes="form_buttons"):
+                yield Button("¡Borrar Todo!", variant="error", id="btn_confirm_reset")
+                yield Button("Cancelar", variant="success", id="btn_cancel_reset")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_cancel_reset":
+            self.dismiss(False)
+        elif event.button.id == "btn_confirm_reset":
+            val = self.query_one("#input_confirm_reset", Input).value.strip()
+            if val == "CONFIRMAR":
+                self.dismiss(True)
+            else:
+                self.app.notify("Debes escribir 'CONFIRMAR' exactamente para proceder.", severity="error")
+
 # --- MODAL DE DETALLES DEL AVENTURERO ---
 
 
@@ -312,7 +346,8 @@ class AdventurerDetailsModal(ModalScreen[None]):
             with Horizontal(classes="btn_row"):
                 yield Button("Abrir Mochila", variant="success", id="btn_open_backpack")
                 yield Button("Renombrar", variant="warning", id="btn_rename_adv")
-                yield Button("Cerrar Ficha", variant="primary", id="btn_close_details")
+                yield Button("Consolidar Riqueza", variant="primary", id="btn_consolidate_adv")
+                yield Button("Cerrar Ficha", variant="error", id="btn_close_details")
 
     def on_mount(self):
         # 1. Poblar Tabla de Equipo
@@ -447,6 +482,19 @@ class AdventurerDetailsModal(ModalScreen[None]):
             self.app.push_screen(
                 RenameAdventurerModal(self.adv_data["name"]),
                 self.handle_rename_result)
+        elif event.button.id == "btn_consolidate_adv":
+            self.request_consolidate()
+
+    @work(thread=True)
+    def request_consolidate(self):
+        resp = httpx.post(f"{API_POSADA_BASE}adventurer/{self.adv_data['id']}/consolidate/")
+        if resp.status_code == 200:
+            self.app.call_from_thread(
+                self.app.notify, resp.json().get("message"), severity="success")
+            self.fetch_my_data_and_refresh()
+        else:
+            self.app.call_from_thread(
+                self.app.notify, "Error al consolidar la riqueza.", severity="error")
 
     def handle_rename_result(self, new_name: str | None) -> None:
         if new_name is not None:
@@ -1700,6 +1748,7 @@ class PosadaMainScreen(Screen):
                         yield Button("Consolidar Riqueza", id="btn_consolidate", classes="btn_consolidate", variant="warning")
                         yield Button("Mejoras de Infraestructura", id="btn_open_upgrades", classes="btn_consolidate", variant="success")
                         yield Button("Cofre del Gremio", id="btn_open_chest", classes="btn_consolidate", variant="primary")
+                        yield Button("¡Reiniciar Gremio (Peligro)!", id="btn_reset_guild", classes="btn_consolidate", variant="error")
                     yield Label("Todos los Aventureros Reclutados:")
                     yield DataTable(id="all_adventurers_table")
 
@@ -1810,6 +1859,30 @@ class PosadaMainScreen(Screen):
         except Exception:
             self.app.call_from_thread(
                 self.app.notify, "El Cambista no responde.", severity="error")
+
+    def handle_reset_guild(self, confirmed: bool) -> None:
+        if confirmed:
+            self._do_reset_guild()
+
+    @work(thread=True)
+    def _do_reset_guild(self) -> None:
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}guild/reset/", timeout=10.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, resp.json().get("message"), severity="warning")
+                self.sync_guild_status()
+                # Optional: refresh other tabs
+                if hasattr(self, 'fetch_missions_data'):
+                    self.fetch_missions_data()
+                if hasattr(self, 'fetch_kanban_data'):
+                    self.fetch_kanban_data()
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, "Error al reiniciar el gremio.", severity="error")
+        except Exception:
+            self.app.call_from_thread(
+                self.app.notify, "El servidor no responde.", severity="error")
 
     def render_guild_status(self, data: dict) -> None:
         guild = data.get("guild", {})
@@ -2020,6 +2093,8 @@ class PosadaMainScreen(Screen):
         elif event.button.id == "btn_consolidate":
             # Llama a la API para ir al cambista
             self.request_consolidation()
+        elif event.button.id == "btn_reset_guild":
+            self.app.push_screen(ConfirmResetModal(), self.handle_reset_guild)
         elif event.button.id == "btn_recruit":
             self.action_recruit()
         elif event.button.id == "btn_refresh_tavern":
