@@ -270,7 +270,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
 
     while current_second < total_seconds:
         if state == "EXPLORING":
-            current_second += 60
+            current_second += 30
             if current_second >= total_seconds:
                 break
 
@@ -369,7 +369,7 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
             # --- EVENTOS DE CONSUMIBLES (INMERSIÓN FLAVOR EXTENDIDA) ---
             if random.random() < 0.15:
                 flavor_slots = list(InventorySlot.objects.filter(
-                    adventurer=flavor_adv, item__consumable_type='FLV', quantity__gt=0))
+                    adventurer=flavor_adv, item__consumable_type__in=['FLV', 'HEL', 'MAN'], quantity__gt=0))
                 if flavor_slots:
                     slot = random.choice(flavor_slots)
                     slot.quantity -= 1
@@ -377,6 +377,15 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                         slot.delete()
                     else:
                         slot.save()
+                    
+                    item_type = slot.item.consumable_type
+                    amt_healed = slot.item.consumable_amount
+                    if item_type == 'HEL':
+                        temp_hp[flavor_adv.id] = min(flavor_adv.max_hp, temp_hp[flavor_adv.id] + amt_healed)
+                    elif item_type == 'MAN' and hasattr(flavor_adv, 'class_resources'):
+                        for k in flavor_adv.class_resources:
+                            flavor_adv.class_resources[k] += amt_healed
+
 
                     item_name = slot.item.name.lower()
 
@@ -557,11 +566,16 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             message_chosen = random.choice(lines)
                             break
 
-                    # Fallback genérico por si creas un ítem flavor que no esté en el diccionario
+                    # Fallback genérico para otros consumibles
                     if not message_chosen:
-                        message_chosen = f"Durante la marcha, {flavor_adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
+                        if item_type == 'HEL':
+                            message_chosen = f"¡{flavor_adv.name} bebe su [bold cyan]{slot.item.name}[/bold cyan] y recupera {amt_healed} HP!"
+                        elif item_type == 'MAN':
+                            message_chosen = f"¡{flavor_adv.name} consume [bold cyan]{slot.item.name}[/bold cyan] y siente cómo su poder interno se restaura!"
+                        else:
+                            message_chosen = f"Durante la marcha, {flavor_adv.name} decide utilizar su [bold cyan]{slot.item.name}[/bold cyan] de forma ingeniosa."
 
-                    script.append({"second": current_second - 35,
+                    script.append({"second": current_second - 15,
                                   "type": "flavor", "message": message_chosen})
             # --------------------------------------------------------
             # Tirada de Encuentro
@@ -621,36 +635,43 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                 
                 # Roll for coins
                 coin_pool = [
-                    ('marco', 0.0001), ('real', 0.0005), ('talento', 0.001),
-                    ('iota', 0.005), ('sueldo', 0.01), ('drabin', 0.05),
-                    ('silver_penny', 0.10), ('ardite', 0.15),
-                    ('copper_penny', 0.25), ('iron_penny', 0.50),
-                    ('iron_half_penny', 1.0)
+                    ('marco', 0.0001), 
+                    ('real', 0.0005), 
+                    ('talento', 0.001),
+                    ('sueldo', 0.005),
+                    ('iota', 0.01), 
+                    ('silver_penny', 0.01), 
+                    ('drabin', 0.05), 
+                    ('copper_penny', 0.05),
+                    ('iron_penny', 0.10),
+                    ('iron_half_penny', 0.20),
+                    ('ardite', 0.25)
                 ]
                 
-                found_coin = 'iron_half_penny'
+                found_coin = None
                 roll = random.random()
                 for coin_name, prob in coin_pool:
                     if roll < (prob + (adv_luk * 0.002)):
                         found_coin = coin_name
                         break
                         
-                if found_coin in ['iron_half_penny', 'iron_penny', 'copper_penny']:
-                    amt = random.randint(2, 5) + adv_luk
-                elif found_coin in ['ardite', 'silver_penny', 'drabin']:
-                    amt = random.randint(1, 3) + (adv_luk // 2)
-                else:
-                    amt = 1
+                if found_coin:
+                    if found_coin in ['iron_half_penny', 'iron_penny', 'copper_penny']:
+                        amt = random.randint(2, 5) + adv_luk
+                    elif found_coin in ['ardite', 'silver_penny', 'drabin']:
+                        amt = random.randint(1, 3) + (adv_luk // 2)
+                    else:
+                        amt = 1
+                        
+                    color = COIN_COLORS.get(found_coin, 'white')
+                    display_name = found_coin.replace('_', ' ').title()
+                    if found_coin == 'iron_half_penny': display_name = "Medio Penique de Hierro"
                     
-                color = COIN_COLORS.get(found_coin, 'white')
-                display_name = found_coin.replace('_', ' ').title()
-                if found_coin == 'iron_half_penny': display_name = "Medio Penique de Hierro"
-                
-                script.append({"second": current_second - 30, "type": "loot", "coin": found_coin,
-                              "amount": amt, "message": f"{explore_adv.name} encontró {amt} [[{color}]{display_name}[/]]."})
+                    script.append({"second": current_second - 10, "type": "loot", "coin": found_coin,
+                                  "amount": amt, "message": f"{explore_adv.name} encontró {amt} [[{color}]{display_name}[/]]."})
 
                 # Drops aleatorios
-                if all_items_db and random.random() < (0.05 + (adv_luk * 0.01)):
+                if all_items_db and random.random() < (0.025 + (adv_luk * 0.01)):
                     roll = random.random()
                     rarity = 'COM'
                     if roll < 0.05: rarity = 'RAR'
