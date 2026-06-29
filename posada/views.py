@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import transaction
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
 import random
 from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills, calculate_sell_value, add_wealth_from_dict, pay_with_change
@@ -564,106 +565,111 @@ def get_inventory(request, target_type, target_id):
 
 @api_view(['POST'])
 def inventory_action(request):
-    """Mueve objetos entre el Cofre y los Aventureros, Vende o Equipa."""
+    """Mueve objetos entre el Cofre y los Aventureros, Vende o Equipa.
+    
+    Todas las operaciones están envueltas en transaction.atomic() para
+    prevenir ítems fantasma por fallos parciales.
+    """
     action = request.data.get('action')
     slot_id = request.data.get('slot_id')
     adv_id = request.data.get('adv_id')
 
     try:
-        slot = InventorySlot.objects.get(id=slot_id)
-        guild = GuildProfile.objects.get(id=1)
-        is_stackable = slot.item.item_type in ['CNS', 'MSC']
+        with transaction.atomic():
+            slot = InventorySlot.objects.select_for_update().get(id=slot_id)
+            guild = GuildProfile.objects.select_for_update().get(id=1)
+            is_stackable = slot.item.item_type in ['CNS', 'MSC']
 
-        if action == "to_guild":
-            if not slot.adventurer:
-                return Response({"error": "Ya está en el cofre"}, status=400)
-            if is_stackable:
-                g_slot, _ = InventorySlot.objects.get_or_create(
-                    guild=guild, item=slot.item, adventurer=None, defaults={'quantity': 0})
-                g_slot.quantity += 1
-                g_slot.save()
-            else:
-                InventorySlot.objects.create(
-                    guild=guild, item=slot.item, adventurer=None, quantity=1)
+            if action == "to_guild":
+                if not slot.adventurer:
+                    return Response({"error": "Ya está en el cofre"}, status=400)
+                if is_stackable:
+                    g_slot, _ = InventorySlot.objects.get_or_create(
+                        guild=guild, item=slot.item, adventurer=None, defaults={'quantity': 0})
+                    g_slot.quantity += 1
+                    g_slot.save()
+                else:
+                    InventorySlot.objects.create(
+                        guild=guild, item=slot.item, adventurer=None, quantity=1)
 
-        elif action == "to_adv":
-            if not slot.guild:
-                return Response({"error": "No está en el cofre"}, status=400)
-            target_adv = Adventurer.objects.get(id=adv_id)
+            elif action == "to_adv":
+                if not slot.guild:
+                    return Response({"error": "No está en el cofre"}, status=400)
+                target_adv = Adventurer.objects.select_for_update().get(id=adv_id)
 
-            if is_stackable:
-                a_slots = InventorySlot.objects.filter(
-                    adventurer=target_adv, item=slot.item, quantity__lt=16)
-                if a_slots.exists():
-                    a_slot = a_slots.first()
-                    a_slot.quantity += 1
-                    a_slot.save()
-                elif target_adv.inventory.count() < target_adv.inventory_capacity:
+                if is_stackable:
+                    a_slots = InventorySlot.objects.filter(
+                        adventurer=target_adv, item=slot.item, quantity__lt=16)
+                    if a_slots.exists():
+                        a_slot = a_slots.first()
+                        a_slot.quantity += 1
+                        a_slot.save()
+                    elif target_adv.inventory.count() < target_adv.inventory_capacity:
+                        InventorySlot.objects.create(
+                            adventurer=target_adv, item=slot.item, guild=None, quantity=1)
+                    else:
+                        return Response({"error": "La mochila del aventurero está llena (Max 10 slots)."}, status=400)
+                else:
+                    if target_adv.inventory.count() >= target_adv.inventory_capacity:
+                        return Response({"error": "La mochila del aventurero está llena (Max 10 slots)."}, status=400)
                     InventorySlot.objects.create(
                         adventurer=target_adv, item=slot.item, guild=None, quantity=1)
+
+            elif action == "equip":
+                if not slot.adventurer:
+                    return Response({"error": "Mueve el objeto a la mochila del aventurero primero."}, status=400)
+                adv = Adventurer.objects.select_for_update().get(id=slot.adventurer.id)
+                item = slot.item
+                if not is_class_allowed(adv, item):
+                    return Response({"error": "Incompatible con su clase."}, status=400)
+                if item.item_type in ['CNS', 'MSC']:
+                    return Response({"error": "No puedes equipar esto."}, status=400)
+
+                slot_map = {
+                    'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
+                    'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs', 'LGS': 'equip_legs',
+                    'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
+                    'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
+                }
+                attr_name = slot_map.get(item.item_type)
+                if item.item_type == 'RNG':
+                    attr_name = 'equip_ring_1' if not adv.equip_ring_1 else 'equip_ring_2'
+
+                old_item = getattr(adv, attr_name)
+                setattr(adv, attr_name, item)
+                adv.save()
+
+                if old_item:
+                    from .engine import add_item_to_inventory
+                    add_item_to_inventory(adv, old_item)
+
+                slot.quantity -= 1
+                if slot.quantity <= 0:
+                    slot.delete()
                 else:
-                    return Response({"error": "La mochila del aventurero está llena (Max 10 slots)."}, status=400)
-            else:
-                if target_adv.inventory.count() >= target_adv.inventory_capacity:
-                    return Response({"error": "La mochila del aventurero está llena (Max 10 slots)."}, status=400)
-                InventorySlot.objects.create(
-                    adventurer=target_adv, item=slot.item, guild=None, quantity=1)
+                    slot.save()
+                return Response({"status": "success", "message": f"{item.name} equipado."})
 
-        elif action == "equip":
-            if not slot.adventurer:
-                return Response({"error": "Mueve el objeto a la mochila del aventurero primero."}, status=400)
-            adv = slot.adventurer
-            item = slot.item
-            if not is_class_allowed(adv, item):
-                return Response({"error": "Incompatible con su clase."}, status=400)
-            if item.item_type in ['CNS', 'MSC']:
-                return Response({"error": "No puedes equipar esto."}, status=400)
+            elif action == "sell":
+                # Venta al 50% del valor real para no inflar la economía
+                item = slot.item
+                sell_value = calculate_sell_value(item, pct=0.50)
 
-            slot_map = {
-                'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-                'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs', 'LGS': 'equip_legs',
-                'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
-                'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
-            }
-            attr_name = slot_map.get(item.item_type)
-            if item.item_type == 'RNG':
-                attr_name = 'equip_ring_1' if not adv.equip_ring_1 else 'equip_ring_2'
+                # El dinero va al dueño del item (aventurero o gremio)
+                if slot.adventurer:
+                    recipient = Adventurer.objects.select_for_update().get(id=slot.adventurer.id)
+                else:
+                    recipient = guild
+                add_wealth_from_dict(recipient, sell_value)
 
-            old_item = getattr(adv, attr_name)
-            setattr(adv, attr_name, item)
-            adv.save()
+            if action in ["to_guild", "to_adv", "sell"]:
+                slot.quantity -= 1
+                if slot.quantity <= 0:
+                    slot.delete()
+                else:
+                    slot.save()
 
-            if old_item:
-                from .engine import add_item_to_inventory
-                add_item_to_inventory(adv, old_item)
-
-            slot.quantity -= 1
-            if slot.quantity <= 0:
-                slot.delete()
-            else:
-                slot.save()
-            return Response({"status": "success", "message": f"{item.name} equipado."})
-
-        elif action == "sell":
-            # Venta al 50% del valor real para no inflar la economía
-            item = slot.item
-            sell_value = calculate_sell_value(item, pct=0.50)
-
-            # El dinero va al dueño del item (aventurero o gremio)
-            if slot.adventurer:
-                recipient = slot.adventurer
-            else:
-                recipient = guild
-            add_wealth_from_dict(recipient, sell_value)
-
-        if action in ["to_guild", "to_adv", "sell"]:
-            slot.quantity -= 1
-            if slot.quantity <= 0:
-                slot.delete()
-            else:
-                slot.save()
-
-        return Response({"status": "success", "message": "Acción completada."})
+            return Response({"status": "success", "message": "Acción completada."})
     except Exception as e:
         return Response({"error": str(e)}, status=400)
 
