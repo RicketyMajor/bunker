@@ -890,7 +890,9 @@ def generate_session_script(session_id, duration_minutes, adventurers_qs):
                             if score > best_score:
                                 best_score = score
                                 best_action = skill
-                        except: pass
+                        except Exception as e:
+                            import logging
+                            logging.warning(f"Skill eval error: {e}")
 
                     context['eval_mode'] = False
 
