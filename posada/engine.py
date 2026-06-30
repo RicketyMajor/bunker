@@ -1794,7 +1794,10 @@ def pay_with_change(adv, item):
     # Pago de la Mancomunidad
     rem_cw = get_commonwealth_value(adv) - get_commonwealth_value(item)
     adv.marco = adv.real = adv.talento = adv.sueldo = adv.iota = adv.drabin = 0
-    adv.ardite = rem_cw // 32  # Dejam todo en ardites
+    adv.ardite = rem_cw // 32  # Dejamos todo en ardites
+    
+    # Mantenemos el residuo de la fracción de ardite pasándolo a la economía imperial
+    adv.iron_half_penny += rem_cw % 32
 
     adv.save()
     # El motor re-ensambla las monedas automáticamente
