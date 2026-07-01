@@ -1673,6 +1673,10 @@ class JournalTab(TabPane):
         ("w", "write_journal", "Escribir Diario"),
     ]
 
+class ChroniclesTab(TabPane):
+    can_focus = True
+    BINDINGS = []
+
 # --- PANTALLA PRINCIPAL ---
 
 
@@ -1693,6 +1697,7 @@ class PosadaMainScreen(Screen):
         Binding("4", "switch_tab('tab_missions')", "Rutinas", show=False),
         Binding("5", "switch_tab('tab_kanban')", "Kanban", show=False),
         Binding("6", "switch_tab('tab_journal')", "Diario", show=False),
+        Binding("7", "switch_tab('tab_chronicles')", "Crónicas", show=False),
 
         # Controles Ocultos Directos
         Binding("p", "pause_timer", "Pausar", show=False),
@@ -1861,6 +1866,16 @@ class PosadaMainScreen(Screen):
                         yield Button("◀ Anterior", id="btn_journal_prev", variant="primary")
                         yield Button("✒️ Escribir (w)", id="btn_journal_write", variant="success")
                         yield Button("Siguiente ▶", id="btn_journal_next", variant="primary")
+
+                with ChroniclesTab("📜 Crónicas", id="tab_chronicles"):
+                    with Horizontal(id="chronicles_layout"):
+                        with Vertical(id="chronicles_list_panel"):
+                            yield Label("📜 Sesiones de Deep Work Registradas", classes="section_title")
+                            yield DataTable(id="chronicles_table", cursor_type="row")
+                        with Vertical(id="chronicles_reader_panel"):
+                            yield Label("Selecciona una sesión para revivir su crónica.", id="lbl_chronicles_hint")
+                            yield RichLog(id="chronicles_log", highlight=True, markup=True)
+
         yield Label("", id="tab_controls")
         yield Footer()
 
@@ -2235,6 +2250,10 @@ class PosadaMainScreen(Screen):
         elif pane_id == "tab_kanban":
             lbl.update(
                 "Kanban -> [t] Tarea | [c] Columna | [e] Nuevo Evento | [E] Editar | [x/Supr] Borrar | [i] Detalle")
+        elif pane_id == "tab_chronicles":
+            lbl.update(
+                "Crónicas -> Selecciona una sesión pasada para releer su narrativa.")
+            self.action_load_chronicles()
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Permite navegar súper rápido entre pestañas presionando 1, 2, 3 o 4."""
@@ -3064,6 +3083,52 @@ class PosadaMainScreen(Screen):
     def action_open_bestiary(self) -> None:
         if self.active_tab == "tab_guild":
             self.app.push_screen(BestiaryCodexModal())
+
+    def action_load_chronicles(self) -> None:
+        """Carga las sesiones completadas desde la API y llena la tabla de crónicas."""
+        import requests
+        try:
+            resp = requests.get("http://localhost:8008/posada/api/chronicles/")
+            if resp.status_code == 200:
+                self.chronicles_data = resp.json().get("chronicles", [])
+                table = self.query_one("#chronicles_table", DataTable)
+                table.clear(columns=True)
+                table.add_columns("Fecha", "Categoría", "Duración", "Grupo")
+                for i, s in enumerate(self.chronicles_data):
+                    group = ", ".join(s["adventurers"][:3]) or "—"
+                    table.add_row(
+                        s["start_time"], 
+                        s["category"], 
+                        f"{s['duration_minutes']} min",
+                        group,
+                        key=str(i)
+                    )
+                self.query_one("#lbl_chronicles_hint", Label).update(
+                    f"📜 {len(self.chronicles_data)} sesiones encontradas. Selecciona una para leer su crónica."
+                )
+        except Exception:
+            self.notify("Error al cargar crónicas.", severity="error")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handler global para cuando se selecciona una fila en una DataTable."""
+        table_id = event.data_table.id
+
+        # --- Chronicles Table ---
+        if table_id == "chronicles_table" and hasattr(self, 'chronicles_data'):
+            idx = int(event.row_key.value)
+            session = self.chronicles_data[idx]
+            log_widget = self.query_one("#chronicles_log", RichLog)
+            log_widget.clear()
+            log_widget.write(f"[bold yellow]═══ {session['category']} | {session['start_time']} | {session['duration_minutes']} min ═══[/bold yellow]\n")
+            log_widget.write(f"[dim]Grupo: {', '.join(session['adventurers']) or '—'}[/dim]\n")
+            log_widget.write("─" * 60 + "\n")
+            for entry in session["event_log"]:
+                if isinstance(entry, str):
+                    log_widget.write(entry)
+                elif isinstance(entry, dict) and "message" in entry:
+                    log_widget.write(entry["message"])
+            self.query_one("#lbl_chronicles_hint", Label).display = False
+            return
 
     # --------------------------------------------------------
     # MÉTODOS DE LA API (HTTP)

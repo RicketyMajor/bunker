@@ -59,4 +59,7 @@ urlpatterns = [
 
     # Bestiary URLs
     path('api/bestiary/', views.list_bestiary, name='list_bestiary'),
+
+    # Chronicles URLs
+    path('api/chronicles/', views.list_chronicles, name='list_chronicles'),
 ]

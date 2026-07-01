@@ -1279,3 +1279,25 @@ def list_bestiary(request):
         })
         
     return Response({"bestiary": data})
+
+
+@api_view(['GET'])
+def list_chronicles(request):
+    """Devuelve el historial de sesiones Deep Work con sus event_logs narrativos."""
+    from posada.models import DeepWorkSession
+
+    sessions = DeepWorkSession.objects.filter(completed=True).order_by('-start_time')[:50]
+
+    data = []
+    for s in sessions:
+        adventurer_names = list(s.adventurers_involved.values_list('name', flat=True))
+        data.append({
+            "id": s.id,
+            "start_time": s.start_time.strftime("%Y-%m-%d %H:%M"),
+            "duration_minutes": s.duration_minutes,
+            "category": s.category,
+            "adventurers": adventurer_names,
+            "event_log": s.event_log or [],
+        })
+
+    return Response({"chronicles": data})
