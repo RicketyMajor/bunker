@@ -363,8 +363,8 @@ class AdventurerDetailsModal(ModalScreen[None]):
 
     def update_ui(self):
         a = self.adv_data
-        self.query_one("#lbl_title_bar", Label).update(f"📜 FICHA: {a.get('name')} | {a.get('class_name')} | {a.get('race')}")
-        self.query_one("#lbl_top_info", Label).update(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP)")
+        self.query_one("#lbl_title_bar", Label).update(f"📜 FICHA: {a.get('name')} | {a.get('reputation_title', 'Novato')} | {a.get('class_name')} | {a.get('race')}")
+        self.query_one("#lbl_top_info", Label).update(f"❤️ HP: {a.get('hp')} | Nivel {a.get('level')} ({a.get('xp')} XP) | 🛡️ Superadas: {a.get('sessions_survived', 0)} | 💀 Bajas: {a.get('monsters_killed', 0)}")
 
         # Update stats
         g_stats = self.query_one("#grid_stats", Grid)

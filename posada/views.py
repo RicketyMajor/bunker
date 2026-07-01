@@ -78,6 +78,9 @@ def guild_status(request):
             "level": adv.level,
             "xp": adv.experience,
             "hp": f"{adv.current_hp}/{adv.max_hp}",
+            "reputation_title": adv.reputation_title,
+            "sessions_survived": adv.sessions_survived,
+            "monsters_killed": adv.monsters_killed,
 
             # --- Estadísticas Formateadas ---
             "str": fmt_stat(adv.base_str, 'str'),

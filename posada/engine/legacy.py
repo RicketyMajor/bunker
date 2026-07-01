@@ -602,10 +602,12 @@ def process_session_completion(session_id, survived_seconds=None):
     # Procesar eventos ocurridos dentro del tiempo sobrevivido
     damage_taken = {}
     session_monster_xp = 0
+    session_monsters_killed = 0
     for event in script:
         if event["second"] <= survived_seconds:
             if event.get("xp_ganada"):
                 session_monster_xp += event["xp_ganada"]
+                session_monsters_killed += 1
             
             if event["type"] == "loot":
                 loot[event["coin"]] += event["amount"]
@@ -631,16 +633,21 @@ def process_session_completion(session_id, survived_seconds=None):
         dmg = damage_taken.get(adv.id, 0)
         if dmg > 0:
             adv.current_hp -= dmg
-            if adv.current_hp <= 0:
-                adv.current_hp = 0
-                adv.is_recovering = True
-                adv.recovery_time_left = 120  # 2 horas de cooldown
-                event_log.append(
-                    f"{adv.name} cayó a 0 HP y fue llevado a la enfermería en camilla.")
-            else:
+            
+        if adv.current_hp <= 0:
+            adv.current_hp = 0
+            adv.is_recovering = True
+            adv.recovery_time_left = 120  # 2 horas de cooldown
+            event_log.append(
+                f"{adv.name} cayó a 0 HP y fue llevado a la enfermería en camilla.")
+        else:
+            if dmg > 0:
                 event_log.append(
                     f"{adv.name} sobrevivió a las heridas con {adv.current_hp}/{adv.max_hp} HP.")
-            adv.save()
+            adv.sessions_survived += 1
+            adv.monsters_killed += session_monsters_killed
+            
+        adv.save()
 
     distribute_tithe(guild, adventurers, loot, event_log)
     market_phase(adventurers, event_log)

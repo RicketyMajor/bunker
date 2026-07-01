@@ -317,6 +317,23 @@ class Adventurer(WealthMixin):
     level = models.PositiveIntegerField(default=1)
     experience = models.PositiveIntegerField(default=0)
 
+    # --- REPUTACIÓN Y HAZAÑAS ---
+    sessions_survived = models.PositiveIntegerField(default=0)
+    monsters_killed = models.PositiveIntegerField(default=0)
+
+    @property
+    def reputation_title(self):
+        """Retorna el título de reputación basado en las hazañas del aventurero."""
+        if self.sessions_survived >= 100 or self.monsters_killed >= 500:
+            return "Leyenda"
+        if self.sessions_survived >= 60 or self.monsters_killed >= 300:
+            return "Héroe"
+        if self.sessions_survived >= 30 or self.monsters_killed >= 100:
+            return "Veterano"
+        if self.sessions_survived >= 10 or self.monsters_killed >= 20:
+            return "Aventurero"
+        return "Novato"
+
     # --- GRIMORIO ---
     session_skills_used = models.JSONField(
         default=list, blank=True, help_text="Habilidades de Sesión ya utilizadas.")
