@@ -36,6 +36,10 @@ def tick_exploring(ctx):
     # --- EVENTOS DE CONSUMIBLES (INMERSIÓN FLAVOR EXTENDIDA) ---
     _consumable_flavor_event(ctx, flavor_adv)
 
+    # --- EVENTOS DE DESCUBRIMIENTO NO-COMBATE ---
+    if _discovery_event(ctx, adventurers):
+        return  # Si hubo un descubrimiento, consumimos el resto del tick
+
     # --- Tirada de Encuentro ---
     if ctx.monsters_db and random.random() < 0.08:
         _spawn_encounter(ctx)
@@ -256,3 +260,131 @@ def _session_skill_eval(ctx, adventurers):
                         ctx.session_skills_tracker[skill_adv.id].add(best_action["id"])
                 except Exception as e:
                     logging.warning(f"Skill exec error: {e}")
+
+
+def _discovery_event(ctx, adventurers):
+    """8% de chance de un evento de descubrimiento interactivo especial."""
+    if random.random() >= 0.08:
+        return False
+
+    # Filtra muertos
+    living = [a for a in adventurers if ctx.temp_hp[a.id] > 0]
+    if not living:
+        return False
+
+    events = [
+        _event_magic_spring,
+        _event_trapped_chest,
+        _event_ancient_inscription,
+        _event_wandering_merchant
+    ]
+    random.choice(events)(ctx, living)
+    return True
+
+
+def _event_magic_spring(ctx, adventurers):
+    """Cura entre 20% y 40% del HP a todo el grupo vivo."""
+    import random
+    ctx.script.append({"second": ctx.current_second - 20, "type": "flavor", 
+                        "message": "✨ El grupo descubre un claro oculto con una [bold cyan]Fuente Mágica Silvestre[/bold cyan]. Sus aguas cristalinas emiten un brillo relajante."})
+    
+    for adv in adventurers:
+        heal_pct = random.uniform(0.20, 0.40)
+        heal_amt = max(1, int(adv.max_hp * heal_pct))
+        # Ensure we do not heal past max_hp
+        actual_heal = min(heal_amt, adv.max_hp - ctx.temp_hp[adv.id])
+        if actual_heal > 0:
+            ctx.temp_hp[adv.id] += actual_heal
+            ctx.script.append({"second": ctx.current_second - 18, "type": "heal", "adventurer_id": adv.id, "amount": actual_heal,
+                                "message": f"{adv.name} bebe de la fuente y recupera {actual_heal} HP."})
+
+
+def _event_trapped_chest(ctx, adventurers):
+    """El aventurero con mayor DEX intenta abrir un cofre trampa."""
+    from posada.engine.legacy import roll_d20
+    from posada.models import ItemRarity
+    import random
+
+    best_adv = max(adventurers, key=lambda a: a.get_stat_modifiers()['dex'])
+    mods = best_adv.get_stat_modifiers()
+    
+    ctx.script.append({"second": ctx.current_second - 20, "type": "flavor", 
+                        "message": f"🧰 El grupo encuentra un [bold yellow]Cofre Misterioso[/bold yellow] medio enterrado. {best_adv.name} se adelanta para inspeccionarlo."})
+    
+    dc = random.randint(12, 16)
+    roll = roll_d20()["value"]
+    total = roll + mods['dex']
+    
+    if total >= dc:
+        # Éxito: Drop raro
+        ctx.script.append({"second": ctx.current_second - 15, "type": "flavor", 
+                            "message": f"   -> ¡ÉXITO! ({roll} + {mods['dex']} = {total}). {best_adv.name} desactiva la trampa de gas y abre la cerradura."})
+        if ctx.all_items_db:
+            rarity = 'RAR' if random.random() < 0.2 else 'UNC'
+            pool = [i for i in ctx.all_items_db if i.rarity == rarity]
+            if not pool:
+                pool = ctx.all_items_db
+            drop_item = random.choice(pool)
+            ctx.script.append({"second": ctx.current_second - 10, "type": "item_loot", "item_id": drop_item.id, "adventurer_id": best_adv.id,
+                                "message": f"🎁 ¡El cofre contenía [[{ItemRarity.get_color(drop_item.rarity)}]{drop_item.name}[/]]!"})
+    else:
+        # Fallo: Daño por veneno o fuego
+        dmg = random.randint(3, 8)
+        ctx.script.append({"second": ctx.current_second - 15, "type": "flavor", 
+                            "message": f"   -> FALLO ({roll} + {mods['dex']} = {total}). *¡CLICK!* Una aguja envenenada salta del cerrojo."})
+        ctx.temp_hp[best_adv.id] -= dmg
+        ctx.script.append({"second": ctx.current_second - 12, "type": "damage", "adventurer_id": best_adv.id, "amount": dmg,
+                            "message": f"{best_adv.name} sufre {dmg} daño por la trampa."})
+
+
+def _event_ancient_inscription(ctx, adventurers):
+    """El aventurero con mayor INT o WIS descifra runas para ganar XP."""
+    from posada.engine.legacy import roll_d20
+    import random
+
+    best_adv = max(adventurers, key=lambda a: max(a.get_stat_modifiers()['int'], a.get_stat_modifiers()['wis']))
+    mods = best_adv.get_stat_modifiers()
+    bonus = max(mods['int'], mods['wis'])
+    
+    ctx.script.append({"second": ctx.current_second - 20, "type": "flavor", 
+                        "message": f"🏛️ El grupo halla una [bold purple]Inscripción Antigua[/bold purple] en una estela de piedra. {best_adv.name} se acerca a estudiarla."})
+    
+    dc = random.randint(12, 16)
+    roll = roll_d20()["value"]
+    total = roll + bonus
+    
+    if total >= dc:
+        xp_bonus = random.randint(30, 80)
+        ctx.script.append({"second": ctx.current_second - 15, "type": "flavor", "xp_ganada": xp_bonus,
+                            "message": f"   -> ¡ÉXITO! ({roll} + {bonus} = {total}). {best_adv.name} descifra los secretos del pasado (+{xp_bonus} XP)."})
+        # Buff al personaje
+        ctx.adv_status_tracker[best_adv.id].add('INSPIRED')
+        ctx.script.append({"second": ctx.current_second - 10, "type": "flavor", 
+                            "message": f"💡 {best_adv.name} se siente profundamente [bold yellow]INSPIRADO[/bold yellow] por la revelación."})
+    else:
+        ctx.script.append({"second": ctx.current_second - 15, "type": "flavor", 
+                            "message": f"   -> FALLO ({roll} + {bonus} = {total}). Las runas están demasiado erosionadas para comprender su significado."})
+
+
+def _event_wandering_merchant(ctx, adventurers):
+    """Un mercader agradece al grupo y les dona monedas valiosas."""
+    from posada.engine.legacy import COIN_COLORS
+    import random
+
+    ctx.script.append({"second": ctx.current_second - 20, "type": "flavor", 
+                        "message": "🐫 Un excéntrico [bold yellow]Mercader Errante[/bold yellow] con una mula cargada se cruza en su camino."})
+    ctx.script.append({"second": ctx.current_second - 15, "type": "flavor", 
+                        "message": "\"¡Benditos sean los viajeros! Gracias por despejar estos caminos. Tomen, por su valentía.\""})
+    
+    # Recompensa alta
+    rewards = [
+        ('silver_penny', random.randint(1, 3)),
+        ('ardite', random.randint(2, 5)),
+        ('drabin', random.randint(1, 2))
+    ]
+    coin, amt = random.choice(rewards)
+    color = COIN_COLORS.get(coin, 'white')
+    display_name = coin.replace('_', ' ').title()
+    
+    ctx.script.append({"second": ctx.current_second - 10, "type": "loot", "coin": coin, "amount": amt,
+                        "message": f"El Mercader obsequia al grupo {amt} [[{color}]{display_name}[/]]."})
