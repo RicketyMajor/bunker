@@ -1552,6 +1552,69 @@ class CalendarEventDetailsModal(ModalScreen[None]):
             self.dismiss(None)
 
 
+class BestiaryCodexModal(ModalScreen[None]):
+    """Modal para mostrar el Bestiario de Monstruos descubiertos."""
+    
+    def compose(self) -> ComposeResult:
+        with Vertical(id="bestiary_codex_dialog", classes="modal_dialog"):
+            yield Label("📖 CÓDICE DE BESTIARIO", id="lbl_bestiary_title", classes="title_bar")
+            
+            with Horizontal(id="bestiary_layout"):
+                # Lista de monstruos descubiertos
+                with Vertical(id="bestiary_list_container"):
+                    yield DataTable(id="bestiary_table", cursor_type="row")
+                
+                # Panel de detalles
+                with Vertical(id="bestiary_details_container"):
+                    yield Label("Selecciona una criatura para ver sus detalles.", id="lbl_bestiary_instructions")
+                    with VerticalScroll(id="bestiary_scroll_details"):
+                        yield Label("", id="lbl_monster_name", classes="section_title")
+                        yield Label("", id="lbl_monster_stats")
+            
+            with Horizontal(classes="btn_row"):
+                yield Button("Cerrar Códice", variant="error", id="btn_close_bestiary")
+
+    def on_mount(self) -> None:
+        table = self.query_one("#bestiary_table", DataTable)
+        table.add_columns("Monstruo", "Bajas", "Cat.")
+        self.load_bestiary()
+
+    def load_bestiary(self) -> None:
+        import requests
+        try:
+            resp = requests.get("http://localhost:8008/api/bestiary/")
+            if resp.status_code == 200:
+                self.bestiary_data = resp.json().get("bestiary", [])
+                table = self.query_one("#bestiary_table", DataTable)
+                table.clear()
+                for i, entry in enumerate(self.bestiary_data):
+                    table.add_row(entry["name"], str(entry["times_killed"]), entry["category"], key=str(i))
+        except Exception:
+            self.notify("Error cargando el bestiario.", severity="error")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        idx = int(event.row_key.value)
+        entry = self.bestiary_data[idx]
+        
+        self.query_one("#lbl_bestiary_instructions", Label).display = False
+        self.query_one("#lbl_monster_name", Label).update(f"[bold red]{entry['name']}[/bold red] ({entry['category']})")
+        
+        stats = entry["stats"]
+        details = (
+            f"[bold cyan]Primer Avistamiento:[/bold cyan] {entry['first_seen']}\n"
+            f"[bold cyan]Último Combate:[/bold cyan] {entry['last_seen']}\n\n"
+            f"[bold yellow]Estadísticas Estimadas:[/bold yellow]\n"
+            f"❤️ HP: {stats['hp']}\n"
+            f"⚔️ Daño: {stats['damage']}\n"
+            f"💪 STR: {stats['str']} | 🏃 DEX: {stats['dex']} | 🧠 INT: {stats['int']}"
+        )
+        self.query_one("#lbl_monster_stats", Label).update(details)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_close_bestiary":
+            self.dismiss()
+
+
 # --- PESTAÑAS ---
 
 
@@ -1564,7 +1627,8 @@ class TimerTab(TabPane):
 class GuildTab(TabPane):
     can_focus = True
     BINDINGS = [("d", "show_details", "Detalles"), ("x", "delete_adventurer", "Eliminar"), 
-                ("n", "new_adventurer", "Nuevo Avatar"), ("c", "open_guild_chest", "Abrir Cofre")]
+                ("n", "new_adventurer", "Nuevo Avatar"), ("c", "open_guild_chest", "Abrir Cofre"),
+                ("b", "open_bestiary", "Bestiario")]
 
 
 class TavernTab(TabPane):
@@ -1648,6 +1712,7 @@ class PosadaMainScreen(Screen):
         Binding("-", "delete_habit", "Borrar Hábito", show=False),
         Binding("u", "undo_habit", "Deshacer Hábito", show=False),
         Binding("R", "claim_chart", "Reclamar Gráfico", show=False),
+        Binding("b", "open_bestiary", "Abrir Bestiario", show=False),
         Binding("i", "handle_i", "Inspeccionar", show=False),
         Binding("I", "inspect_habit", "Detalle Hábito", show=False),
         Binding("t", "new_kanban_task", "Nueva Tarea", show=False),
@@ -2995,6 +3060,13 @@ class PosadaMainScreen(Screen):
         active_tab = self.query_one(TabbedContent).active
         if active_tab == "tab_timer": self.action_setup_timer()
         elif active_tab == "tab_kanban": self.action_new_kanban_col()
+
+    def action_open_bestiary(self) -> None:
+        if self.active_tab == "tab_guild":
+            self.app.push_screen(BestiaryCodexModal())
+
+    # --------------------------------------------------------
+    # MÉTODOS DE LA API (HTTP)
 
     def action_handle_x(self):
         active_tab = self.query_one(TabbedContent).active

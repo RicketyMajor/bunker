@@ -792,3 +792,18 @@ class CalendarEvent(models.Model):
     def __str__(self):
         return f"{self.date} - {self.title}"
 
+
+class BestiaryEntry(models.Model):
+    """Registro de monstruos avistados y derrotados por el gremio."""
+    guild = models.ForeignKey(GuildProfile, on_delete=models.CASCADE, related_name='bestiary_entries')
+    monster = models.ForeignKey(Monster, on_delete=models.CASCADE, related_name='bestiary_entries')
+    times_killed = models.PositiveIntegerField(default=0)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('guild', 'monster')
+        ordering = ['-times_killed', 'monster__name']
+
+    def __str__(self):
+        return f"{self.monster.name} - Derrotado: {self.times_killed}"

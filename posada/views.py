@@ -1245,7 +1245,37 @@ def delete_calendar_event(request, event_id):
         event = CalendarEvent.objects.get(id=event_id)
         title = event.title
         event.delete()
-        return Response({"status": "success", "message": f"Evento '{title}' eliminado."})
+        return Response({"status": "success", "message": "Evento eliminado."})
     except CalendarEvent.DoesNotExist:
-        return Response({"error": "Evento no encontrado."}, status=404)
+        return Response({"status": "error", "message": "Evento no encontrado."}, status=404)
 
+
+@api_view(['GET'])
+def list_bestiary(request):
+    """Devuelve la lista de monstruos derrotados por el Gremio."""
+    from posada.models import BestiaryEntry, GuildProfile
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+    
+    entries = BestiaryEntry.objects.filter(guild=guild).select_related('monster')
+    
+    data = []
+    for entry in entries:
+        m = entry.monster
+        data.append({
+            "id": entry.id,
+            "monster_id": m.id,
+            "name": m.name,
+            "category": m.get_category_display(),
+            "times_killed": entry.times_killed,
+            "first_seen": entry.first_seen.strftime("%Y-%m-%d %H:%M"),
+            "last_seen": entry.last_seen.strftime("%Y-%m-%d %H:%M"),
+            "stats": {
+                "hp": f"{m.min_hp}-{m.max_hp}",
+                "str": f"{m.min_str}-{m.max_str}",
+                "dex": f"{m.min_dex}-{m.max_dex}",
+                "int": f"{m.min_int}-{m.max_int}",
+                "damage": f"{m.damage_dice_count}d{m.damage_dice_sides} + {m.bonus_damage}"
+            }
+        })
+        
+    return Response({"bestiary": data})

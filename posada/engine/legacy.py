@@ -603,11 +603,15 @@ def process_session_completion(session_id, survived_seconds=None):
     damage_taken = {}
     session_monster_xp = 0
     session_monsters_killed = 0
+    killed_monsters_ids = {}
     for event in script:
         if event["second"] <= survived_seconds:
             if event.get("xp_ganada"):
                 session_monster_xp += event["xp_ganada"]
                 session_monsters_killed += 1
+            if event.get("monster_id"):
+                m_id = event["monster_id"]
+                killed_monsters_ids[m_id] = killed_monsters_ids.get(m_id, 0) + 1
             
             if event["type"] == "loot":
                 loot[event["coin"]] += event["amount"]
@@ -648,6 +652,20 @@ def process_session_completion(session_id, survived_seconds=None):
             adv.monsters_killed += session_monsters_killed
             
         adv.save()
+
+    # --- Bestiary Update ---
+    from posada.models import BestiaryEntry
+    for m_id, count in killed_monsters_ids.items():
+        entry, created = BestiaryEntry.objects.get_or_create(
+            guild=guild, monster_id=m_id, 
+            defaults={'times_killed': 0}
+        )
+        if created:
+            guild.add_prestige(10)
+            guild.save()
+            event_log.append(f"📖 ¡Nuevo descubrimiento en el Bestiario! (+10 Prestigio)")
+        entry.times_killed += count
+        entry.save()
 
     distribute_tithe(guild, adventurers, loot, event_log)
     market_phase(adventurers, event_log)

@@ -334,7 +334,8 @@ def _check_deaths(ctx, adventurers):
             xp_ganada = getattr(m['base'], 'xp_reward', 0)
             m_color = MONSTER_COLORS.get(m['base'].category, 'red')
             ctx.script.append({"second": ctx.current_second - 2, "type": "flavor",
-                                "message": f"💀 [[{m_color}]{m['name']}[/]] cae derrotado (+{xp_ganada} XP).", "xp_ganada": xp_ganada})
+                                "message": f"💀 [[{m_color}]{m['name']}[/]] cae derrotado (+{xp_ganada} XP).", 
+                                "xp_ganada": xp_ganada, "monster_id": m['base'].id})
             ctx.active_monsters_group.remove(m)
 
             # Generar Monedas
