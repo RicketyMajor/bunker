@@ -989,6 +989,13 @@ def list_kanban(request):
         "board_name": board.name,
         "columns": []
     }
+    quest_ranks = {
+        'LOW': '📜 Rango D',
+        'MED': '⚔️ Rango C',
+        'HGH': '🛡️ Rango B',
+        'CRT': '👑 Rango S'
+    }
+    
     for col in columns:
         tasks = col.tasks.all()
         col_data = {
@@ -1002,6 +1009,7 @@ def list_kanban(request):
                 "description": t.description,
                 "priority": t.get_priority_display(),
                 "priority_code": t.priority,
+                "quest_rank": quest_ranks.get(t.priority, 'Desconocido'),
                 "due_date": t.due_date.isoformat() if t.due_date else None,
                 "prestige_reward": t.prestige_reward,
             } for t in tasks]
@@ -1085,29 +1093,51 @@ def move_kanban_task(request):
 
         # Si llega a la última columna, completar y dar prestigio
         if new_col.id == columns[-1].id and not task.completed_at:
+            import random
             task.completed_at = timezone.now()
             guild, _ = GuildProfile.objects.get_or_create(id=1)
             
             reward_msg = f"+{task.prestige_reward} Prestigio"
+            flavor_text = ""
+            
             if task.priority == 'LOW':
+                guild.ardite += 2
+                reward_msg += ", +2 Ardites"
+                flavor_text = random.choice([
+                    "El Gremio agradece tu diligencia. Un mandado más sale de la pizarra.",
+                    "Un trabajo menor, pero honrado. Las calles están un poco más seguras.",
+                    "La tarea fue sencilla, pero cada esfuerzo cuenta para la Posada."
+                ])
+            elif task.priority == 'MED':
                 guild.silver_penny += 1
                 reward_msg += ", +1 Penique de Plata"
-            elif task.priority == 'MED':
-                guild.sueldo += 2
-                guild.silver_penny += 1
-                reward_msg += ", +2 Sueldos, +1 Penique de Plata"
+                flavor_text = random.choice([
+                    "¡Encargo cumplido! Los mercaderes del distrito revisan tus logros con respeto.",
+                    "El cliente ha pagado generosamente por esta misión estándar.",
+                    "Has demostrado tu valía en combate. Una misión bien ejecutada."
+                ])
             elif task.priority == 'HGH':
-                guild.real += 1
-                guild.sueldo += 5
-                reward_msg += ", +1 Real, +5 Sueldos"
+                guild.sueldo += 1
+                guild.drabin += 2
+                reward_msg += ", +1 Sueldo, +2 Drabines"
+                flavor_text = random.choice([
+                    "¡Cacería exitosa! Tu nombre resuena en los pasillos del Gremio con admiración.",
+                    "Una tarea peligrosa superada con gran maestría.",
+                    "Los nobles locales enviarán sus agradecimientos por resolver este gran problema."
+                ])
             elif task.priority == 'CRT':
                 guild.talento += 1
-                guild.real += 2
-                reward_msg += ", +1 Talento, +2 Reales"
+                guild.real += 1
+                reward_msg += ", +1 Talento, +1 Real"
+                flavor_text = random.choice([
+                    "¡¡GESTA LEGENDARIA!! Los bardos compondrán canciones sobre esta hazaña por generaciones.",
+                    "Has salvado al reino de una catástrofe. El Gremio inscribe tu nombre en oro.",
+                    "Una misión de proporciones míticas completada. La Posada celebra tu victoria épica."
+                ])
 
             leveled_up = guild.add_prestige(task.prestige_reward)
             lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
-            msg = f"¡Tarea '{task.title}' completada! {reward_msg}.{lvl_msg}"
+            msg = f"¡Misión '{task.title}' Completada!\n{reward_msg}.{lvl_msg}\n\n[italic cyan]\"{flavor_text}\"[/]"
 
         # Si se mueve de vuelta desde la última columna, quitar completado
         elif new_col.id != columns[-1].id and task.completed_at:

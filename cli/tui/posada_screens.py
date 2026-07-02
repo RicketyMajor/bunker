@@ -1037,7 +1037,7 @@ class NewKanbanTaskModal(ModalScreen[dict]):
             yield Label("Nueva Tarea", classes="modal_title")
             yield Input(placeholder="Título de la tarea", id="task_title")
             yield Label("Prioridad:")
-            yield Select((("Baja", "LOW"), ("Media", "MED"), ("Alta", "HGH"), ("Crítica", "CRT")), id="task_priority", value="MED")
+            yield Select((("📜 Rango D (Baja)", "LOW"), ("⚔️ Rango C (Media)", "MED"), ("🛡️ Rango B (Alta)", "HGH"), ("👑 Rango S (Crítica)", "CRT")), id="task_priority", value="MED")
             yield Input(placeholder="Descripción (Opcional)", id="task_desc")
             yield Label("Fecha Límite (Opcional):", classes="date_label")
             with Horizontal(classes="date_row"):
@@ -1489,8 +1489,8 @@ class KanbanTaskDetailsModal(ModalScreen[None]):
             yield Label("Descripción:", classes="detail_section")
             yield Label(f"  {desc}", classes="detail_content")
 
-            yield Label("Prioridad:", classes="detail_section")
-            yield Label(f"  [{p_color}]{t.get('priority', '?')}[/]", classes="detail_content")
+            yield Label("Rango de Misión:", classes="detail_section")
+            yield Label(f"  [{p_color}]{t.get('quest_rank', t.get('priority', '?'))}[/]", classes="detail_content")
 
             yield Label("Columna Actual:", classes="detail_section")
             yield Label(f"  {self.column_name}", classes="detail_content")
@@ -1843,7 +1843,7 @@ class PosadaMainScreen(Screen):
                             yield Label("Cargando gráficos...", id="chart_title_label", classes="section_title")
                             yield PlotextPlot(id="productivity_plot")
 
-                with KanbanTab("Tablón de Misiones", id="tab_kanban"):
+                with KanbanTab("Encargos del Gremio", id="tab_kanban"):
                     with Vertical():
                         yield Label("Kanban (Cargando...)", id="lbl_kanban_title", classes="section_title")
                         with Horizontal(id="kanban_columns_container"):
@@ -3185,7 +3185,8 @@ class PosadaMainScreen(Screen):
                     col = columns[i]
                     table.add_column(f"[{col['color']}]{col['title']}[/]", width=40)
                     for task in col['tasks']:
-                        table.add_row(f"[{task['priority_code']}] {task['title']}", key=f"{task['id']}_col{col['id']}")
+                        quest_icon = task.get('quest_rank', '').split(' ')[0] if task.get('quest_rank') else ''
+                        table.add_row(f"{quest_icon} [{task['priority_code']}] {task['title']}", key=f"{task['id']}_col{col['id']}")
                 else:
                     table.display = False
             except Exception:
