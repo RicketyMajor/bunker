@@ -134,31 +134,14 @@ def get_local_ip():
 
 
 def get_dashboard_stats():
-    """Consulta la API para obtener métricas rápidas de la biblioteca."""
-    stats = {"books": 0, "loans": 0, "wishlist": 0}
+    """Consulta la API BFF para obtener todas las métricas en una sola llamada."""
     try:
-        books_resp = httpx.get(
-            "http://localhost:8008/api/books/library/", timeout=1.0)
-        if books_resp.status_code == 200:
-            stats["books"] = len(books_resp.json())
-
-        loans_resp = httpx.get(
-            "http://localhost:8008/api/books/loans/", timeout=1.0)
-        if loans_resp.status_code == 200:
-            stats["loans"] = len(loans_resp.json())
-
-        wish_resp = httpx.get(
-            "http://localhost:8008/api/books/wishlist-crud/", timeout=1.0)
-        if wish_resp.status_code == 200:
-            stats["wishlist"] = len(wish_resp.json())
-
-        tracker_resp = httpx.get(
-            "http://localhost:8008/api/books/tracker/stats/", timeout=1.0)
-        if tracker_resp.status_code == 200:
-            stats["tracker"] = tracker_resp.json()
+        resp = httpx.get("http://localhost:8008/api/dashboard/", timeout=2.0)
+        if resp.status_code == 200:
+            return resp.json()
     except Exception:
         pass
-    return stats
+    return {}
 
 
 def show_welcome_screen():
@@ -167,46 +150,43 @@ def show_welcome_screen():
     ascii_art = pyfiglet.figlet_format("BUNKER", font="slant")
     ascii_text = Text(ascii_art, style="bold cyan")
 
-    # Obtiene los datos dinámicos
+    # Obtiene los datos dinámicos a través del BFF
     stats = get_dashboard_stats()
+    
+    posada = stats.get("posada", {})
+    guild = posada.get("guild", {})
+    books = stats.get("books", {})
+    movies = stats.get("movies", {})
+    music = stats.get("music", {})
+    feed = stats.get("feed", [])
 
-    tracker = stats.get("tracker", {})
-    pages_month = tracker.get("pages_this_month", 0)
-    books_month = tracker.get("books_this_month", 0)
-    month_name = tracker.get("current_month", "Mes actual")
+    # Panel de Búnker (Medios)
+    inv_text = f"""[cyan]▤[/cyan] Libros: [bold cyan]{books.get('total', 0)}[/bold cyan] ({books.get('read', 0)} leídos)
+[yellow]🎬[/yellow] Cine: [bold yellow]{movies.get('total', 0)}[/bold yellow] ({movies.get('watched', 0)} vistos)
+[magenta]🎵[/magenta] Discos: [bold magenta]{music.get('total', 0)}[/bold magenta] ({music.get('listened', 0)} oídos)
+[green]⏱️[/green] Deep Work Hoy: [bold green]{posada.get('dw_minutes_today', 0)}m[/bold green]"""
 
-    # Panel de Inventario
-    inv_text = f"""[cyan]▤[/cyan] Colección: [bold green]{stats.get('books', 0)}[/bold green] tomos
-[yellow]⇋[/yellow] Préstamos: [bold yellow]{stats.get('loans', 0)}[/bold yellow] activos
-[magenta]◈[/magenta] Wishlist:  [bold magenta]{stats.get('wishlist', 0)}[/bold magenta] en radar
-[green]★[/green] Bandeja: [bold cyan]book inbox[/bold cyan]"""
-
-    # Panel de Tracker
-    track_text = f"""[cyan]∑[/cyan] Páginas leídas: [bold cyan]{pages_month}[/bold cyan]
-[yellow]★[/yellow] Obras terminadas: [bold yellow]{books_month}[/bold yellow]
-[dim]Progreso de {month_name}[/dim]"""
+    # Panel de La Posada
+    track_text = f"""[yellow]🛡️[/yellow] Gremio Nivel: [bold yellow]{guild.get('prestige_level', 1)}[/bold yellow]
+[cyan]⭐[/cyan] Prestigio: [bold cyan]{guild.get('prestige', 0)}/{guild.get('prestige_meta', 100)}[/bold cyan]
+[green]📅[/green] Eventos Hoy: [bold green]{posada.get('today_events', 0)}[/bold green]
+[magenta]📋[/magenta] Tareas Pendientes: [bold magenta]{posada.get('pending_tasks', 0)}[/bold magenta]"""
 
     # Panel de Comandos Rápidos
-    cmd_text = """[cyan]⌘[/cyan] Escanear QR: [bold cyan]scanner[/bold cyan]
-[green]▤[/green] Explorar Raíz: [bold cyan]ls[/bold cyan]
-[green]✎[/green] Anotar páginas: [bold cyan]tracker log <num>[/bold cyan]
-[magenta]✔[/magenta] Registrar obra: [bold cyan]tracker finish[/bold cyan]"""
+    cmd_text = """[cyan]⌘[/cyan] Entrar a la TUI: [bold cyan]enter[/bold cyan]
+[green]▤[/green] Escanear QR: [bold cyan]scanner[/bold cyan]
+[magenta]✔[/magenta] Ver Sistema: [bold cyan]ls[/bold cyan]
+[yellow]▶[/yellow] Sincronizar: [bold cyan]sync[/bold cyan]"""
 
-    # Panel de Módulos (Con atajos extra)
-    mod_text = """[green]▪[/green] [bold]book[/bold]    (list, add, details...)
-[green]▪[/green] [bold]dir[/bold]     (create, list, add)
-[green]▪[/green] [bold]loan[/bold]    (list, lend, return)
-[green]▪[/green] [bold]tracker[/bold] (log, finish, annual)"""
+    # Panel de Activity Feed
+    feed_lines = feed[:4] if feed else ["[dim]Sin actividad reciente...[/dim]"]
+    feed_text = "\n".join(feed_lines)
 
-    # Ensambla los 4 paneles reduciendo drásticamente el padding vertical
-    p_inv = Panel(
-        inv_text, title="[bold cyan]Sensores[/bold cyan]", border_style="cyan", padding=(0, 2))
-    p_trk = Panel(
-        track_text, title="[bold green]Hábitos[/bold green]", border_style="green", padding=(0, 2))
-    p_cmd = Panel(cmd_text, title="[bold yellow]Atajos Rápidos[/bold yellow]",
-                  border_style="yellow", padding=(0, 2))
-    p_mod = Panel(mod_text, title="[bold magenta]Módulos[/bold magenta]",
-                  border_style="magenta", padding=(0, 2))
+    # Ensambla los 4 paneles
+    p_inv = Panel(inv_text, title="[bold cyan]Colecciones[/bold cyan]", border_style="cyan", padding=(0, 2))
+    p_trk = Panel(track_text, title="[bold green]La Posada[/bold green]", border_style="green", padding=(0, 2))
+    p_cmd = Panel(cmd_text, title="[bold yellow]Atajos Rápidos[/bold yellow]", border_style="yellow", padding=(0, 2))
+    p_mod = Panel(feed_text, title="[bold magenta]Activity Feed[/bold magenta]", border_style="magenta", padding=(0, 2))
 
     grid = Table.grid(expand=True, padding=(0, 2))
     grid.add_column(ratio=1)  # Columna Izquierda
@@ -218,8 +198,7 @@ def show_welcome_screen():
 
     console.print(Align.center(ascii_text))
     console.print(grid)
-    console.print(
-        "[dim]Atajos: \\[Tab] Autocompletar | \\[exit] Cerrar sesión[/dim]", justify="center")
+    console.print("[dim]Atajos: \\[Tab] Autocompletar | \\[exit] Cerrar sesión[/dim]", justify="center")
     console.print()
 
 
