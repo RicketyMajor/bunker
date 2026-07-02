@@ -133,8 +133,20 @@ def _spawn_encounter(ctx):
     """Genera un grupo de monstruos y transiciona a COMBAT."""
     from posada.engine.legacy import safe_randint, MONSTER_COLORS
 
-    category_weights = {'SML': 60, 'MED': 30, 'LRG': 8, 'EPC': 2}
-    weights = [category_weights.get(m.category, 10) for m in ctx.monsters_db]
+    avg_level = sum(a.level for a in ctx.adventurers) / len(ctx.adventurers) if ctx.adventurers else 1
+    
+    if avg_level <= 3:
+        category_weights = {'SML': 80, 'MED': 20, 'LRG': 0, 'EPC': 0}
+    elif avg_level <= 6:
+        category_weights = {'SML': 60, 'MED': 30, 'LRG': 10, 'EPC': 0}
+    elif avg_level <= 9:
+        category_weights = {'SML': 10, 'MED': 60, 'LRG': 30, 'EPC': 0}
+    else:
+        category_weights = {'SML': 20, 'MED': 40, 'LRG': 30, 'EPC': 10}
+
+    weights = [category_weights.get(m.category, 0) for m in ctx.monsters_db]
+    if sum(weights) == 0:
+        weights = [1] * len(ctx.monsters_db)
     base_monster = random.choices(ctx.monsters_db, weights=weights, k=1)[0]
 
     spawn_count = random.randint(base_monster.min_spawn, base_monster.max_spawn)
