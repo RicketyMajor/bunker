@@ -502,6 +502,7 @@ class BunkerLauncherScreen(Screen):
                         yield Label("[#00e5ff]▸[/] BIBLIOTECA", classes="col_header", id="lib_title")
                         yield Label("[dim]░░░░░░░░░░░░░░░░░░░░[/dim] 0%", id="bar_books", classes="col_bar")
                         yield Label("  --/-- leídos • --h est.", id="stat_books", classes="col_stat")
+                        yield Label("  [green]📖 Racha de Lectura: 0 días[/green]", id="stat_books_streak", classes="col_stat")
 
                     with Vertical(classes="collection_block"):
                         yield Label("[#ffb000]▸[/] VIDEOCLUB", classes="col_header", id="mov_title")
@@ -712,9 +713,13 @@ class BunkerLauncherScreen(Screen):
             b_read = b.get("read", 0)
             b_total = b.get("total", 0)
             b_hours = b.get("hours", 0)
+            b_streak = b.get("streak", 0)
             self.query_one("#bar_books", Label).update(self.create_gauge(b_read, max(b_total, 1)))
             self.query_one("#stat_books", Label).update(
                 f"  [dim]{b_read}/{b_total} completados • {b_hours}h est.[/]"
+            )
+            self.query_one("#stat_books_streak", Label).update(
+                f"  [#00ff41]📖 Racha de Lectura: {b_streak} días[/]"
             )
 
             m = data.get("movies") or {}
