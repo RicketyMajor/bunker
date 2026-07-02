@@ -2017,6 +2017,7 @@ class PosadaMainScreen(Screen):
             status = "Enfermería" if adv.get("is_recovering") else "Disponible"
 
             # En la tabla principal muestra solo un resumen rápido
+            resumen_equipo = "Ver Detalles (d)"
             # key=str(adv['id']) ancla la fila de la tabla a la base de datos
             table_adv.add_row(
                 adv.get("name", "Unknown"),
