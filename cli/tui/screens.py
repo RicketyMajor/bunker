@@ -490,7 +490,8 @@ class BunkerLauncherScreen(Screen):
                     yield Label("  Héroe Líder  │ [dim]--[/]", id="metric_leader", classes="metric_line")
                     yield Label("  Patrimonio   │ [dim]-- Talentos[/]", id="metric_wealth", classes="metric_line")
                     yield Label("  Hábitos Hoy  │ [dim]--/--[/]", id="metric_habits", classes="metric_line")
-                    yield Label("  Racha Activa │ [dim]--[/]", id="metric_streak", classes="metric_line")
+                    yield Label("  Racha Hábitos│ [dim]--[/]", id="metric_streak", classes="metric_line")
+                    yield Label("  Racha Lectura│ [dim]--[/]", id="metric_read_streak", classes="metric_line")
                     yield Label("  Kanban Pend. │ [dim]-- tareas[/]", id="metric_kanban", classes="metric_line")
                     yield Label("  Eventos Hoy  │ [dim]-- eventos[/]", id="metric_calendar", classes="metric_line")
 
@@ -502,7 +503,6 @@ class BunkerLauncherScreen(Screen):
                         yield Label("[#00e5ff]▸[/] BIBLIOTECA", classes="col_header", id="lib_title")
                         yield Label("[dim]░░░░░░░░░░░░░░░░░░░░[/dim] 0%", id="bar_books", classes="col_bar")
                         yield Label("  --/-- leídos • --h est.", id="stat_books", classes="col_stat")
-                        yield Label("  [green]📖 Racha de Lectura: 0 días[/green]", id="stat_books_streak", classes="col_stat")
 
                     with Vertical(classes="collection_block"):
                         yield Label("[#ffb000]▸[/] VIDEOCLUB", classes="col_header", id="mov_title")
@@ -694,7 +694,14 @@ class BunkerLauncherScreen(Screen):
             str_val = streak.get("streak", 0)
             flame = "[#ff4444]▲[/]" if str_val > 5 else "[#ffb000]▲[/]"
             self.query_one("#metric_streak", Label).update(
-                f"  {flame}  Racha Activa [#555555]│[/] [bold]{str_name}[/] [dim]({str_val}d)[/]"
+                f"  {flame}  Racha Hábitos[#555555]│[/] [bold]{str_name}[/] [dim]({str_val}d)[/]"
+            )
+
+            b = data.get("books") or {}
+            b_streak = b.get("streak", 0)
+            read_icon = "[#00ff41]▤[/]" if b_streak > 0 else "[#555555]▤[/]"
+            self.query_one("#metric_read_streak", Label).update(
+                f"  {read_icon}  Racha Lectura[#555555]│[/] [bold #00ff41]{b_streak}[/] [dim]días[/]"
             )
 
             pt = posada.get("pending_tasks") or 0
@@ -713,13 +720,9 @@ class BunkerLauncherScreen(Screen):
             b_read = b.get("read", 0)
             b_total = b.get("total", 0)
             b_hours = b.get("hours", 0)
-            b_streak = b.get("streak", 0)
             self.query_one("#bar_books", Label).update(self.create_gauge(b_read, max(b_total, 1)))
             self.query_one("#stat_books", Label).update(
                 f"  [dim]{b_read}/{b_total} completados • {b_hours}h est.[/]"
-            )
-            self.query_one("#stat_books_streak", Label).update(
-                f"  [#00ff41]📖 Racha de Lectura: {b_streak} días[/]"
             )
 
             m = data.get("movies") or {}
