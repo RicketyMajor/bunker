@@ -41,6 +41,7 @@ urlpatterns = [
          name='create_journal_entry'),
     path('api/guild/upgrades/', views.list_upgrades, name='list_upgrades'),
     path('api/guild/upgrades/buy/', views.buy_upgrade, name='buy_upgrade'),
+    path('api/guild/exchange/', views.exchange_currency, name='exchange_currency'),
 
     # Kanban URLs
     path('api/kanban/', views.list_kanban, name='list_kanban'),

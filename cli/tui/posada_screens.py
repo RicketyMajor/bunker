@@ -1823,11 +1823,18 @@ class PosadaMainScreen(Screen):
                     yield DataTable(id="all_adventurers_table")
 
                 with TavernTab("La Taberna", id="tab_tavern"):
-                    yield Label("Aventureros buscando un Gremio (Nivel 1):", classes="section_title")
-                    yield DataTable(id="tavern_table")
-                    with Horizontal(classes="timer_buttons"):
-                        yield Button("Reclutar Seleccionado (r)", id="btn_recruit", variant="success")
-                        yield Button("Invitar Rondas (f)", id="btn_refresh_tavern", variant="primary")
+                    with Vertical():
+                        yield Label("Aventureros buscando un Gremio (Nivel 1):", classes="section_title")
+                        yield DataTable(id="tavern_table")
+                        with Horizontal(classes="timer_buttons"):
+                            yield Button("Reclutar Seleccionado (r)", id="btn_recruit", variant="success")
+                            yield Button("Invitar Rondas (f)", id="btn_refresh_tavern", variant="primary")
+                    
+                    with Vertical(id="exchange_section", classes="hidden"):
+                        yield Label("🏛️ Casa de Cambio de Vintas", classes="section_title")
+                        with Horizontal(classes="timer_buttons"):
+                            yield Button("Cambiar 5 Plata a 16 Sueldos", id="btn_exchange_to_sueldo", variant="warning")
+                            yield Button("Cambiar 16 Sueldos a 5 Plata", id="btn_exchange_to_silver", variant="primary")
 
                 with MissionsTab("Rutinas del Gremio", id="tab_missions"):
                     with Horizontal():
@@ -1940,6 +1947,19 @@ class PosadaMainScreen(Screen):
             self.app.call_from_thread(
                 self.app.notify, "El Cambista no responde.", severity="error")
 
+    @work(thread=True)
+    def request_exchange(self, direction: str) -> None:
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}guild/exchange/", json={"direction": direction}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, resp.json().get("message"), severity="success")
+                self.sync_guild_status()
+            else:
+                msg = resp.json().get("error", "Error en cambio de divisas") if resp.status_code == 400 else "Error del servidor"
+                self.app.call_from_thread(self.app.notify, msg, severity="error")
+        except Exception:
+            self.app.call_from_thread(self.app.notify, "La Casa de Cambio está cerrada.", severity="error")
+
     def handle_reset_guild(self, confirmed: bool) -> None:
         if confirmed:
             self._do_reset_guild()
@@ -1997,15 +2017,24 @@ class PosadaMainScreen(Screen):
             status = "Enfermería" if adv.get("is_recovering") else "Disponible"
 
             # En la tabla principal muestra solo un resumen rápido
-            resumen_equipo = "Ver Detalles (d)"
-
             # key=str(adv['id']) ancla la fila de la tabla a la base de datos
             table_adv.add_row(
-                adv["name"], adv["class_name"], str(
-                    adv["level"]), str(adv["xp"]),
-                adv["wealth_summary"], resumen_equipo, status,
-                key=str(adv["id"])
+                adv.get("name", "Unknown"),
+                adv.get("adv_class", "BBN"),
+                str(adv.get("level", 1)),
+                f"{adv.get('current_hp', 0)}/{adv.get('max_hp', 0)}",
+                status,
+                resumen_equipo,
+                key=str(adv.get("id"))
             )
+
+        # Configurar visibilidad de Casa de Cambio
+        unlocked = guild.get('unlocked_upgrades', [])
+        exchange_sec = self.query_one("#exchange_section", Vertical)
+        if "casa_de_cambio" in unlocked:
+            exchange_sec.remove_class("hidden")
+        else:
+            exchange_sec.add_class("hidden")
 
         # SI EL GREMIO ESTÁ VACÍO, FUERZA LA CREACIÓN DEL AVATAR
         if not adventurers:
@@ -2191,6 +2220,10 @@ class PosadaMainScreen(Screen):
                                  lambda _: self.sync_guild_status())
         elif event.button.id == "btn_open_chest":
             self.action_open_guild_chest()
+        elif event.button.id == "btn_exchange_to_sueldo":
+            self.request_exchange("to_sueldo")
+        elif event.button.id == "btn_exchange_to_silver":
+            self.request_exchange("to_silver")
 
     def action_delete_adventurer(self) -> None:
         if self.query_one(TabbedContent).active != "tab_guild":

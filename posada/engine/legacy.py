@@ -836,6 +836,23 @@ def universal_consolidate(entity):
         entity.silver_penny += n
 
     # --- Puentes de Alto Valor ---
+    from posada.models import GuildUnlockedUpgrade, Adventurer, GuildProfile
+    guild = None
+    if isinstance(entity, GuildProfile):
+        guild = entity
+    elif isinstance(entity, Adventurer):
+        guild, _ = GuildProfile.objects.get_or_create(id=1)
+        
+    has_casa = False
+    if guild:
+        has_casa = GuildUnlockedUpgrade.objects.filter(guild=guild, upgrade__key='casa_de_cambio').exists()
+
+    if has_casa and entity.silver_penny >= 10:
+        n = entity.silver_penny // 10
+        entity.silver_penny %= 10
+        entity.talento += n
+        log.append(f"Casa de Cambio: {n*10} Peniques de Plata convertidos a {n} Talento.")
+
     if entity.sueldo >= 32:
         n = entity.sueldo // 32
         entity.sueldo %= 32

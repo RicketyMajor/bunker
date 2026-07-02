@@ -123,6 +123,7 @@ def guild_status(request):
         })
 
     max_adventurers = 1 + 2 * (guild.prestige_level - 1)
+    unlocked = list(GuildUnlockedUpgrade.objects.filter(guild=guild).values_list('upgrade__key', flat=True))
     guild_data = {
         "prestige_level": guild.prestige_level,
         "prestige": guild.prestige,
@@ -130,6 +131,7 @@ def guild_status(request):
         "net_worth_talents": guild.net_worth_in_talents,
         "max_adventurers": max_adventurers,
         "current_adventurers": Adventurer.objects.count(),
+        "unlocked_upgrades": unlocked,
         "inventory": {
             "iron_half_penny": guild.iron_half_penny, "iron_penny": guild.iron_penny,
             "ardite": guild.ardite, "drabin": guild.drabin, "copper_penny": guild.copper_penny,
@@ -968,6 +970,41 @@ def buy_upgrade(request):
 
     GuildUnlockedUpgrade.objects.create(guild=guild, upgrade=upgrade)
     return Response({"status": "success", "message": f"¡Mejora '{upgrade.name}' adquirida!"})
+
+
+@api_view(['POST'])
+def exchange_currency(request):
+    """Permite el libre flujo entre divisas de la Senda Imperial y Mancomunidad."""
+    direction = request.data.get('direction') # 'to_sueldo' or 'to_silver'
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+    
+    has_casa = GuildUnlockedUpgrade.objects.filter(guild=guild, upgrade__key='casa_de_cambio').exists()
+    if not has_casa:
+        return Response({"error": "Requiere la mejora 'Casa de Cambio de Vintas'."}, status=400)
+        
+    if direction == 'to_sueldo':
+        if guild.silver_penny < 5:
+            return Response({"error": "Necesitas al menos 5 Peniques de Plata."}, status=400)
+        
+        n = guild.silver_penny // 5
+        guild.silver_penny %= 5
+        guild.sueldo += (n * 16)
+        guild.save()
+        universal_consolidate(guild)
+        return Response({"status": "success", "message": f"Se cambiaron {n*5} Peniques de Plata por {n*16} Sueldos."})
+        
+    elif direction == 'to_silver':
+        if guild.sueldo < 16:
+            return Response({"error": "Necesitas al menos 16 Sueldos."}, status=400)
+            
+        n = guild.sueldo // 16
+        guild.sueldo %= 16
+        guild.silver_penny += (n * 5)
+        guild.save()
+        universal_consolidate(guild)
+        return Response({"status": "success", "message": f"Se cambiaron {n*16} Sueldos por {n*5} Peniques de Plata."})
+        
+    return Response({"error": "Dirección de cambio inválida."}, status=400)
 
 
 # --- KANBAN ---
