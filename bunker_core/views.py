@@ -27,6 +27,27 @@ def global_dashboard_view(request):
         data["books"]["read"] = books.filter(is_read=True).count()
         total_pages = sum((b.page_count or 0) for b in books)
         data["books"]["hours"] = round((total_pages * 1.5) / 60, 1)
+        
+        # Calculate reading streak
+        from catalog.models import ReadingSession
+        sessions = ReadingSession.objects.filter(pages_read__gt=0).values_list('date', flat=True).distinct()
+        session_dates = set(sessions)
+        
+        streak = 0
+        if today in session_dates:
+            check_date = today
+        elif (today - timedelta(days=1)) in session_dates:
+            check_date = today - timedelta(days=1)
+        else:
+            check_date = None
+            
+        if check_date:
+            while check_date in session_dates:
+                streak += 1
+                check_date -= timedelta(days=1)
+        
+        data["books"]["streak"] = streak
+
     except Exception as e:
         feed.append(f"[red]Error Libros:[/] {str(e)[:40]}")
 
