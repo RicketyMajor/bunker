@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import log_pages, finish_book, tracker_stats, AnnualRecordViewSet
+from .views import log_pages, finish_book, tracker_stats, AnnualRecordViewSet, genre_stats
 
 
 # enrutador y registra las nuevas vistas automáticas
@@ -27,6 +27,7 @@ urlpatterns = [
     path('tracker/pages/', log_pages, name='log-pages'),
     path('tracker/finish/', finish_book, name='finish-book'),
     path('tracker/stats/', tracker_stats, name='tracker-stats'),
+    path('stats/genres/', genre_stats, name='genre-stats'),
 
     # Inyecta todas las rutas automáticas generadas por el router
     path('', include(router.urls)),

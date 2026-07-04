@@ -268,6 +268,22 @@ def tracker_stats(request):
         "current_year": now.year
     }, status=200)
 
+@api_view(['GET'])
+def genre_stats(request):
+    """Devuelve el conteo de libros agrupados por género, ordenados de mayor a menor."""
+    from django.db.models import Count
+    
+    stats = Book.objects.exclude(genres__isnull=True).values('genres__name').annotate(count=Count('id')).order_by('-count')
+    
+    labels = []
+    values = []
+    # Limitar al Top 15 para evitar que el gráfico en terminal sea inmanejable
+    for item in list(stats)[:15]:
+        labels.append(item['genres__name'])
+        values.append(item['count'])
+        
+    return Response({"labels": labels, "values": values}, status=200)
+
 
 # catalog/views.py
 

@@ -11,6 +11,7 @@ API_TRACKER_PAGES = "http://localhost:8008/api/books/tracker/pages/"
 API_TRACKER_FINISH = "http://localhost:8008/api/books/tracker/finish/"
 API_WATCHERS = "http://localhost:8008/api/books/watchers-crud/"
 API_LOG_PAGES = "http://localhost:8008/api/books/log-pages/"
+API_GENRE_STATS = "http://localhost:8008/api/books/stats/genres/"
 # --- RUTAS DEL VIDEOCLUB (MOVIE SHELL) ---
 API_MOVIES = "http://localhost:8008/api/movies/inventory/"
 API_MOVIE_DIRS = "http://localhost:8008/api/movies/directories/"

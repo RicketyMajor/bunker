@@ -14,6 +14,7 @@ class InventoryTab(TabPane):
         ("c", "screen.create_dir", "Crear Carpeta"),
         ("D", "screen.delete_dir", "Borrar Carpeta"),
         ("x", "screen.delete_book", "Eliminar Ficha"),
+        ("g", "screen.show_genre_stats", "Estadísticas Géneros"),
     ]
 
     def compose(self) -> ComposeResult:

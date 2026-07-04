@@ -11,6 +11,9 @@ from textual.widgets import Input, Button, Label, Checkbox, RichLog, Select, Mar
 from textual.containers import Vertical, Horizontal, VerticalScroll
 from pathlib import Path
 from textual import work
+from textual_plotext import PlotextPlot
+from .constants import API_GENRE_STATS
+import httpx
 
 
 class IsbnModal(ModalScreen[str]):
@@ -1209,3 +1212,43 @@ class ChessDirModal(ModalScreen[dict]):
             })
         else:
             self.dismiss(None)
+
+
+class GenreStatsModal(ModalScreen[None]):
+    """Modal ancho para mostrar el gráfico de barras de géneros."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="genre_stats_dialog"):
+            yield Label("Estadísticas de Género", classes="modal_title")
+            yield PlotextPlot(id="genre_plot")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Cerrar", variant="error", id="btn_cancel")
+
+    def on_mount(self) -> None:
+        self.fetch_data()
+
+    @work(thread=True)
+    def fetch_data(self) -> None:
+        try:
+            resp = httpx.get(API_GENRE_STATS, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.app.call_from_thread(self.draw_plot, data.get("labels", []), data.get("values", []))
+            else:
+                self.app.call_from_thread(self.app.notify, "Error obteniendo géneros", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Red: {e}", severity="error")
+
+    def draw_plot(self, labels: list, values: list) -> None:
+        plot = self.query_one("#genre_plot", PlotextPlot)
+        plt = plot.plt
+        plt.clear_data()
+        
+        # Invertimos para que el mayor quede arriba si usamos bar() o similar
+        plt.bar(labels, values)
+        plt.title("Distribución por Géneros")
+        plt.theme('dark')
+        plot.refresh()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(None)

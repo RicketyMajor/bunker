@@ -10,7 +10,7 @@ from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
 from textual import work
 from .constants import *
 from .screens import BookDetailsScreen
-from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal, DeleteDirModal
+from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal, DeleteDirModal, GenreStatsModal
 
 
 class LibraryMainScreen(Screen):
@@ -324,6 +324,11 @@ class LibraryMainScreen(Screen):
                 self.app.push_screen(BookDetailsScreen(book_id=row_key))
         except Exception:
             pass
+
+    def action_show_genre_stats(self) -> None:
+        if self.query_one("#main_tabs", TabbedContent).active != "tab_library":
+            return
+        self.app.push_screen(GenreStatsModal())
 
     # ================= ADQUISICIONES =================
     def action_add_book(self) -> None:
