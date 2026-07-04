@@ -503,6 +503,7 @@ class BunkerLauncherScreen(Screen):
                         yield Label("[#00e5ff]▸[/] BIBLIOTECA", classes="col_header", id="lib_title")
                         yield Label("[dim]░░░░░░░░░░░░░░░░░░░░[/dim] 0%", id="bar_books", classes="col_bar")
                         yield Label("  --/-- leídos • --h est.", id="stat_books", classes="col_stat")
+                        yield Label("", id="stat_books_health", classes="col_stat")
 
                     with Vertical(classes="collection_block"):
                         yield Label("[#ffb000]▸[/] VIDEOCLUB", classes="col_header", id="mov_title")
@@ -724,6 +725,12 @@ class BunkerLauncherScreen(Screen):
             self.query_one("#stat_books", Label).update(
                 f"  [dim]{b_read}/{b_total} completados • {b_hours}h est.[/]"
             )
+            
+            health = (b_read / b_total * 100) if b_total > 0 else 0
+            if b_total > 0 and health < 50:
+                self.query_one("#stat_books_health", Label).update(f"  [#ff4444]⚠️ Tu bóveda acumula polvo ({health:.1f}%)[/]")
+            else:
+                self.query_one("#stat_books_health", Label).update(f"  [#00ff41]✔ Bóveda Saludable ({health:.1f}%)[/]")
 
             m = data.get("movies") or {}
             m_watched = m.get("watched", 0)
