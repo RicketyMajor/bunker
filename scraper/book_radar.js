@@ -44,6 +44,12 @@ async function sendToWishlist(item) {
     }
 }
 
+// Función auxiliar para normalizar texto (quitar acentos, lower, trim)
+function normalizeText(text) {
+    if (!text) return "";
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
 async function runScrapers(keywords) {
     const strategiesDir = path.join(__dirname, 'strategies', 'books');
     if (!fs.existsSync(strategiesDir)) return;
@@ -53,7 +59,15 @@ async function runScrapers(keywords) {
     // Preparar el motor de coincidencias difusas con el tablón actual
     console.log(`[LIBROS] Descargando memoria del tablón para aplicar filtros...`);
     const currentWishlist = await getWishlist();
-    const fuse = new Fuse(currentWishlist, { keys: ['title'], threshold: 0.2 });
+    
+    // Preparar datos normalizados para Fuse
+    const normalizedWishlist = currentWishlist.map(w => ({
+        ...w,
+        normalized_title: normalizeText(w.title)
+    }));
+    
+    // Configurar Fuse.js para usar el título normalizado con un threshold más estricto
+    const fuse = new Fuse(normalizedWishlist, { keys: ['normalized_title'], threshold: 0.15 });
 
     for (const file of files) {
         const strategy = require(path.join(strategiesDir, file));
@@ -68,17 +82,35 @@ async function runScrapers(keywords) {
             console.log(`   🔎 Evaluando: '${item.title}'`);
             item.author_string = keywords.find(k => item.title.toLowerCase().includes(k.toLowerCase())) || "Desconocido";
             
-            // Verifica en el Tablón actual usando Fuse.js
-            const existingMatches = fuse.search(item.title);
-            if (existingMatches.length > 0) {
-                const isRejected = existingMatches.some(match => match.item.is_rejected);
-                if (isRejected) {
-                    console.log(`      [🚫] DESCARTADO (En Lista Negra)`);
-                    continue; 
-                } else {
-                    console.log(`      [♻️] OMITIDO (Ya existe en el Tablón actual)`);
-                    continue;
+            let isDuplicate = false;
+            let isRejected = false;
+            
+            // 1. Coincidencia por ISBN (si está disponible en item y Wishlist lo tuviese en el futuro, o en Django)
+            if (item.isbn) {
+                const isbnMatch = currentWishlist.find(w => w.isbn && w.isbn === item.isbn);
+                if (isbnMatch) {
+                    isDuplicate = true;
+                    isRejected = isbnMatch.is_rejected;
                 }
+            }
+
+            // 2. Coincidencia por Fuse.js con títulos normalizados
+            if (!isDuplicate) {
+                const normTitle = normalizeText(item.title);
+                const existingMatches = fuse.search(normTitle);
+                
+                if (existingMatches.length > 0) {
+                    isDuplicate = true;
+                    isRejected = existingMatches.some(match => match.item.is_rejected);
+                }
+            }
+            
+            if (isRejected) {
+                console.log(`      [🚫] DESCARTADO (En Lista Negra)`);
+                continue; 
+            } else if (isDuplicate) {
+                console.log(`      [♻️] OMITIDO (Ya existe en el Tablón actual)`);
+                continue;
             }
 
             // Si sobrevive a los filtros, intenta enviarlo a Django
