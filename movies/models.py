@@ -64,6 +64,16 @@ class MovieWatcher(models.Model):
 
 class MovieWishlist(models.Model):
     """Lanzamientos o descubrimientos que el scraper inyecta en el sistema."""
+    PRIORITY_CHOICES = [
+        ('HIGH', 'Alta'),
+        ('MED', 'Media'),
+        ('LOW', 'Baja')
+    ]
+    ADDED_BY_CHOICES = [
+        ('manual', 'Manual'),
+        ('scraper', 'Scraper')
+    ]
+
     title = models.CharField(max_length=255)
     director = models.CharField(max_length=255, null=True, blank=True)
     release_year = models.CharField(max_length=10, null=True, blank=True)
@@ -72,6 +82,9 @@ class MovieWishlist(models.Model):
 
     date_found = models.DateTimeField(auto_now_add=True)
     is_rejected = models.BooleanField(default=False)
+    
+    priority = models.CharField(max_length=4, choices=PRIORITY_CHOICES, default='MED')
+    added_by = models.CharField(max_length=10, choices=ADDED_BY_CHOICES, default='scraper')
 
     def __str__(self):
         return self.title

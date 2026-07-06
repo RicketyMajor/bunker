@@ -63,6 +63,8 @@ async function startRadar() {
             
             for (const item of results) {
                 try {
+                    item.priority = 'MED';
+                    item.added_by = 'scraper';
                     const response = await axios.post(API_MOVIES_WISHLIST, item);
                     
                     // Django devuelve 201 si es un descubrimiento nuevo

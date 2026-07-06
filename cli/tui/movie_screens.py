@@ -216,7 +216,7 @@ class MovieMainScreen(Screen):
         t_wishlist.cursor_type = "row"
         t_wishlist.zebra_stripes = True
         t_wishlist.add_columns("ID", "Título de Lanzamiento",
-                               "Director/Saga", "Año Est.", "Encontrado")
+                               "Director/Saga", "Año Est.", "Prioridad", "Origen", "Encontrado")
 
         self.title = "BUNKER"
         self.sub_title = "Módulo de Videoclub"
@@ -933,10 +933,22 @@ class MovieMainScreen(Screen):
         table.clear()
         for item in items:
             date_str = item.get('date_found', '')[:10]
+            
+            p_val = item.get('priority', 'MED')
+            if p_val == 'HIGH':
+                p_str = "[red]Alta[/]"
+            elif p_val == 'LOW':
+                p_str = "[dim]Baja[/]"
+            else:
+                p_str = "[yellow]Media[/]"
+                
+            orig = item.get('added_by', 'scraper')
+            orig_str = "[#00ff00]Scraper[/]" if orig == 'scraper' else "[#ff00ff]Manual[/]"
+
             table.add_row(
                 str(item.get('id')), item.get('title', '').upper(),
                 item.get('director') or "-", item.get('release_year') or "-",
-                date_str, key=str(item.get('id'))
+                p_str, orig_str, date_str, key=str(item.get('id'))
             )
 
     # --- SISTEMA DE EDICIÓN MANUAL ---
