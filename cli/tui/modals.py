@@ -363,7 +363,7 @@ class ScannerModal(ModalScreen[None]):
             # Levanta el túnel en background
             self.tunnel_process = await asyncio.create_subprocess_exec(
                 "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                "ServerAliveInterval=60", "-R", "80:localhost:8008", "nokey@localhost.run",
+                "ServerAliveInterval=60", "-R", "80:localhost:8009", "nokey@localhost.run",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -434,7 +434,7 @@ class MovieScannerModal(ModalScreen[None]):
             # Levanta el túnel en background
             self.tunnel_process = await asyncio.create_subprocess_exec(
                 "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                "ServerAliveInterval=60", "-R", "80:localhost:8008", "nokey@localhost.run",
+                "ServerAliveInterval=60", "-R", "80:localhost:8009", "nokey@localhost.run",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -923,7 +923,7 @@ class MusicScannerModal(ModalScreen[None]):
         try:
             self.tunnel_process = await asyncio.create_subprocess_exec(
                 "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                "ServerAliveInterval=60", "-R", "80:localhost:8008", "nokey@localhost.run",
+                "ServerAliveInterval=60", "-R", "80:localhost:8009", "nokey@localhost.run",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             )
             asyncio.create_task(self.read_output(log, title))

@@ -10,7 +10,7 @@ import datetime as _dt
 import calendar as _cal
 from textual_plotext import PlotextPlot
 
-API_POSADA_BASE = "http://127.0.0.1:8008/posada/api/"
+API_POSADA_BASE = "http://127.0.0.1:8009/posada/api/"
 
 # --- GENERADOR DE RELOJ ASCII ---
 ASCII_NUMS = {
@@ -1582,7 +1582,7 @@ class BestiaryCodexModal(ModalScreen[None]):
     def load_bestiary(self) -> None:
         import requests
         try:
-            resp = requests.get("http://localhost:8008/api/bestiary/")
+            resp = requests.get("http://localhost:8009/api/bestiary/")
             if resp.status_code == 200:
                 self.bestiary_data = resp.json().get("bestiary", [])
                 table = self.query_one("#bestiary_table", DataTable)
@@ -3122,7 +3122,7 @@ class PosadaMainScreen(Screen):
         """Carga las sesiones completadas desde la API y llena la tabla de crónicas."""
         import requests
         try:
-            resp = requests.get("http://localhost:8008/posada/api/chronicles/")
+            resp = requests.get("http://localhost:8009/posada/api/chronicles/")
             if resp.status_code == 200:
                 self.chronicles_data = resp.json().get("chronicles", [])
                 table = self.query_one("#chronicles_table", DataTable)

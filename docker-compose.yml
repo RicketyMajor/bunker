@@ -9,7 +9,7 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=supersecret
     ports:
-      - "5435:5432"
+      - "5436:5432"
 
   # El contenedor aplicación Django / CLI
   web:
@@ -19,7 +19,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8008:8000"
+      - "8009:8000"
     depends_on:
       - db
     environment:

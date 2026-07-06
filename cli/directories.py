@@ -12,8 +12,8 @@ console = Console()
 dir_app = typer.Typer(
     help="Gestiona los directorios y colecciones maestras.", no_args_is_help=True)
 
-API_DIR = "http://localhost:8008/api/books/directories/"
-API_LIBRARY = "http://localhost:8008/api/books/library/"
+API_DIR = "http://localhost:8009/api/books/directories/"
+API_LIBRARY = "http://localhost:8009/api/books/library/"
 
 
 @dir_app.command("create")
