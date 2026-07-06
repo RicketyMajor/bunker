@@ -296,6 +296,20 @@ def tracker_annual(request):
     return Response(data)
 
 
+@api_view(['GET'])
+def tracker_heatmap(request):
+    """Devuelve el conteo de películas vistas agrupadas por mes para el año en curso."""
+    today = timezone.localdate()
+    start_of_year = today.replace(month=1, day=1)
+
+    records = MovieAnnualRecord.objects.filter(date_watched__gte=start_of_year)
+    counts = [0] * 12
+    for r in records:
+        counts[r.date_watched.month - 1] += 1
+
+    return Response({"counts": counts})
+
+
 @api_view(['POST'])
 def log_minutes(request):
     """Anota minutos vistos en el día actual."""

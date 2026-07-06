@@ -21,6 +21,7 @@ API_MOVIE_SCAN = "http://localhost:8008/api/movies/scan/"
 # API para el tracker de películas
 API_MOVIE_TRACKER = "http://localhost:8008/api/movies/tracker/stats/"
 API_MOVIE_TRACKER_ANNUAL = "http://localhost:8008/api/movies/tracker/annual/"
+API_MOVIE_TRACKER_HEATMAP = "http://localhost:8008/api/movies/tracker/heatmap/"
 API_MOVIE_TRACKER_MINUTES = "http://localhost:8008/api/movies/tracker/minutes/"
 API_MOVIE_TRACKER_FINISH = "http://localhost:8008/api/movies/tracker/finish/"
 # API de la wishlist de películas

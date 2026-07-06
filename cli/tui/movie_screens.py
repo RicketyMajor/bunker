@@ -7,7 +7,7 @@ from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedCo
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
-from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
+from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
 from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
 from .tabs import MovieWishlistTab
 
@@ -126,6 +126,7 @@ class MovieTrackerTab(TabPane):
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Markdown("Cargando métricas cinematográficas...", id="movie_tracker_content")
+            yield Label("Cargando heatmap...", id="movie_heatmap_content", classes="heatmap_panel")
             yield DataTable(id="movie_annual_table")
 
 
@@ -151,6 +152,7 @@ class MovieMainScreen(Screen):
     Screen { background: $surface-darken-1; }
     DataTable { height: 1fr; margin: 1 2; }
     #movie_tracker_content { height: auto; margin: 1 2 0 2; padding: 1; border: solid $warning; background: $surface; }
+    .heatmap_panel { margin: 1 2; padding: 0 1; border: heavy $accent; background: $surface; text-align: center; }
     #sidebar {
         dock: left; 
         width: 45; 
@@ -288,9 +290,10 @@ class MovieMainScreen(Screen):
         try:
             tracker = httpx.get(API_MOVIE_TRACKER, timeout=5.0).json()
             annual = httpx.get(API_MOVIE_TRACKER_ANNUAL, timeout=5.0).json()
+            heatmap = httpx.get(API_MOVIE_TRACKER_HEATMAP, timeout=5.0).json()
             if isinstance(tracker, dict):
                 self.app.call_from_thread(
-                    self.populate_tracker, tracker, annual)
+                    self.populate_tracker, tracker, annual, heatmap.get("counts", []))
         except Exception:
             pass
 
@@ -352,13 +355,33 @@ class MovieMainScreen(Screen):
             table.add_row(str(item.get('id')), item.get(
                 'barcode', '-'), item.get('date_scanned', '')[:10], key=str(item.get('id')))
 
-    def populate_tracker(self, stats: dict, annual: list) -> None:
+    def populate_tracker(self, stats: dict, annual: list, heatmap_counts: list = None) -> None:
         md = self.query_one("#movie_tracker_content", Markdown)
         cintas_anuales = len(annual)
         cintas_mes = stats.get('movies_this_month', 0)
         text = f"""**Mes de {stats.get('current_month', '')}:** `{cintas_mes} cintas vistas`  |  **Total Año:** `{cintas_anuales} cintas vistas`"""
-
         md.update(text)
+
+        if heatmap_counts is None:
+            heatmap_counts = [0] * 12
+
+        months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        header = " ".join(f"{m:3}" for m in months)
+        
+        blocks = []
+        for count in heatmap_counts:
+            if count == 0:
+                blocks.append("[#333333] ⬛ [/]")
+            elif count <= 2:
+                blocks.append("[#008800] 🟩 [/]")
+            elif count <= 5:
+                blocks.append("[#00ff00] 🟩 [/]")
+            else:
+                blocks.append("[#ffff00] 🟨 [/]")
+                
+        row = " ".join(blocks)
+        heatmap_text = f"[bold]AÑO EN REVISIÓN[/bold]\n{header}\n{row}"
+        self.query_one("#movie_heatmap_content", Label).update(heatmap_text)
 
         table = self.query_one("#movie_annual_table", DataTable)
         table.clear()
