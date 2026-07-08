@@ -864,6 +864,40 @@ class FinishMusicModal(ModalScreen[dict]):
             self.dismiss(None)
 
 
+class LogMinutesModal(ModalScreen[dict]):
+    def compose(self) -> ComposeResult:
+        with Vertical(id="finish_dialog"):
+            yield Label("Anotar Minutos Escuchados", classes="modal_title")
+            yield Label("Minutos (*):", classes="edit_label")
+            yield Input(id="inp_minutes", placeholder="Ej: 45")
+            yield Label("ID del Disco (opcional):", classes="edit_label")
+            yield Input(id="inp_album_id", placeholder="ID del inventario")
+            yield Label("Notas (opcional):", classes="edit_label")
+            yield Input(id="inp_notes", placeholder="¿Qué te pareció?")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Registrar", variant="success", id="btn_save")
+                yield Button("Cancelar", variant="error", id="btn_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_save":
+            minutes = self.query_one("#inp_minutes", Input).value
+            if not minutes.isdigit():
+                self.app.notify("Ingresa un número válido de minutos.", severity="error")
+                return
+            
+            payload = {
+                "minutes_listened": int(minutes),
+                "notes": self.query_one("#inp_notes", Input).value
+            }
+            album_id = self.query_one("#inp_album_id", Input).value
+            if album_id.isdigit():
+                payload["album"] = int(album_id)
+                
+            self.dismiss(payload)
+        else:
+            self.dismiss(None)
+
+
 class MusicFullEditModal(ModalScreen[dict]):
     def __init__(self, album: dict, **kwargs):
         super().__init__(**kwargs)

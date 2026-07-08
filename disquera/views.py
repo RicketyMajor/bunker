@@ -2,8 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
-from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
-from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
+from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
+from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
 from .discogs_oracle import search_album_discogs
 
 
@@ -31,6 +31,11 @@ class MusicWishlistViewSet(viewsets.ModelViewSet):
 class MusicInboxViewSet(viewsets.ModelViewSet):
     queryset = MusicInbox.objects.all().order_by('-date_scanned')
     serializer_class = MusicInboxSerializer
+
+
+class ListeningEntryViewSet(viewsets.ModelViewSet):
+    queryset = ListeningEntry.objects.all().order_by('-date', '-id')
+    serializer_class = ListeningEntrySerializer
 
 # --- ENDPOINTS DEL ORÁCULO DISCOGS ---
 

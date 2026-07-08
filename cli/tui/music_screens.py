@@ -11,12 +11,13 @@ from textual import work
 from .constants import (
     API_MUSIC, API_MUSIC_DIRS, API_MUSIC_INBOX, API_MUSIC_PROCESS, API_MUSIC_SCAN,
     API_MUSIC_TRACKER, API_MUSIC_TRACKER_ANNUAL, API_MUSIC_TRACKER_FINISH,
-    API_MUSIC_WATCHERS, API_MUSIC_WISHLIST
+    API_MUSIC_WATCHERS, API_MUSIC_WISHLIST, API_MUSIC_TRACKER_LOG
 )
 from .modals import (
     AddMusicMenuModal, MusicScannerModal, MusicTitleModal, MusicFullEditModal,
     FinishMusicModal, LendModal, ConfirmModal, DirModal, MoveToDirModal,
-    DeleteDirModal, SyncConsoleModal, WatcherModal, WatchersListModal
+    DeleteDirModal, SyncConsoleModal, WatcherModal, WatchersListModal,
+    LogMinutesModal
 )
 from .tabs import (
     MusicInventoryTab, MusicInboxTab, MusicLoansTab, MusicTrackerTab, MusicWishlistTab
@@ -687,6 +688,27 @@ class MusicMainScreen(Screen):
             pass
 
     # --- REVERSIÓN DE HÁBITOS (DISQUERA) ---
+    def action_log_minutes(self) -> None:
+        if self.query_one("#music_tabs", TabbedContent).active != "tab_tracker":
+            return
+            
+        def do_log(payload: dict | None) -> None:
+            if payload:
+                self.process_log_minutes(payload)
+        self.app.push_screen(LogMinutesModal(), do_log)
+        
+    @work(thread=True)
+    def process_log_minutes(self, payload: dict) -> None:
+        try:
+            resp = httpx.post(API_MUSIC_TRACKER_LOG, json=payload, timeout=5.0)
+            if resp.status_code == 201:
+                self.app.call_from_thread(self.app.notify, "¡Minutos registrados!", title="Diario de Escucha")
+                self.app.call_from_thread(self.load_data)
+            else:
+                self.app.call_from_thread(self.app.notify, f"Error: {resp.status_code}", severity="error")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error red: {e}", severity="error")
+
     def action_delete_habit(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_tracker":
             return

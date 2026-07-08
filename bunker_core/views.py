@@ -66,6 +66,13 @@ def global_dashboard_view(request):
         data["music"]["total"] = albums.count()
         data["music"]["listened"] = albums.filter(is_listened=True).count()
         data["music"]["hours"] = round(data["music"]["listened"] * 0.75, 1)
+
+        # Minutes listened this week
+        from disquera.models import ListeningEntry
+        start_of_week = today - timedelta(days=today.weekday())
+        entries = ListeningEntry.objects.filter(date__gte=start_of_week)
+        minutes_this_week = entries.aggregate(Sum('minutes_listened'))['minutes_listened__sum'] or 0
+        data["music"]["minutes_week"] = minutes_this_week
     except Exception as e:
         feed.append(f"[red]Error Disquera:[/] {str(e)[:40]}")
 

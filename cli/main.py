@@ -164,7 +164,7 @@ def show_welcome_screen():
     inv_text = f"""[cyan]▤[/cyan] Libros: [bold cyan]{books.get('total', 0)}[/bold cyan] ({books.get('read', 0)} leídos)
 [green]📖[/green] Racha de Lectura: [bold green]{books.get('streak', 0)} días[/bold green]
 [yellow]🎬[/yellow] Cine: [bold yellow]{movies.get('total', 0)}[/bold yellow] ({movies.get('watched', 0)} vistos)
-[magenta]🎵[/magenta] Discos: [bold magenta]{music.get('total', 0)}[/bold magenta] ({music.get('listened', 0)} oídos)
+[magenta]🎵[/magenta] Discos: [bold magenta]{music.get('total', 0)}[/bold magenta] ({music.get('listened', 0)} oídos) | [bold magenta]{music.get('minutes_week', 0)}m 7d[/bold magenta]
 [green]⏱️[/green] Deep Work Hoy: [bold green]{posada.get('dw_minutes_today', 0)}m[/bold green]"""
 
     # Panel de La Posada

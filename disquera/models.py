@@ -90,3 +90,13 @@ class MusicAnnualRecord(models.Model):
 
     def __str__(self):
         return f"{self.title} - Escuchado el {self.date_listened}"
+
+class ListeningEntry(models.Model):
+    """Diario de escucha (Event Sourcing)"""
+    album = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='listening_entries')
+    date = models.DateField(default=localdate)
+    minutes_listened = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.date}: {self.minutes_listened} minutos"

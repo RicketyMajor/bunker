@@ -11,6 +11,7 @@ router.register(r'watchers', views.MusicWatcherViewSet,
 router.register(r'wishlist', views.MusicWishlistViewSet,
                 basename='musicwishlist')
 router.register(r'inbox', views.MusicInboxViewSet, basename='musicinbox')
+router.register(r'tracker/log', views.ListeningEntryViewSet, basename='musictrackerlog')
 
 urlpatterns = [
     path('', include(router.urls)),

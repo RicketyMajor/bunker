@@ -42,6 +42,7 @@ API_MOVIE_TRACKER_ANNUAL_DEL = "http://localhost:8009/api/movies/tracker/annual/
 API_MUSIC_TRACKER_FINISH = "http://localhost:8009/api/music/tracker/finish/"
 API_MUSIC_WATCHERS = "http://localhost:8009/api/music/watchers/"
 API_MUSIC_WISHLIST = "http://localhost:8009/api/music/wishlist/"
+API_MUSIC_TRACKER_LOG = "http://localhost:8009/api/music/tracker/log/"
 
 # --- RUTAS DEL PROTOCOLO DE EVACUACIÓN (BACKUP/RESTORE) ---
 API_BACKUP = "http://localhost:8009/api/backup/"
