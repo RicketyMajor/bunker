@@ -5,6 +5,7 @@ from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
 from .discogs_oracle import search_album_discogs
+from .lastfm_oracle import enrich_album_data
 
 
 class AlbumDirectoryViewSet(viewsets.ModelViewSet):
@@ -50,6 +51,16 @@ def process_barcode(request):
     album_data = search_album_discogs(barcode, search_type="barcode")
 
     if album_data:
+        # Enriquecer con Last.fm
+        lastfm_data = enrich_album_data(album_data['artist'], album_data['title'])
+        duration = None
+        tracklist = []
+        if lastfm_data:
+            duration = lastfm_data.get('duration_minutes')
+            tracklist = lastfm_data.get('tracklist', [])
+            if lastfm_data.get('cover_url'):
+                album_data['cover_url'] = lastfm_data.get('cover_url')
+
         # Lo encontramos! Lo guardamos en el inventario oficial
         Album.objects.create(
             title=album_data['title'],
@@ -58,7 +69,9 @@ def process_barcode(request):
             release_year=album_data['release_year'],
             format_type=album_data['format_type'],
             genres=album_data['genres'],
-            cover_url=album_data['cover_url']
+            cover_url=album_data['cover_url'],
+            duration_minutes=duration,
+            tracklist=tracklist
         )
         return Response({"message": "Álbum procesado y guardado en la Disquera."}, status=status.HTTP_201_CREATED)
     else:
@@ -77,6 +90,16 @@ def scan_album(request):
     album_data = search_album_discogs(title, search_type="title")
 
     if album_data:
+        # Enriquecer con Last.fm
+        lastfm_data = enrich_album_data(album_data['artist'], album_data['title'])
+        duration = None
+        tracklist = []
+        if lastfm_data:
+            duration = lastfm_data.get('duration_minutes')
+            tracklist = lastfm_data.get('tracklist', [])
+            if lastfm_data.get('cover_url'):
+                album_data['cover_url'] = lastfm_data.get('cover_url')
+                
         Album.objects.create(
             title=album_data['title'],
             artist=album_data['artist'],
@@ -84,7 +107,9 @@ def scan_album(request):
             release_year=album_data['release_year'],
             format_type=album_data['format_type'],
             genres=album_data['genres'],
-            cover_url=album_data['cover_url']
+            cover_url=album_data['cover_url'],
+            duration_minutes=duration,
+            tracklist=tracklist
         )
         return Response({"message": f"Álbum '{album_data['title']}' archivado."}, status=status.HTTP_201_CREATED)
 

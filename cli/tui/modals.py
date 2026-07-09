@@ -919,6 +919,8 @@ class MusicFullEditModal(ModalScreen[dict]):
                 yield Select(FORMATS, value=self.album.get('format_type', 'VINYL'), id="sel_format")
                 yield Label("Año de Lanzamiento:", classes="edit_label")
                 yield Input(value=str(self.album.get('release_year') or ''), id="inp_year")
+                yield Label("Duración (minutos):", classes="edit_label")
+                yield Input(value=str(self.album.get('duration_minutes') or ''), id="inp_duration")
             with Horizontal(classes="form_buttons"):
                 yield Button("Guardar", variant="success", id="btn_save")
                 yield Button("Cancelar", variant="error", id="btn_cancel")
@@ -934,6 +936,9 @@ class MusicFullEditModal(ModalScreen[dict]):
             year = self.query_one("#inp_year", Input).value
             if year.isdigit():
                 payload["release_year"] = int(year)
+            duration = self.query_one("#inp_duration", Input).value
+            if duration.isdigit():
+                payload["duration_minutes"] = int(duration)
             self.dismiss(payload)
         else:
             self.dismiss(None)

@@ -159,7 +159,7 @@ class MusicMainScreen(Screen):
         t_inv.cursor_type = "row"
         t_inv.zebra_stripes = True
         t_inv.add_columns("ID", "Álbum", "Artista", "Año",
-                          "Sello", "Formato", "Escuchado")
+                          "Sello", "Formato", "Duración", "Escuchado")
 
         t_inbox = self.query_one("#music_inbox_table", DataTable)
         t_inbox.cursor_type = "row"
@@ -251,11 +251,12 @@ class MusicMainScreen(Screen):
         for a in albums:
             if not a.get('is_loaned'):
                 status = "✔" if a.get('is_listened') else "✘"
+                dur = f"{a.get('duration_minutes')}m" if a.get('duration_minutes') else "-"
                 table_inv.add_row(
                     str(a.get('id')), a.get(
                         'title', '').upper(), a.get('artist', '-'),
                     str(a.get('release_year') or '-'), a.get('label', '-'),
-                    a.get('format_type', 'VINYL'), status, key=str(a.get('id'))
+                    a.get('format_type', 'VINYL'), dur, status, key=str(a.get('id'))
                 )
             else:
                 amigo = a.get('friend_name') or 'Desconocido'

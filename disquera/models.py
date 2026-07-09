@@ -25,6 +25,8 @@ class Album(models.Model):
 
     release_year = models.IntegerField(null=True, blank=True)
     track_count = models.IntegerField(null=True, blank=True)
+    duration_minutes = models.IntegerField(null=True, blank=True, help_text="Duración total en minutos")
+    tracklist = models.JSONField(default=list, blank=True, help_text="Lista de pistas (título, duración)")
     format_type = models.CharField(
         max_length=20, choices=FORMAT_CHOICES, default='VINYL')
 
