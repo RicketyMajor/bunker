@@ -37,6 +37,9 @@ class Album(models.Model):
     is_loaned = models.BooleanField(default=False)
     friend_name = models.CharField(max_length=255, blank=True, null=True)
 
+    personal_rating = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True, help_text="1.0 a 10.0")
+    review_notes = models.TextField(blank=True, null=True)
+
     directory = models.ForeignKey(
         AlbumDirectory, null=True, blank=True, on_delete=models.SET_NULL, related_name='albums')
     created_at = models.DateTimeField(auto_now_add=True)

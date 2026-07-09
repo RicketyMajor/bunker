@@ -47,6 +47,10 @@ def global_dashboard_view(request):
                 check_date -= timedelta(days=1)
         
         data["books"]["streak"] = streak
+        
+        top_book = books.filter(personal_rating__isnull=False).order_by('-personal_rating').first()
+        if top_book:
+            data["books"]["top_rated"] = {"title": top_book.title, "rating": float(top_book.personal_rating)}
 
     except Exception as e:
         feed.append(f"[red]Error Libros:[/] {str(e)[:40]}")
@@ -57,6 +61,11 @@ def global_dashboard_view(request):
         data["movies"]["total"] = movies.count()
         data["movies"]["watched"] = movies.filter(is_watched=True).count()
         data["movies"]["hours"] = data["movies"]["watched"] * 2
+        
+        top_movie = movies.filter(personal_rating__isnull=False).order_by('-personal_rating').first()
+        if top_movie:
+            data["movies"]["top_rated"] = {"title": top_movie.title, "rating": float(top_movie.personal_rating)}
+            
     except Exception as e:
         feed.append(f"[red]Error Videoclub:[/] {str(e)[:40]}")
 
@@ -73,6 +82,11 @@ def global_dashboard_view(request):
         entries = ListeningEntry.objects.filter(date__gte=start_of_week)
         minutes_this_week = entries.aggregate(Sum('minutes_listened'))['minutes_listened__sum'] or 0
         data["music"]["minutes_week"] = minutes_this_week
+        
+        top_album = albums.filter(personal_rating__isnull=False).order_by('-personal_rating').first()
+        if top_album:
+            data["music"]["top_rated"] = {"title": top_album.title, "rating": float(top_album.personal_rating)}
+            
     except Exception as e:
         feed.append(f"[red]Error Disquera:[/] {str(e)[:40]}")
 

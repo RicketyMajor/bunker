@@ -67,6 +67,10 @@ class FullEditModal(ModalScreen[dict]):
                 yield Input(value=generos_str, id="inp_genres")
                 yield Label("Número total de páginas:", classes="edit_label")
                 yield Input(value=str(self.book.get('page_count', '')), id="inp_pages")
+                yield Label("Nota Personal (1-10):", classes="edit_label")
+                yield Input(value=str(self.book.get('personal_rating') or ''), id="inp_rating")
+                yield Label("Reseña / Notas:", classes="edit_label")
+                yield Input(value=self.book.get('review_notes', ''), id="inp_review")
                 yield Label("")
                 yield Checkbox("✔ Libro Completado/Leído", value=self.book.get('is_read', False), id="chk_read")
 
@@ -89,6 +93,15 @@ class FullEditModal(ModalScreen[dict]):
             }
             if pages_val.isdigit():
                 payload["page_count"] = int(pages_val)
+                
+            rating = self.query_one("#inp_rating", Input).value
+            if rating:
+                try:
+                    payload["personal_rating"] = float(rating)
+                except ValueError:
+                    pass
+            payload["review_notes"] = self.query_one("#inp_review", Input).value
+            
             self.dismiss(payload)
         else:
             self.dismiss(None)
@@ -752,6 +765,10 @@ class MovieFullEditModal(ModalScreen[dict]):
                 generos_str = ", ".join(self.movie.get(
                     'genres', [])) if self.movie.get('genres') else ""
                 yield Input(value=generos_str, id="inp_genres")
+                yield Label("Nota Personal (1-10):", classes="edit_label")
+                yield Input(value=str(self.movie.get('personal_rating') or ''), id="inp_rating")
+                yield Label("Reseña / Notas:", classes="edit_label")
+                yield Input(value=self.movie.get('review_notes', ''), id="inp_review")
 
                 yield Label("")  # Espaciador
                 yield Checkbox("✔ Ya he visto esta película", value=self.movie.get('is_watched', False), id="chk_watched")
@@ -782,6 +799,14 @@ class MovieFullEditModal(ModalScreen[dict]):
                 payload["duration_minutes"] = int(dur)
             if genres:
                 payload["genres"] = [g.strip() for g in genres.split(",")]
+                
+            rating = self.query_one("#inp_rating", Input).value
+            if rating:
+                try:
+                    payload["personal_rating"] = float(rating)
+                except ValueError:
+                    pass
+            payload["review_notes"] = self.query_one("#inp_review", Input).value
 
             self.dismiss(payload)
         else:
@@ -921,6 +946,10 @@ class MusicFullEditModal(ModalScreen[dict]):
                 yield Input(value=str(self.album.get('release_year') or ''), id="inp_year")
                 yield Label("Duración (minutos):", classes="edit_label")
                 yield Input(value=str(self.album.get('duration_minutes') or ''), id="inp_duration")
+                yield Label("Nota Personal (1-10):", classes="edit_label")
+                yield Input(value=str(self.album.get('personal_rating') or ''), id="inp_rating")
+                yield Label("Reseña / Notas:", classes="edit_label")
+                yield Input(value=self.album.get('review_notes', ''), id="inp_review")
             with Horizontal(classes="form_buttons"):
                 yield Button("Guardar", variant="success", id="btn_save")
                 yield Button("Cancelar", variant="error", id="btn_cancel")
@@ -932,6 +961,7 @@ class MusicFullEditModal(ModalScreen[dict]):
                 "artist": self.query_one("#inp_artist", Input).value,
                 "label": self.query_one("#inp_label", Input).value,
                 "format_type": self.query_one("#sel_format", Select).value,
+                "review_notes": self.query_one("#inp_review", Input).value,
             }
             year = self.query_one("#inp_year", Input).value
             if year.isdigit():
@@ -939,6 +969,15 @@ class MusicFullEditModal(ModalScreen[dict]):
             duration = self.query_one("#inp_duration", Input).value
             if duration.isdigit():
                 payload["duration_minutes"] = int(duration)
+                
+            rating = self.query_one("#inp_rating", Input).value
+            if rating:
+                try:
+                    payload["personal_rating"] = float(rating)
+                except ValueError:
+                    pass
+            payload["review_notes"] = self.query_one("#inp_review", Input).value
+            
             self.dismiss(payload)
         else:
             self.dismiss(None)

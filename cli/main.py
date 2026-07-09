@@ -160,11 +160,16 @@ def show_welcome_screen():
     music = stats.get("music", {})
     feed = stats.get("feed", [])
 
+    # Top Rated text formatting
+    top_book_txt = f"\n  [yellow]⭐ Top: {books['top_rated']['title']} ({books['top_rated']['rating']})[/yellow]" if books.get("top_rated") else ""
+    top_movie_txt = f"\n  [yellow]⭐ Top: {movies['top_rated']['title']} ({movies['top_rated']['rating']})[/yellow]" if movies.get("top_rated") else ""
+    top_music_txt = f"\n  [yellow]⭐ Top: {music['top_rated']['title']} ({music['top_rated']['rating']})[/yellow]" if music.get("top_rated") else ""
+
     # Panel de Búnker (Medios)
     inv_text = f"""[cyan]▤[/cyan] Libros: [bold cyan]{books.get('total', 0)}[/bold cyan] ({books.get('read', 0)} leídos)
-[green]📖[/green] Racha de Lectura: [bold green]{books.get('streak', 0)} días[/bold green]
-[yellow]🎬[/yellow] Cine: [bold yellow]{movies.get('total', 0)}[/bold yellow] ({movies.get('watched', 0)} vistos)
-[magenta]🎵[/magenta] Discos: [bold magenta]{music.get('total', 0)}[/bold magenta] ({music.get('listened', 0)} oídos) | [bold magenta]{music.get('minutes_week', 0)}m 7d[/bold magenta]
+[green]📖[/green] Racha de Lectura: [bold green]{books.get('streak', 0)} días[/bold green]{top_book_txt}
+[yellow]🎬[/yellow] Cine: [bold yellow]{movies.get('total', 0)}[/bold yellow] ({movies.get('watched', 0)} vistos){top_movie_txt}
+[magenta]🎵[/magenta] Discos: [bold magenta]{music.get('total', 0)}[/bold magenta] ({music.get('listened', 0)} oídos) | [bold magenta]{music.get('minutes_week', 0)}m 7d[/bold magenta]{top_music_txt}
 [green]⏱️[/green] Deep Work Hoy: [bold green]{posada.get('dw_minutes_today', 0)}m[/bold green]"""
 
     # Panel de La Posada
