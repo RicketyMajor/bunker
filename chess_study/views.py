@@ -44,6 +44,69 @@ class ChessRoomViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({"error": f"Movimiento inválido: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['post'])
+    def finish_analysis(self, request, pk=None):
+        room = self.get_object()
+        if room.is_analyzed:
+            return Response({"error": "Esta partida ya fue analizada y su experiencia reclamada."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from posada.models import Adventurer, GuildProfile, DeepWorkSession
+            from posada.engine.legacy import check_level_up
+        except ImportError:
+            return Response({"error": "El motor de Posada no está disponible."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        adv = Adventurer.objects.first()
+        guild = GuildProfile.objects.first()
+        if not adv or not guild:
+            return Response({"error": "No hay un Aventurero o Gremio activo."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Cálculo de Recompensas
+        base_xp = 300
+        if adv.adv_class == 'WIZ':
+            base_xp += int(base_xp * 0.3)  # Bono 30%
+
+        # Otorgar Prestigio
+        guild.prestige_level += 2
+        guild.save()
+
+        # Otorgar Experiencia
+        adv.experience += base_xp
+        adv.save()
+        
+        log_messages = [f"Ganaste {base_xp} XP por tu riguroso estudio táctico."]
+        check_level_up(adv, log_messages)
+        
+        # Registrar en Crónicas
+        from django.utils import timezone
+        session = DeepWorkSession.objects.create(
+            duration_minutes=30,
+            completed=True,
+            category="Chess Study"
+        )
+        session.adventurers_involved.add(adv)
+        
+        events = [
+            f"El aventurero {adv.name} se encerró en el Laboratorio de Ajedrez.",
+            f"Analizó rigurosamente la partida: '{room.title}'.",
+            f"El gremio gana 2 puntos de prestigio."
+        ]
+        events.extend(log_messages)
+        
+        session.event_log = events
+        session.save()
+
+        # Marcar como analizada
+        room.is_analyzed = True
+        room.save()
+
+        return Response({
+            "message": "Análisis completado",
+            "xp_earned": base_xp,
+            "prestige_earned": 2,
+            "logs": events
+        })
+
 
 class ChessNoteViewSet(viewsets.ModelViewSet):
     """Controlador para gestionar los apuntes tácticos."""

@@ -20,6 +20,7 @@ class ChessRoom(models.Model):
     pgn_data = models.TextField(blank=True)
     orientation = models.CharField(
         max_length=5, choices=(('white', 'Blancas'), ('black', 'Negras')), default='white')
+    is_analyzed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

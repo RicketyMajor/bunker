@@ -5,7 +5,7 @@ from textual.widgets import Header, Footer, Markdown, DataTable, Static, Tree, I
 from textual.containers import Vertical, Grid, Horizontal
 from textual import work
 from textual.binding import Binding
-from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS, API_CHESS_EVALUATE, API_CHESS_VALIDATE, API_CHESS_VARIATIONS
+from .constants import API_CHESS_ROOMS, API_CHESS_NOTES, API_CHESS_PARSE, API_CHESS_DIRS, API_CHESS_EVALUATE, API_CHESS_VALIDATE, API_CHESS_VARIATIONS, API_CHESS_FINISH_ANALYSIS
 from .modals import ImportPGNModal, ChessNoteModal, ChessDirModal, ConfirmModal, CreateGameModal, CreateVariationModal, SelectVariationModal
 
 
@@ -98,6 +98,7 @@ class ChessMainScreen(Screen):
         Binding("n", "edit_note", "Nota"),
         Binding("z", "undo_move", "Deshacer"),
         Binding("e", "evaluate_pos", "Oráculo"),
+        Binding("w", "finish_study", "Completar"),
         Binding("v", "show_variations", "Ver Vars"),
         Binding("b", "back_to_mainline", "Volver"),
         Binding("delete, x", "delete_note", "Borrar Nota", show=False),
@@ -1128,3 +1129,38 @@ class ChessMainScreen(Screen):
 
         bar.update(render_eval_bar(percentage))
         panel.update(text)
+
+    @work(thread=True)
+    def action_finish_study(self) -> None:
+        if not self.current_room_id:
+            self.app.call_from_thread(
+                self.app.notify, "Carga una partida primero para poder completarla.", severity="warning"
+            )
+            return
+
+        try:
+            url = API_CHESS_FINISH_ANALYSIS.format(self.current_room_id)
+            resp = httpx.post(url, timeout=10.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                xp = data.get("xp_earned")
+                prestige = data.get("prestige_earned")
+                
+                # Format the success message
+                msg = f"¡Estudio Táctico Finalizado!\n+{xp} XP otorgada.\n+{prestige} Prestigio para el Gremio."
+                self.app.call_from_thread(
+                    self.app.notify, msg, title="Sinergia Posada", severity="success", timeout=6
+                )
+            elif resp.status_code == 400:
+                err = resp.json().get("error", "No se pudo reclamar.")
+                self.app.call_from_thread(
+                    self.app.notify, f"Aviso: {err}", severity="warning"
+                )
+            else:
+                self.app.call_from_thread(
+                    self.app.notify, f"Error del sistema: {resp.text}", severity="error"
+                )
+        except Exception as e:
+            self.app.call_from_thread(
+                self.app.notify, f"Falla de red: {e}", severity="error"
+            )

@@ -56,4 +56,5 @@ API_CHESS_DIRS = "http://localhost:8009/api/chess/directories/"
 API_CHESS_EVALUATE = "http://localhost:8009/api/chess/evaluate/"
 API_CHESS_VALIDATE = "http://localhost:8009/api/chess/validate-move/"
 API_CHESS_VARIATIONS = "http://localhost:8009/api/chess/variations/"
+API_CHESS_FINISH_ANALYSIS = "http://localhost:8009/api/chess/rooms/{}/finish_analysis/"
 
