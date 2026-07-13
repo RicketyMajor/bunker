@@ -1,3 +1,4 @@
+import os
 import io
 import chess
 import chess.pgn
@@ -129,7 +130,8 @@ def evaluate_position(request):
 
     try:
         # turn_perspective=False garantiza que la evaluación siempre sea respecto a las blancas.
-        stockfish = Stockfish(path="/usr/games/stockfish", turn_perspective=False)
+        stockfish_path = os.environ.get("STOCKFISH_PATH", "/usr/games/stockfish")
+        stockfish = Stockfish(path=stockfish_path, turn_perspective=False)
         board = chess.Board(fen)
 
         if initial_fen and history:
