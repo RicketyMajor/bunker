@@ -61,11 +61,11 @@ def ensure_infrastructure_up():
             "\n[bold yellow]Infraestructura dormida o inestable. Encendiendo servidores...[/bold yellow]")
         project_dir = Path(__file__).resolve().parent.parent
         try:
-            subprocess.run(["docker-compose", "up", "-d"], cwd=project_dir,
+            subprocess.run(["docker", "compose", "up", "-d"], cwd=project_dir,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError:
             console.print(
-                "[bold red]Comando 'docker-compose' no encontrado en el sistema.[/bold red]")
+                "[bold red]Comando 'docker compose' no encontrado en el sistema.[/bold red]")
             return
 
         console.print(
