@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Escáner de Biblioteca</title>
+    <script
+      src="https://unpkg.com/html5-qrcode"
+      type="text/javascript"
+    ></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 20px;
+        background-color: #1e1e1e;
+        color: #ffffff;
+      }
+      h1 {
+        color: #00d2ff;
+      }
+      p {
+        color: #aaaaaa;
+      }
+
+      #reader {
+        width: 100%;
+        max-width: 500px;
+        margin: 20px auto;
+        background: #ffffff;
+        color: #000000;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      #status {
+        margin-top: 20px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #ffcc00;
+        padding: 10px;
+      }
+
+      .btn-restart {
+        margin-top: 15px;
+        padding: 12px 24px;
+        font-size: 16px;
+        background-color: #00d2ff;
+        color: #1e1e1e;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.2s;
+      }
+      .btn-restart:hover {
+        background-color: #00a8cc;
+      }
+      .btn-error {
+        background-color: #ff4444;
+        color: #ffffff;
+      }
+      .btn-error:hover {
+        background-color: #cc0000;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Escáner de Disquera</h1>
+    <p>Apunta la cámara al código de barras o sube una imagen.</p>
+
+    <div id="reader"></div>
+
+    <div id="status">Esperando escáner...</div>
+
+    <script>
+      const csrfToken = "{{ csrf_token }}";
+
+      let isScanning = false;
+
+      function onScanSuccess(decodedText, decodedResult) {
+        if (isScanning) return;
+        isScanning = true;
+
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerHTML = `Inyectando EAN: ${decodedText}...`;
+        statusDiv.style.color = "#00d2ff";
+
+        // Pausa visualmente el escáner
+        html5QrcodeScanner.pause();
+
+        fetch("/api/music/process-barcode/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ barcode: decodedText }),
+        })
+          .then((response) =>
+            response
+              .json()
+              .then((data) => ({ status: response.status, body: data })),
+          )
+          .then((res) => {
+            if (res.status === 201 || res.status === 200) {
+              statusDiv.innerHTML = `¡Capturado! ${res.body.message || "Código guardado"}`;
+              statusDiv.style.color = "#00ff00";
+            } else {
+              statusDiv.innerHTML = `Aviso: ${res.body.error || "Ya registrado"}`;
+              statusDiv.style.color = "#ffcc00";
+            }
+
+            // Espera 1.5 segundos para que leas el mensaje,
+            // y reactiva la cámara sin recargar la página.
+            setTimeout(() => {
+              statusDiv.innerHTML = "Esperando siguiente código...";
+              statusDiv.style.color = "#ffcc00";
+              html5QrcodeScanner.resume();
+              isScanning = false;
+            }, 1500);
+          })
+          .catch((error) => {
+            statusDiv.innerHTML = `Error de red. Intenta de nuevo.`;
+            statusDiv.style.color = "#ff4444";
+            setTimeout(() => {
+              html5QrcodeScanner.resume();
+              isScanning = false;
+            }, 2000);
+          });
+      }
+      let html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+        },
+        false,
+      );
+
+      html5QrcodeScanner.render(onScanSuccess, undefined);
+    </script>
+  </body>
+</html>

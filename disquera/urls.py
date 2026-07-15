@@ -17,6 +17,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('scan/', views.scan_album, name='scan-album'),
     path('process-barcode/', views.process_barcode, name='process-barcode'),
+    path('scanner-web/', views.music_scanner_view, name='music-scanner-web'),
     path('tracker/', views.tracker_stats, name='tracker-stats'),
     path('tracker/annual/', views.tracker_annual, name='tracker-annual'),
     path('tracker/finish/', views.finish_album, name='finish-album'),

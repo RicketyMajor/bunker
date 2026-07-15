@@ -6,6 +6,7 @@ from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInb
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
+from django.shortcuts import render
 
 
 class AlbumDirectoryViewSet(viewsets.ModelViewSet):
@@ -114,6 +115,10 @@ def scan_album(request):
         return Response({"message": f"Álbum '{album_data['title']}' archivado."}, status=status.HTTP_201_CREATED)
 
     return Response({"error": "No se encontraron resultados en los archivos de Discogs."}, status=status.HTTP_404_NOT_FOUND)
+
+def music_scanner_view(request):
+    """Renderiza el escáner QR aislado exclusivamente para música."""
+    return render(request, 'disquera/music_scanner.html')
 
 # --- TRACKER MUSICAL ---
 
