@@ -160,6 +160,7 @@ class ChessMainScreen(Screen):
     
     #moves_panel { border: heavy $warning; background: $surface; height: 100%; }
     #notes_panel { border: heavy $primary; background: $surface; height: 100%; padding: 0 1; }
+    #repertoire_tree { display: none; }
     """
 
     def compose(self) -> ComposeResult:
@@ -183,6 +184,7 @@ class ChessMainScreen(Screen):
 
             with Vertical(id="moves_panel"):
                 yield DataTable(id="moves_table")
+                yield Tree("Repertorio Táctico", id="repertoire_tree")
                 # Barra para crear estudios (Input Manual)
                 yield Input(placeholder="Ingresa jugada (Ej: e4, Nf3)...", id="manual_move_input")
 
@@ -297,7 +299,8 @@ class ChessMainScreen(Screen):
                 "title": payload["title"],
                 "directory": payload.get("directory"),
                 "pgn_data": "",
-                "orientation": payload.get("orientation", "white")
+                "orientation": payload.get("orientation", "white"),
+                "room_type": payload.get("room_type", "game")
             }, timeout=5.0)
 
             if room_resp.status_code == 201:
@@ -387,9 +390,10 @@ class ChessMainScreen(Screen):
     def load_game_into_ui(self, room_id: int, moves: list) -> None:
         self.current_room_id = room_id
         
-        # Obtener orientación de la sala
+        # Obtener orientación de la sala y el tipo de sala
         room_data = next((r for r in getattr(self, "raw_rooms", []) if r["id"] == room_id), {})
         self.current_orientation = room_data.get("orientation", "white")
+        self.current_room_type = room_data.get("room_type", "game")
 
         self.current_moves = moves
         self.current_notes = {}
@@ -405,7 +409,18 @@ class ChessMainScreen(Screen):
         self.refresh_moves_table()
 
         table = self.query_one("#moves_table", DataTable)
-        table.focus()
+        tree = self.query_one("#repertoire_tree", Tree)
+        
+        if self.current_room_type == "repertoire":
+            table.display = False
+            tree.display = True
+            tree.focus()
+            self.build_repertoire_tree()
+        else:
+            table.display = True
+            tree.display = False
+            table.focus()
+            
         self.fetch_notes()
         self.fetch_variations()
 
@@ -451,6 +466,88 @@ class ChessMainScreen(Screen):
 
         fen = moves[local_ply]["fen"]
         self._update_board_view(fen)
+        self.refresh_notes_panel()
+
+    def build_repertoire_tree(self) -> None:
+        """Construye el árbol de decisiones leyendo la línea principal y variaciones."""
+        tree = self.query_one("#repertoire_tree", Tree)
+        tree.clear()
+        
+        if not self.current_moves:
+            tree.root.set_label("Vacío")
+            return
+            
+        tree.root.set_label("⭐ Inicio")
+        tree.root.data = {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", "is_mainline": True, "local_ply": 0}
+        
+        import chess
+        
+        def add_variations(parent_node, parent_ply, base_fen, variation_id=None):
+            # Buscar variaciones que nacen de este ply exacto
+            forks = [v for forks_list in self.variations.values() for v in forks_list if v.get("parent_variation") == variation_id and v["parent_ply"] == parent_ply]
+            
+            for var in forks:
+                board = chess.Board(base_fen)
+                current_node = parent_node
+                
+                # Para evitar duplicados visuales en la raíz si es un fork directo de la línea principal
+                var_label = f"⑂ Variación {var['id']}"
+                var_root = current_node.add(f"[bold cyan]{var_label}[/]", data={"fen": base_fen, "is_mainline": False, "variation": var, "local_ply": 0})
+                
+                curr = var_root
+                for i, san in enumerate(var["moves_san"]):
+                    try:
+                        board.push_san(san)
+                        turn_prefix = f"{(parent_ply + i) // 2 + 1}." if board.turn == chess.BLACK else f"{(parent_ply + i) // 2 + 1}..."
+                        label = f"{turn_prefix} {san}"
+                        
+                        curr = curr.add(label, data={"fen": board.fen(), "is_mainline": False, "variation": var, "local_ply": i + 1})
+                        
+                        # Recursividad: buscar sub-variaciones que nazcan en ESTE ply de ESTA variación
+                        add_variations(curr, i + 1, board.fen(), var["id"])
+                    except:
+                        break
+
+        # Construir Línea Principal
+        curr_node = tree.root
+        for i, move in enumerate(self.current_moves[1:], 1):
+            turn_prefix = f"{(i+1) // 2}." if move["turn"] == "black" else f"{(i+1) // 2}..."
+            label = f"[bold green]{turn_prefix} {move['san']}[/]"
+            curr_node = curr_node.add(label, data={"fen": move["fen"], "is_mainline": True, "local_ply": i})
+            
+            # Buscar variaciones de nivel 1 que nazcan en este ply de la línea principal
+            add_variations(curr_node, i, move["fen"], None)
+
+        tree.root.expand_all()
+
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Al navegar por el Repertorio Táctico, actualiza el tablero y activa la variación correspondiente."""
+        if event.control.id != "repertoire_tree":
+            return
+            
+        data = event.node.data
+        if not data:
+            return
+            
+        fen = data.get("fen")
+        if fen:
+            self._update_board_view(fen)
+            
+        # Sincronizar estado interno para que funcionen notas, undo, y forks
+        if data.get("is_mainline"):
+            self.active_variation = None
+            self.active_var_moves = []
+            self.current_ply = data.get("local_ply", 0)
+        elif "variation" in data:
+            self.active_variation = data["variation"]
+            self.active_var_ply = data.get("local_ply", 0)
+            
+            # Reconstruir active_var_moves si no está cargada
+            if not self.active_var_moves or len(self.active_var_moves) - 1 < self.active_var_ply:
+                # Esto es una optimización, idealmente usaríamos el código de enter_variation
+                # Por ahora solo llamamos a enter_variation en background si queremos extenderlo
+                pass
+                
         self.refresh_notes_panel()
 
     @work(thread=True)
@@ -657,6 +754,8 @@ class ChessMainScreen(Screen):
             self.active_var_ply = new_ply
             self._update_board_view(data["new_fen"])
             self.refresh_moves_table()
+            if hasattr(self, "current_room_type") and self.current_room_type == "repertoire":
+                self.build_repertoire_tree()
             self.save_variation_to_db(self.active_variation)
             return
 
@@ -677,6 +776,8 @@ class ChessMainScreen(Screen):
         self.current_ply = new_ply
         self._update_board_view(data["new_fen"])
         self.refresh_moves_table()
+        if hasattr(self, "current_room_type") and self.current_room_type == "repertoire":
+            self.build_repertoire_tree()
         self.save_mainline_to_db()
 
     @work(thread=True)
@@ -708,6 +809,8 @@ class ChessMainScreen(Screen):
                 self.active_var_ply -= 1
                 self._update_board_view(self.active_var_moves[-1]["fen"])
                 self.refresh_moves_table()
+                if hasattr(self, "current_room_type") and self.current_room_type == "repertoire":
+                    self.build_repertoire_tree()
                 self.save_variation_to_db(self.active_variation)
                 self.app.notify("Jugada deshecha (Variación).", severity="information")
             else:
@@ -718,6 +821,8 @@ class ChessMainScreen(Screen):
                 self.current_ply -= 1
                 self._update_board_view(self.current_moves[-1]["fen"])
                 self.refresh_moves_table()
+                if hasattr(self, "current_room_type") and self.current_room_type == "repertoire":
+                    self.build_repertoire_tree()
                 self.save_mainline_to_db()
                 self.app.notify("Jugada deshecha (Principal).", severity="information")
             else:
@@ -875,6 +980,8 @@ class ChessMainScreen(Screen):
     def update_variations_dict(self, var_dict: dict) -> None:
         self.variations = var_dict
         self.refresh_moves_table()
+        if hasattr(self, "current_room_type") and self.current_room_type == "repertoire":
+            self.build_repertoire_tree()
 
     def action_show_variations(self) -> None:
         """Muestra las bifurcaciones disponibles en el ply actual con un selector."""

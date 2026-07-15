@@ -20,6 +20,14 @@ class ChessRoom(models.Model):
     pgn_data = models.TextField(blank=True)
     orientation = models.CharField(
         max_length=5, choices=(('white', 'Blancas'), ('black', 'Negras')), default='white')
+    
+    class RoomType(models.TextChoices):
+        GAME = 'game', 'Partida'
+        REPERTOIRE = 'repertoire', 'Repertorio'
+        
+    room_type = models.CharField(
+        max_length=15, choices=RoomType.choices, default=RoomType.GAME)
+        
     is_analyzed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -1017,7 +1017,7 @@ class MusicScannerModal(ModalScreen[None]):
             text_line = line.decode().strip()
             match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", text_line)
             if match:
-                url = match.group(1) + "/api/music/scan/"
+                url = match.group(1) + "/api/music/scanner-web/"
                 title.update(f"Escanea o visita:\n{url}")
                 self.render_qr(url, log)
                 break
@@ -1119,6 +1119,9 @@ class CreateGameModal(ModalScreen[dict]):
                 [(f"■ {d['name']}", str(d['id'])) for d in self.dirs]
             yield Select(options, id="sel_dir")
 
+            yield Label("Tipo de Estudio:", classes="edit_label")
+            yield Select([("Partida Clásica", "game"), ("Repertorio de Aperturas", "repertoire")], value="game", id="sel_room_type")
+
             yield Label("Orientación del Tablero:", classes="edit_label")
             yield Select([("Jugar con Blancas", "white"), ("Jugar con Negras", "black")], value="white", id="sel_orientation")
 
@@ -1130,10 +1133,12 @@ class CreateGameModal(ModalScreen[dict]):
         if event.button.id == "btn_save":
             dir_val = self.query_one("#sel_dir", Select).value
             orientation_val = self.query_one("#sel_orientation", Select).value
+            room_type_val = self.query_one("#sel_room_type", Select).value
             self.dismiss({
                 "title": self.query_one("#inp_title", Input).value,
                 "directory": int(dir_val) if dir_val else None,
                 "orientation": orientation_val,
+                "room_type": room_type_val,
             })
         else:
             self.dismiss(None)
