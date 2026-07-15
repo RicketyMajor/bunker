@@ -42,7 +42,7 @@ class ChessRoomViewSet(viewsets.ModelViewSet):
             room.save()
             return Response({"status": "success"})
         except ValueError as e:
-            return Response({"error": f"Movimiento inválido: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": f"Movimiento inválido: {str(e)}", "valid": False}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
     def finish_analysis(self, request, pk=None):
@@ -262,3 +262,73 @@ def validate_move(request):
     except ValueError:
         # Si parse_san falla, es un movimiento ilegal o mal escrito
         return Response({"valid": False, "error": "Movimiento ilegal o error de sintaxis."}, status=status.HTTP_400_BAD_REQUEST)
+
+import httpx
+
+@api_view(['GET'])
+def get_daily_puzzle(request):
+    try:
+        resp = httpx.get("https://lichess.org/api/puzzle/daily", timeout=5.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            puzzle_id = data["puzzle"]["id"]
+            from .models import SolvedPuzzle
+            is_solved = SolvedPuzzle.objects.filter(puzzle_id=puzzle_id).exists()
+            data["solved"] = is_solved
+            return Response(data)
+        return Response({"error": "No se pudo obtener el puzzle"}, status=resp.status_code)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['POST'])
+def solve_daily_puzzle(request):
+    puzzle_id = request.data.get("puzzle_id")
+    rating = request.data.get("rating", 1500)
+    
+    if not puzzle_id:
+        return Response({"error": "Missing puzzle_id"}, status=400)
+        
+    from .models import SolvedPuzzle
+    if SolvedPuzzle.objects.filter(puzzle_id=puzzle_id).exists():
+        return Response({"error": "Ya resolviste este puzzle."}, status=400)
+        
+    try:
+        from posada.models import Adventurer, GuildProfile, DeepWorkSession
+        from posada.engine.legacy import check_level_up
+        
+        adv = Adventurer.objects.first()
+        guild = GuildProfile.objects.first()
+        if adv and guild:
+            # Recompensas
+            xp = max(100, int(rating) // 5)
+            
+            adv.experience += xp
+            adv.save()
+            
+            log_messages = [f"Ganaste {xp} XP por resolver un enigma táctico de {rating} ELO."]
+            check_level_up(adv, log_messages)
+            
+            # Crear sesión
+            session = DeepWorkSession.objects.create(
+                duration_minutes=15,
+                completed=True,
+                category="Tactics Puzzle"
+            )
+            session.adventurers_involved.add(adv)
+            session.event_log = [
+                f"El aventurero {adv.name} resolvió un complejo problema táctico (Puzzle {puzzle_id}).",
+                f"El gremio gana 3 puntos de prestigio."
+            ] + log_messages
+            session.save()
+            
+            # Add prestige at the end to prevent concurrent save issues
+            guild.prestige_level += 3
+            guild.save()
+            
+        SolvedPuzzle.objects.create(puzzle_id=puzzle_id, rating=int(rating))
+        return Response({"status": "success", "message": f"Puzzle Resuelto! Ganaste {xp} XP."})
+        
+    except ImportError:
+        # Fallback if posada is missing
+        SolvedPuzzle.objects.create(puzzle_id=puzzle_id, rating=int(rating))
+        return Response({"status": "success", "message": "Puzzle Resuelto! (Sin Posada)"})

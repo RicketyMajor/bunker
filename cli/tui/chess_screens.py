@@ -101,6 +101,7 @@ class ChessMainScreen(Screen):
         Binding("w", "finish_study", "Completar"),
         Binding("v", "show_variations", "Ver Vars"),
         Binding("b", "back_to_mainline", "Volver"),
+        Binding("p", "solve_puzzle", "Puzzle Diario"),
         Binding("delete, x", "delete_note", "Borrar Nota", show=False),
         Binding("backspace", "delete_node", "Borrar Árbol", show=False),
     ]
@@ -1005,6 +1006,10 @@ class ChessMainScreen(Screen):
                 self.enter_variation(forks[idx])
 
         self.app.push_screen(SelectVariationModal(forks), handle_selection)
+
+    def action_solve_puzzle(self) -> None:
+        """Abre la interfaz del Puzzle Diario."""
+        self.app.push_screen(PuzzleScreen())
 
     def enter_variation(self, var_data: dict) -> None:
         """Entra en modo variación, reconstruyendo las posiciones FEN."""

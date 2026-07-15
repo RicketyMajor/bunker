@@ -12,6 +12,15 @@ class ChessDirectory(models.Model):
         return self.name
 
 
+class SolvedPuzzle(models.Model):
+    puzzle_id = models.CharField(max_length=50, unique=True)
+    rating = models.IntegerField()
+    solved_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Puzzle {self.puzzle_id} (Rating: {self.rating})"
+
+
 class ChessRoom(models.Model):
     title = models.CharField(max_length=255)
     # Enlazamos la partida a un directorio (puede ser null si está en la raíz)
