@@ -102,6 +102,7 @@ class ChessMainScreen(Screen):
         Binding("v", "show_variations", "Ver Vars"),
         Binding("b", "back_to_mainline", "Volver"),
         Binding("p", "solve_puzzle", "Puzzle Diario"),
+        Binding("m", "toggle_engine", "Motor"),
         Binding("delete, x", "delete_note", "Borrar Nota", show=False),
         Binding("backspace", "delete_node", "Borrar Árbol", show=False),
     ]
@@ -202,6 +203,7 @@ class ChessMainScreen(Screen):
         self.current_notes = {}
         self.current_ply = 0
         self.raw_dirs = []
+        self.current_engine = "stockfish"
 
         # --- Estado de Variaciones ---
         self.variations = {}          # {parent_ply: [{"id": ..., "moves_san": [...], ...}, ...]}
@@ -1183,7 +1185,16 @@ class ChessMainScreen(Screen):
                 except Exception:
                     pass
 
-    # --- ORÁCULO DE STOCKFISH ---
+    # --- ORÁCULO MULTI-MOTOR ---
+
+    def action_toggle_engine(self) -> None:
+        """Alterna entre Stockfish y Leela Chess Zero (Lc0)."""
+        if self.current_engine == "stockfish":
+            self.current_engine = "lc0"
+        else:
+            self.current_engine = "stockfish"
+            
+        self.app.notify(f"Motor activo cambiado a: {self.current_engine.upper()}", severity="information")
 
     def action_evaluate_pos(self) -> None:
         """Se activa al presionar la E."""
@@ -1196,7 +1207,7 @@ class ChessMainScreen(Screen):
         history = [m["san"] for m in self.current_moves[1:self.current_ply+1]]
 
         self.query_one("#oracle_panel", Static).update(
-            "⏳ [italic text-muted]Oráculo calculando árboles de variantes (contexto completo)...[/]")
+            f"⏳ [italic text-muted]Oráculo ({self.current_engine.upper()}) calculando variantes...[/]")
         self.process_evaluation(fen, initial_fen, history)
 
     @work(thread=True)
@@ -1206,7 +1217,8 @@ class ChessMainScreen(Screen):
                               "fen": fen,
                               "initial_fen": initial_fen,
                               "history": history,
-                              "depth": 15}, timeout=15.0)
+                              "depth": 15,
+                              "engine": self.current_engine}, timeout=15.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(self.update_oracle_ui, resp.json())
             else:
@@ -1226,14 +1238,14 @@ class ChessMainScreen(Screen):
         if eval_info.get("type") == "mate":
             mate_in = eval_info.get("value", 0)
             color = "Blancas" if mate_in > 0 else "Negras"
-            text = f"[bold red]MATE INMINENTE[/]: {color} en {abs(mate_in)} | Sugerencia: [bold]{best_move}[/]"
+            text = f"[bold red]MATE INMINENTE[/] ({self.current_engine.upper()}): {color} en {abs(mate_in)} | Sugerencia: [bold]{best_move}[/]"
             percentage = 100.0 if mate_in > 0 else 0.0
         else:
             cp = eval_info.get("value", 0)
             score = cp / 100.0
             sign = "+" if score > 0 else ""
 
-            text = f"[bold cyan]Análisis (Stockfish):[/] {sign}{score:.2f} | Mejor jugada: [bold]{best_move}[/]"
+            text = f"[bold cyan]Análisis ({self.current_engine.upper()}):[/] {sign}{score:.2f} | Mejor jugada: [bold]{best_move}[/]"
 
             # Matemática para la barra térmica: -5 a +5 puntos (500 centipeones) llenan o vacían la barra
             percentage = 50.0 + (score * 10.0)

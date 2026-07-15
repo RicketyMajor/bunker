@@ -2,7 +2,7 @@ import os
 import io
 import chess
 import chess.pgn
-from stockfish import Stockfish
+import chess.engine
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
@@ -180,59 +180,62 @@ def parse_pgn(request):
 @api_view(['POST'])
 def evaluate_position(request):
     """
-    Enciende a Stockfish en segundo plano, evalúa el contexto histórico completo 
+    Enciende el motor UCI en segundo plano, evalúa el contexto histórico completo 
     y devuelve la ventaja matemática y la mejor jugada sugerida (en SAN).
     """
     fen = request.data.get('fen')
     initial_fen = request.data.get('initial_fen')
     history = request.data.get('history', [])
     depth = request.data.get('depth', 15)  # Profundidad por defecto rápida
+    engine_name = request.data.get('engine', 'stockfish').lower()
 
     if not fen:
         return Response({"error": "No se proporcionó FEN."}, status=status.HTTP_400_BAD_REQUEST)
 
+    engine_path = os.environ.get("STOCKFISH_PATH", "/usr/games/stockfish")
+    if engine_name == "lc0":
+        engine_path = os.environ.get("LC0_PATH", "/usr/games/lc0")
+
     try:
-        # turn_perspective=False garantiza que la evaluación siempre sea respecto a las blancas.
-        stockfish_path = os.environ.get("STOCKFISH_PATH", "/usr/games/stockfish")
-        stockfish = Stockfish(path=stockfish_path, turn_perspective=False)
+        engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         board = chess.Board(fen)
 
         if initial_fen and history:
-            # Recrea la partida desde el inicio para darle a Stockfish contexto completo
-            # (vital para la regla de los 50 movimientos y la triple repetición)
+            # Recrea la partida desde el inicio para darle a engine contexto completo
             temp_board = chess.Board(initial_fen)
-            uci_moves = []
             for san_move in history:
                 if san_move == "Inicial":
                     continue
                 move = temp_board.parse_san(san_move)
-                uci_moves.append(move.uci())
                 temp_board.push(move)
+            # board will be the final position (should match fen theoretically)
+            # we use board for analyse, python-chess handles history internally if we want,
+            # but wait, `engine.analyse` takes a `Board` object which tracks move stack natively!
+            board = temp_board
 
-            stockfish.set_fen_position(initial_fen)
-            if uci_moves:
-                stockfish.make_moves_from_current_position(uci_moves)
+        info = engine.analyse(board, chess.engine.Limit(depth=depth))
+        engine.quit()
+
+        # Extraer evaluación
+        score = info["score"].white()
+        if score.is_mate():
+            eval_info = {"type": "mate", "value": score.mate()}
         else:
-            stockfish.set_fen_position(fen)
+            eval_info = {"type": "cp", "value": score.score()}
 
-        stockfish.set_depth(depth)
-
-        eval_info = stockfish.get_evaluation()
-        best_move_uci = stockfish.get_best_move()
-
-        # Convertir la jugada UCI a SAN para que sea legible (Ej: "e2e4" -> "e4")
-        try:
-            best_move_san = board.san(board.parse_uci(best_move_uci)) if best_move_uci else "Ninguno"
-        except Exception:
-            best_move_san = best_move_uci
+        # Extraer mejor jugada
+        best_move_san = "Ninguno"
+        if "pv" in info and len(info["pv"]) > 0:
+            best_move = info["pv"][0]
+            # Convertir a SAN usando el tablero ANTES de la jugada
+            best_move_san = board.san(best_move)
 
         return Response({
-            # Formato: {"type": "cp", "value": 150} o {"type": "mate", "value": 3}
             "eval": eval_info,
             "best_move": best_move_san
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({"error": f"Falla en el motor Stockfish: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": f"Falla en el motor {engine_name}: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
