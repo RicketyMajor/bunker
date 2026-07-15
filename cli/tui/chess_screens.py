@@ -1276,3 +1276,163 @@ class ChessMainScreen(Screen):
             self.app.call_from_thread(
                 self.app.notify, f"Falla de red: {e}", severity="error"
             )
+
+class PuzzleScreen(Screen):
+    """Pantalla para resolver el Puzzle Diario de Lichess."""
+    
+    BINDINGS = [
+        Binding("escape, q", "go_back", "Volver")
+    ]
+    
+    CSS = """
+    #puzzle_root {
+        layout: grid;
+        grid-size: 2 1;
+        grid-columns: 2fr 1fr;
+        padding: 1 2;
+        grid-gutter: 1 2;
+    }
+    
+    #board_container_puzzle {
+        border: heavy $success;
+        background: $surface;
+        align: center middle;
+        content-align: center middle;
+        layout: horizontal;
+    }
+    
+    #info_panel_puzzle {
+        border: heavy $warning;
+        background: $surface;
+        padding: 1 2;
+    }
+    """
+    
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Grid(id="puzzle_root"):
+            with Horizontal(id="board_container_puzzle"):
+                yield Static(render_eval_bar(50.0), id="eval_bar_puzzle")
+                yield Static(render_fen("8/8/8/8/8/8/8/8"), id="board_view_puzzle")
+                
+            with Vertical(id="info_panel_puzzle"):
+                yield Markdown("## 🧩 Puzzle Diario\nCargando conexión con Lichess...", id="puzzle_info")
+                yield Input(placeholder="Ingresa tu jugada (Ej: e4, d4f4)...", id="puzzle_input")
+        yield Footer()
+        
+    def on_mount(self) -> None:
+        self.puzzle_data = None
+        self.puzzle_solved = False
+        self.solution_moves = []
+        self.current_fen = ""
+        self.current_orientation = "white"
+        self.app.call_from_thread(self.fetch_daily_puzzle)
+        
+    @work(thread=True)
+    def fetch_daily_puzzle(self):
+        try:
+            from .constants import API_CHESS_DAILY_PUZZLE
+            resp = httpx.get(API_CHESS_DAILY_PUZZLE, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.app.call_from_thread(self.load_puzzle, data)
+            else:
+                self.app.call_from_thread(self.show_error, "No se pudo obtener el puzzle.")
+        except Exception as e:
+            self.app.call_from_thread(self.show_error, str(e))
+            
+    def show_error(self, msg: str):
+        self.query_one("#puzzle_info", Markdown).update(f"## ❌ Error\n{msg}")
+        
+    def load_puzzle(self, data: dict):
+        if data.get("solved"):
+            self.query_one("#puzzle_info", Markdown).update("## 🏆 Puzzle Resuelto\nYa resolviste el puzzle diario hoy. ¡Vuelve mañana!")
+            self.query_one("#puzzle_input", Input).display = False
+            
+            # Still show the board
+            p = data.get("puzzle", {})
+            self.current_fen = p.get("fen", "")
+            if self.current_fen:
+                import chess
+                board = chess.Board(self.current_fen)
+                self.current_orientation = "white" if board.turn == chess.WHITE else "black"
+                self.query_one("#board_view_puzzle", Static).update(render_fen(self.current_fen, self.current_orientation))
+            return
+            
+        p = data.get("puzzle", {})
+        self.puzzle_data = p
+        self.solution_moves = p.get("solution", [])
+        self.current_fen = p.get("fen", "")
+        
+        import chess
+        board = chess.Board(self.current_fen)
+        self.current_orientation = "white" if board.turn == chess.WHITE else "black"
+        
+        self.query_one("#board_view_puzzle", Static).update(render_fen(self.current_fen, self.current_orientation))
+        
+        info = f"## 🧩 Puzzle Diario\n**Rating:** {p.get('rating')}\n**Juegan:** {'Blancas' if self.current_orientation == 'white' else 'Negras'}\n\nEscribe tu jugada para resolverlo."
+        self.query_one("#puzzle_info", Markdown).update(info)
+        self.query_one("#puzzle_input", Input).focus()
+        
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if self.puzzle_solved or not self.puzzle_data or event.control.id != "puzzle_input":
+            return
+            
+        move_str = event.value.strip()
+        event.control.value = ""
+        
+        if not self.solution_moves:
+            return
+            
+        correct_uci = self.solution_moves[0]
+        import chess
+        board = chess.Board(self.current_fen)
+        
+        try:
+            try:
+                move = board.parse_san(move_str)
+            except ValueError:
+                move = board.parse_uci(move_str)
+                
+            if move.uci() == correct_uci:
+                board.push(move)
+                self.current_fen = board.fen()
+                self.solution_moves.pop(0)
+                
+                if not self.solution_moves:
+                    self.puzzle_solved = True
+                    self.query_one("#board_view_puzzle", Static).update(render_fen(self.current_fen, self.current_orientation))
+                    self.query_one("#puzzle_info", Markdown).update("## 🎉 ¡CORRECTO!\nEnviando recompensa a la Posada...")
+                    self.app.call_from_thread(self.submit_solved)
+                    return
+                    
+                opponent_uci = self.solution_moves.pop(0)
+                opp_move = chess.Move.from_uci(opponent_uci)
+                board.push(opp_move)
+                self.current_fen = board.fen()
+                
+                self.query_one("#board_view_puzzle", Static).update(render_fen(self.current_fen, self.current_orientation))
+            else:
+                self.app.notify("Jugada incorrecta. Intenta de nuevo.", severity="warning")
+        except ValueError:
+            self.app.notify("Jugada ilegal o no reconocida.", severity="error")
+            
+    @work(thread=True)
+    def submit_solved(self):
+        try:
+            from .constants import API_CHESS_SOLVE_PUZZLE
+            resp = httpx.post(API_CHESS_SOLVE_PUZZLE, json={"puzzle_id": self.puzzle_data["id"], "rating": self.puzzle_data["rating"]}, timeout=5.0)
+            if resp.status_code == 200:
+                msg = resp.json().get("message", "Puzzle Resuelto!")
+                self.app.call_from_thread(self.update_solved_ui, f"## 🏆 ¡PUZZLE SUPERADO!\n{msg}")
+            else:
+                self.app.call_from_thread(self.show_error, "No se pudo registrar la victoria.")
+        except Exception as e:
+            self.app.call_from_thread(self.show_error, str(e))
+            
+    def update_solved_ui(self, msg: str):
+        self.query_one("#puzzle_info", Markdown).update(msg)
+        self.query_one("#puzzle_input", Input).display = False
+        
+    def action_go_back(self):
+        self.app.pop_screen()
