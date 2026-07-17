@@ -206,9 +206,9 @@ def backup_database(request):
                 os.path.abspath(__file__))), 'bunker_backup.json')
 
             with open(backup_path, 'w', encoding='utf-8') as f:
-                # vuelca específicamente las 4 aplicaciones
+                # vuelca específicamente las 5 aplicaciones
                 call_command('dumpdata', 'catalog', 'movies', 'disquera',
-                             'posada', format='json', indent=4, stdout=f)
+                             'posada', 'chess_study', format='json', indent=4, stdout=f)
 
             return JsonResponse({"message": "Cápsula de seguridad generada con éxito.", "path": backup_path}, status=200)
         except Exception as e:
