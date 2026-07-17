@@ -801,8 +801,10 @@ class BunkerLauncherScreen(Screen):
     # ── FUNCIONES DE SEGURIDAD ──
     @work(thread=True)
     def process_backup(self) -> None:
+        import os
+        token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
         try:
-            resp = httpx.post(API_BACKUP, timeout=15.0)
+            resp = httpx.post(API_BACKUP, headers={"X-Bunker-Token": token}, timeout=15.0)
             if resp.status_code == 200:
                 data = resp.json()
                 self.app.call_from_thread(
@@ -816,8 +818,10 @@ class BunkerLauncherScreen(Screen):
 
     @work(thread=True)
     def process_restore(self) -> None:
+        import os
+        token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
         try:
-            resp = httpx.post(API_RESTORE, timeout=15.0)
+            resp = httpx.post(API_RESTORE, headers={"X-Bunker-Token": token}, timeout=15.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.app.notify, "Búnker restaurado con éxito. Datos recargados.", title="Restauración Exitosa")

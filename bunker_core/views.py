@@ -194,6 +194,12 @@ def global_dashboard_view(request):
 def backup_database(request):
     """Genera una cápsula de tiempo (JSON) de la base de datos de los 4 módulos."""
     if request.method == 'POST':
+        # 🛡️ Seguridad: Validar Token Secreto
+        token = request.headers.get("X-Bunker-Token")
+        expected_token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
+        if token != expected_token:
+            return JsonResponse({"error": "Acceso denegado: Token de seguridad inválido o ausente."}, status=403)
+
         try:
             # Apunta a la raíz del proyecto (donde está el docker-compose)
             backup_path = os.path.join(os.path.dirname(os.path.dirname(
@@ -214,6 +220,12 @@ def backup_database(request):
 def restore_database(request):
     """Restaura todo el Búnker a partir de la cápsula de tiempo."""
     if request.method == 'POST':
+        # 🛡️ Seguridad: Validar Token Secreto
+        token = request.headers.get("X-Bunker-Token")
+        expected_token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
+        if token != expected_token:
+            return JsonResponse({"error": "Acceso denegado: Token de seguridad inválido o ausente."}, status=403)
+
         try:
             backup_path = os.path.join(os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__))), 'bunker_backup.json')
