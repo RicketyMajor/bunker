@@ -18,6 +18,7 @@ services:
     # la imagen cada vez que se edite una línea de código en Python.
     volumes:
       - .:/app
+      - bunker_backups:/app/backups
     ports:
       - "8009:8000"
     depends_on:
@@ -62,3 +63,5 @@ services:
 volumes:
   postgres_data:
     name: library_manager_postgres_data
+  bunker_backups:
+    name: bunker_backups_data
