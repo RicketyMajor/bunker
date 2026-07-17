@@ -5,3 +5,6 @@ __pycache__/
 bunker_backup.json
 node_modules/
 venv/
+context/
+backups/
+logs/

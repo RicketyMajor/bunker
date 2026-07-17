@@ -28,6 +28,7 @@ from cli.wishlist import wishlist_app
 from cli.tracker import tracker_app
 from cli.directories import dir_app
 from cli.tui.app import BunkerApp
+from cli.config import BASE_URL
 
 console = Console()
 app = typer.Typer(
@@ -53,7 +54,7 @@ def ensure_infrastructure_up():
 
     try:
         # Sube el timeout a 2.0s para evitar "falsos positivos" de caída
-        httpx.get("http://localhost:8009/api/health/", timeout=2.0)
+        httpx.get(f"{BASE_URL}/api/health/", timeout=2.0)
         _infrastructure_checked = True  # Sellamos la verificación exitosa
 
     except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
@@ -73,7 +74,7 @@ def ensure_infrastructure_up():
         for _ in range(20):
             try:
                 httpx.get(
-                    "http://localhost:8009/api/health/", timeout=2.0)
+                    f"{BASE_URL}/api/health/", timeout=2.0)
                 console.print(
                     "\n[bold green]¡Sistemas en línea![/bold green]\n")
                 _infrastructure_checked = True  # Sellamos la verificación tras encender
@@ -136,7 +137,7 @@ def get_local_ip():
 def get_dashboard_stats():
     """Consulta la API BFF para obtener todas las métricas en una sola llamada."""
     try:
-        resp = httpx.get("http://localhost:8009/api/dashboard/", timeout=2.0)
+        resp = httpx.get(f"{BASE_URL}/api/dashboard/", timeout=2.0)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -281,8 +282,8 @@ def show_scanner_qr():
 def list_structure():
     """Muestra la estructura unificada de la raíz (Directorios + Libros Huérfanos)."""
     try:
-        books_resp = httpx.get("http://localhost:8009/api/books/library/")
-        dirs_resp = httpx.get("http://localhost:8009/api/books/directories/")
+        books_resp = httpx.get(f"{BASE_URL}/api/books/library/")
+        dirs_resp = httpx.get(f"{BASE_URL}/api/books/directories/")
         books_resp.raise_for_status()
         dirs_resp.raise_for_status()
 
@@ -353,8 +354,8 @@ def show_tree():
     """Explorador visual del Sistema de Archivos (Directorios y Libros)."""
     console.print("\n[bold cyan]ÁRBOL DE DIRECTORIOS[/bold cyan]\n")
     try:
-        books = httpx.get("http://localhost:8009/api/books/library/").json()
-        dirs = httpx.get("http://localhost:8009/api/books/directories/").json()
+        books = httpx.get(f"{BASE_URL}/api/books/library/").json()
+        dirs = httpx.get(f"{BASE_URL}/api/books/directories/").json()
     except Exception as e:
         console.print(f"[bold red]Error de red: {e}[/bold red]")
         return
