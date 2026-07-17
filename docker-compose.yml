@@ -40,6 +40,7 @@ services:
     volumes:
       - ./scraper:/app
       - /app/node_modules
+      - ./scraper_logs:/app/logs
     depends_on:
       - web
 
@@ -52,6 +53,7 @@ services:
     volumes:
       - ./scraper:/app
       - /app/node_modules
+      - ./scraper_logs:/app/logs
     depends_on:
       - web
 
@@ -62,6 +64,7 @@ services:
     volumes:
       - ./scraper:/app
       - /app/node_modules
+      - ./scraper_logs:/app/logs
     depends_on:
       - web
 
