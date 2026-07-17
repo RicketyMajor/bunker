@@ -53,7 +53,7 @@ def ensure_infrastructure_up():
 
     try:
         # Sube el timeout a 2.0s para evitar "falsos positivos" de caída
-        httpx.get("http://localhost:8009/api/books/library/", timeout=2.0)
+        httpx.get("http://localhost:8009/api/health/", timeout=2.0)
         _infrastructure_checked = True  # Sellamos la verificación exitosa
 
     except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
@@ -73,7 +73,7 @@ def ensure_infrastructure_up():
         for _ in range(20):
             try:
                 httpx.get(
-                    "http://localhost:8009/api/books/library/", timeout=2.0)
+                    "http://localhost:8009/api/health/", timeout=2.0)
                 console.print(
                     "\n[bold green]¡Sistemas en línea![/bold green]\n")
                 _infrastructure_checked = True  # Sellamos la verificación tras encender

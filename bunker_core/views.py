@@ -239,3 +239,26 @@ def restore_database(request):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
     return JsonResponse({"error": "Método no permitido."}, status=405)
+
+
+def health_check(request):
+    """Endpoint ultra-ligero para verificar la infraestructura."""
+    from django.db import connection
+    import time
+    
+    start_time = time.time()
+    db_ok = True
+    try:
+        # Check simple de DB
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except Exception:
+        db_ok = False
+        
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    
+    return JsonResponse({
+        "status": "ok",
+        "db": db_ok,
+        "latency_ms": elapsed_ms
+    }, status=200 if db_ok else 503)
