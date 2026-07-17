@@ -2,6 +2,7 @@ services:
   # El contenedor de la base de datos
   db:
     image: postgres:15-alpine
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -14,6 +15,7 @@ services:
   # El contenedor aplicación Django / CLI
   web:
     build: .
+    restart: unless-stopped
     # Sincroniza la carpeta actual con el contenedor para no tener que reconstruir 
     # la imagen cada vez que se edite una línea de código en Python.
     volumes:
@@ -33,6 +35,7 @@ services:
 # --- Microservicios Distribuidos Node.js ---
   scraper-books:
     build: ./scraper
+    restart: unless-stopped
     command: npm run start:books
     volumes:
       - ./scraper:/app
@@ -42,6 +45,7 @@ services:
 
   scraper-movies:
     build: ./scraper
+    restart: unless-stopped
     command: npm run start:movies
     env_file:
       - .env # Pasa la clave TMDB_API_KEY
@@ -53,6 +57,7 @@ services:
 
   scraper-music:
     build: ./scraper
+    restart: unless-stopped
     command: npm run start:music
     volumes:
       - ./scraper:/app
