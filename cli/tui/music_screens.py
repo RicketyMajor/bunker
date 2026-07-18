@@ -100,6 +100,7 @@ class MusicMainScreen(Screen):
         ("escape", "go_back", "Volver al Launcher"),
         ("q", "quit", "Salir"),
         ("ctrl+b", "toggle_sidebar", "Explorador"),
+        ("a", "action_add_album", "Añadir Disco"),
         ("M", "action_move_album", "Mover a Carpeta"),
         ("/", "focus_search", "Buscador Global"),
         Binding("1", "switch_tab('tab_disquera')", "1-5 Pestañas", show=True),

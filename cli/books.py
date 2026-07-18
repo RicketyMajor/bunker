@@ -1,3 +1,4 @@
+from config import BASE_URL
 import typer
 import re
 import httpx
@@ -35,9 +36,9 @@ console = Console()
 book_app = typer.Typer(
     help="Manage your library books, comics, and mangas.", no_args_is_help=True)
 
-API_LIBRARY = "http://localhost:8009/api/books/library/"
-API_SCAN = "http://localhost:8009/api/books/scan/"
-API_INBOX = "http://localhost:8009/api/books/inbox/"
+API_LIBRARY = f"{BASE_URL}/api/books/library/"
+API_SCAN = f"{BASE_URL}/api/books/scan/"
+API_INBOX = f"{BASE_URL}/api/books/inbox/"
 
 
 def parse_manga_title(raw_title: str):
@@ -102,7 +103,7 @@ def list_books(
         # Fetch de los directorios para pintarlos en la tabla
         dir_map = {}
         dir_resp = httpx.get(
-            "http://localhost:8009/api/books/directories/", timeout=2.0)
+            f"{BASE_URL}/api/books/directories/", timeout=2.0)
         if dir_resp.status_code == 200:
             dir_map = {d['id']: d for d in dir_resp.json()}
 

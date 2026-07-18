@@ -1,3 +1,4 @@
+from config import BASE_URL
 import typer
 import httpx
 from rich.console import Console
@@ -12,8 +13,8 @@ console = Console()
 dir_app = typer.Typer(
     help="Gestiona los directorios y colecciones maestras.", no_args_is_help=True)
 
-API_DIR = "http://localhost:8009/api/books/directories/"
-API_LIBRARY = "http://localhost:8009/api/books/library/"
+API_DIR = f"{BASE_URL}/api/books/directories/"
+API_LIBRARY = f"{BASE_URL}/api/books/library/"
 
 
 @dir_app.command("create")

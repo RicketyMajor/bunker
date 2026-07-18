@@ -1,3 +1,4 @@
+from config import BASE_URL
 import typer
 import httpx
 from rich.console import Console
@@ -10,8 +11,8 @@ console = Console()
 wishlist_app = typer.Typer(
     help="Manage your Wishlist and Scraper Watchers.", no_args_is_help=True)
 
-API_WISHLIST = "http://localhost:8009/api/books/wishlist-crud/"
-API_WATCHERS = "http://localhost:8009/api/books/watchers-crud/"
+API_WISHLIST = f"{BASE_URL}/api/books/wishlist-crud/"
+API_WATCHERS = f"{BASE_URL}/api/books/watchers-crud/"
 
 
 @wishlist_app.command(name="list")

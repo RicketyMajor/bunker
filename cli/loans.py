@@ -1,3 +1,4 @@
+from config import BASE_URL
 import typer
 import httpx
 from rich.console import Console
@@ -11,9 +12,9 @@ console = Console()
 loan_app = typer.Typer(
     help="Gestiona los préstamos de tus libros a amigos.", no_args_is_help=True)
 
-API_LIBRARY = "http://localhost:8009/api/books/library/"
-API_FRIENDS = "http://localhost:8009/api/books/friends/"
-API_LOANS = "http://localhost:8009/api/books/loans/"
+API_LIBRARY = f"{BASE_URL}/api/books/library/"
+API_FRIENDS = f"{BASE_URL}/api/books/friends/"
+API_LOANS = f"{BASE_URL}/api/books/loans/"
 
 
 @loan_app.command(name="lend")

@@ -1,3 +1,4 @@
+from config import BASE_URL
 import typer
 import httpx
 from rich.console import Console
@@ -9,10 +10,10 @@ console = Console()
 tracker_app = typer.Typer(
     help="Registra tu progreso de lectura diario y anual.", no_args_is_help=True)
 
-API_LIBRARY = "http://localhost:8009/api/books/library/"
-API_TRACKER_PAGES = "http://localhost:8009/api/books/tracker/pages/"
-API_TRACKER_FINISH = "http://localhost:8009/api/books/tracker/finish/"
-API_TRACKER_ANNUAL = "http://localhost:8009/api/books/tracker/annual/"
+API_LIBRARY = f"{BASE_URL}/api/books/library/"
+API_TRACKER_PAGES = f"{BASE_URL}/api/books/tracker/pages/"
+API_TRACKER_FINISH = f"{BASE_URL}/api/books/tracker/finish/"
+API_TRACKER_ANNUAL = f"{BASE_URL}/api/books/tracker/annual/"
 
 
 @tracker_app.command(name="log")

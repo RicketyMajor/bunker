@@ -1582,7 +1582,7 @@ class BestiaryCodexModal(ModalScreen[None]):
     def load_bestiary(self) -> None:
         import requests
         try:
-            resp = requests.get("http://localhost:8009/api/bestiary/")
+            resp = requests.get(f"{BASE_URL}/api/bestiary/")
             if resp.status_code == 200:
                 self.bestiary_data = resp.json().get("bestiary", [])
                 table = self.query_one("#bestiary_table", DataTable)
@@ -3122,7 +3122,7 @@ class PosadaMainScreen(Screen):
         """Carga las sesiones completadas desde la API y llena la tabla de crónicas."""
         import requests
         try:
-            resp = requests.get("http://localhost:8009/posada/api/chronicles/")
+            resp = requests.get(f"{BASE_URL}/posada/api/chronicles/")
             if resp.status_code == 200:
                 self.chronicles_data = resp.json().get("chronicles", [])
                 table = self.query_one("#chronicles_table", DataTable)

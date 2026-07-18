@@ -638,6 +638,34 @@ class BunkerLauncherScreen(Screen):
         if not data:
             return
 
+        if not self._boot_done:
+            self._boot_done = True
+            posada = data.get("posada", {})
+            te = posada.get("today_events") or 0
+            hc = posada.get("habits_completed") or 0
+            ht = posada.get("habits_total") or 0
+            msgs = []
+            if te > 0:
+                msgs.append(f"Tienes {te} evento(s) HOY.")
+            if hc < ht:
+                msgs.append(f"Faltan {ht - hc} hábito(s) por completar.")
+            
+            if msgs:
+                msg_body = "\n".join(msgs)
+                self.app.notify(msg_body, title="🚨 Alerta del Bunker", severity="warning", timeout=8.0)
+                try:
+                    import subprocess
+                    subprocess.Popen(["notify-send", "-a", "Bunker", "-u", "critical", "🚨 Alerta del Bunker", msg_body])
+                except Exception:
+                    pass
+                
+                try:
+                    self.app.bell()
+                except Exception:
+                    import sys
+                    sys.stdout.write('\a')
+                    sys.stdout.flush()
+
         try:
             # ── STATUS BAR ──
             sb = self.query_one("#status_bar", Label)
