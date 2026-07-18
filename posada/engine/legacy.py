@@ -571,7 +571,7 @@ def evaluate_daily_penalties():
     return penalty_log
 
 
-def process_session_completion(session_id, survived_seconds=None):
+def process_session_completion(session_id, survived_seconds=None, surrendered=False, focus_lock_broken=False):
     try:
         session = DeepWorkSession.objects.get(id=session_id)
     except DeepWorkSession.DoesNotExist:
@@ -681,6 +681,16 @@ def process_session_completion(session_id, survived_seconds=None):
         guild=guild, upgrade__key='salon_cartografia').exists()
 
     for adv in adventurers:
+        if focus_lock_broken:
+            penalty = 50 * adv.level
+            adv.experience = max(0, adv.experience - penalty)
+            event_log.append(f"❌ ¡FOCUS LOCK ROTO! {adv.name} pierde {penalty} XP por cobardía.")
+            adv.session_skills_used = []
+            adv.combat_skills_used = []
+            adv.class_resources = {}
+            adv.save()
+            continue
+
         multiplier = 1.0
         if has_cartography:
             multiplier += 0.10

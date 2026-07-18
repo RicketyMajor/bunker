@@ -232,12 +232,14 @@ def complete_session(request):
     data = request.data
     session_id = data.get('session_id')
     survived_seconds = data.get('survived_seconds')
+    surrendered = data.get('surrendered', False)
+    focus_lock_broken = data.get('focus_lock_broken', False)
 
     if not session_id:
         return Response({"status": "error", "message": "Falta el ID de la sesión."}, status=status.HTTP_400_BAD_REQUEST)
 
     # El motor procesa la realidad basándose en cuánto tiempo se aguantate sin distracciones, y devuelve el resultado de la expedición
-    result = process_session_completion(session_id, survived_seconds)
+    result = process_session_completion(session_id, survived_seconds, surrendered, focus_lock_broken)
 
     if result.get("status") == "error":
         return Response(result, status=status.HTTP_400_BAD_REQUEST)

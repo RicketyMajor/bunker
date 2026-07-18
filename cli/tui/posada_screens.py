@@ -69,6 +69,9 @@ class SessionSetupModal(ModalScreen[dict]):
 
             yield Label("Reclutar Party (Máx 5):", classes="input_label")
             yield SelectionList(id="party_select")
+            
+            yield Label("")
+            yield Checkbox("🔒 Focus Lock (Penalización si abandonas)", id="chk_focus_lock")
 
             with Horizontal(classes="form_buttons"):
                 yield Button("Comenzar", variant="success", id="btn_confirm")
@@ -117,12 +120,39 @@ class SessionSetupModal(ModalScreen[dict]):
                 dur = int(self.query_one("#input_duration", Input).value)
             except ValueError:
                 dur = 25
+            
+            focus_lock = self.query_one("#chk_focus_lock", Checkbox).value
 
             self.dismiss({"mode": mode, "category": cat,
-                         "duration": dur, "party": party_ids})
+                         "duration": dur, "party": party_ids, "focus_lock": focus_lock})
+
+class FocusLockModal(ModalScreen[str]):
+    """Ventana para forzar confirmación si el Focus Lock está activo."""
+    CSS = """
+    #focus_lock_dialog { width: 50; height: auto; padding: 1 2; border: heavy $error; background: $surface; }
+    .focus_lock_title { text-style: bold; color: $error; text-align: center; width: 100%; margin-bottom: 1;}
+    #focus_lock_input { margin-bottom: 1; }
+    """
+    def compose(self) -> ComposeResult:
+        with Vertical(id="focus_lock_dialog"):
+            yield Label("⚠️ FOCUS LOCK ACTIVADO ⚠️", classes="focus_lock_title")
+            yield Label("Escribe SALIR en mayúsculas para abandonar y penalizar al Gremio.")
+            yield Input(id="focus_lock_input", placeholder="Escribe SALIR")
+            with Horizontal(classes="form_buttons"):
+                yield Button("Permanecer", variant="success", id="btn_stay")
+                yield Button("Rendirse", variant="error", id="btn_surrender")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn_stay":
+            self.dismiss(None)
+        elif event.button.id == "btn_surrender":
+            val = self.query_one("#focus_lock_input", Input).value
+            if val == "SALIR":
+                self.dismiss("SALIR")
+            else:
+                self.app.notify("Escribe SALIR exactamente.", severity="error")
 
 # --- MODAL DE BOTÍN ---
-
 
 class LootSummaryModal(ModalScreen[None]):
     """Ventana emergente que muestra el botín y la XP obtenidos."""
@@ -1689,7 +1719,7 @@ class PosadaMainScreen(Screen):
 
     BINDINGS = [
         # Globales (funcionales pero ocultos del footer)
-        Binding("escape", "app.pop_screen", "Salir Posada", show=False),
+        Binding("escape", "handle_escape", "Salir Posada", show=False),
         Binding("q", "app.quit", "Salir Bunker", show=False),
         Binding("1", "switch_tab('tab_timer')", "Enfoque", show=False),
         Binding("2", "switch_tab('tab_guild')", "Gremio", show=False),
@@ -2155,6 +2185,16 @@ class PosadaMainScreen(Screen):
             self.time_seconds += 1
 
     # --- BINDINGS Y EVENTOS DE INTERFAZ ---
+    def action_handle_escape(self) -> None:
+        if self.timer_active and getattr(self, 'focus_lock_active', False):
+            def handle_surrender(typed: str | None) -> None:
+                if typed == "SALIR":
+                    self.action_stop_timer()
+                    self.app.pop_screen()
+            self.app.push_screen(FocusLockModal(), handle_surrender)
+        else:
+            self.app.pop_screen()
+
     def action_setup_timer(self) -> None:
         if self.query_one(TabbedContent).active != "tab_timer":
             return
@@ -2298,6 +2338,8 @@ class PosadaMainScreen(Screen):
         """Paso 1: Recibe configuración y pide el guion al backend."""
         if result is None:
             return
+            
+        self.focus_lock_active = result.get("focus_lock", False)
 
         log = self.query_one("#event_log", RichLog)
         log.clear()
@@ -2386,13 +2428,16 @@ class PosadaMainScreen(Screen):
 
         session_id = getattr(self, 'current_session_id', None)
         if session_id:
-            self.submit_session_completion(session_id, elapsed)
+            focus_lock_broken = not success and getattr(self, 'focus_lock_active', False)
+            self.submit_session_completion(session_id, elapsed, not success, focus_lock_broken)
 
     @work(thread=True)
-    def submit_session_completion(self, session_id: int, survived_seconds: int) -> None:
+    def submit_session_completion(self, session_id: int, survived_seconds: int, surrendered: bool = False, focus_lock_broken: bool = False) -> None:
         """Paso Final: Envía los segundos vividos para calcular el botín oficial."""
         payload = {"session_id": session_id,
-                   "survived_seconds": survived_seconds}
+                   "survived_seconds": survived_seconds,
+                   "surrendered": surrendered,
+                   "focus_lock_broken": focus_lock_broken}
         try:
             resp = httpx.post(
                 f"{API_POSADA_BASE}session/complete/", json=payload, timeout=10.0)
