@@ -8,4 +8,6 @@ venv/
 context/
 backups/
 logs/
+scraper_logs/
+library_cli.egg-info/
 CLAUDE.md

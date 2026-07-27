@@ -1,3 +1,6 @@
+# cron runs with PATH=/usr/bin:/bin, but python:3.12-slim keeps the interpreter in
+# /usr/local/bin. Without this line backup.sh fails with "python: command not found".
+PATH=/usr/local/bin:/usr/bin:/bin
 # Correr a las 00:00 todos los días
 0 0 * * * root /app/scripts/backup.sh >> /var/log/cron.log 2>&1
 # Linea vacia requerida por cron

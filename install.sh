@@ -16,8 +16,9 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null; then
-    echo -e "${YELLOW}  docker-compose no encontrado. Por favor, instálalo primero.${NC}"
+# El runtime usa `docker compose` (V2, sin guion), igual que ensure_infrastructure_up.
+if ! docker compose version &> /dev/null; then
+    echo -e "${YELLOW}  docker compose (V2) no encontrado. Por favor, instálalo primero.${NC}"
     exit 1
 fi
 

@@ -10,16 +10,20 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar cron
-RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+# Instalar cron y el motor UCI. Debian deja el binario en /usr/games/stockfish,
+# que es exactamente la ruta por defecto de STOCKFISH_PATH en chess_study/views.py.
+RUN apt-get update && apt-get install -y cron stockfish && rm -rf /var/lib/apt/lists/*
 
 # Copia el resto del código del proyecto al contenedor
 COPY . /app/
 
-# Configurar cron
+# Configurar cron. Solo /etc/cron.d: ese formato acepta el campo de usuario ("root").
+# Instalarlo ademas con `crontab` lo interpretaba como crontab de usuario, donde el sexto
+# campo ya es el comando, y la tarea intentaba ejecutar el binario inexistente "root".
 COPY bunker_crontab /etc/cron.d/bunker-cron
 RUN chmod 0644 /etc/cron.d/bunker-cron
-RUN crontab /etc/cron.d/bunker-cron
 RUN touch /var/log/cron.log
 
-CMD cron && python manage.py runserver 0.0.0.0:8000
+# Volcar el entorno a /etc/bunker.env antes de arrancar cron: las tareas de cron no heredan
+# las variables de compose (solo las recibe PID 1), y backup.sh necesita las POSTGRES_*.
+CMD printenv | grep -E '^(POSTGRES_|TZ=)' > /etc/bunker.env && cron && python manage.py runserver 0.0.0.0:8000

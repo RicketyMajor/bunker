@@ -5,3 +5,9 @@ __pycache__/
 *.pyc
 db.sqlite3
 .git/
+# Ni el codigo ni la imagen los necesitan: `COPY . /app/` los horneaba dentro.
+backups/
+bunker_backup.json
+scraper_logs/
+context/
+library_cli.egg-info/

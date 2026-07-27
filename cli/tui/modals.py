@@ -925,69 +925,6 @@ class MusicFullEditModal(ModalScreen[dict]):
             self.dismiss(None)
 
 
-class MusicScannerModal(ModalScreen[None]):
-    def compose(self) -> ComposeResult:
-        with Vertical(id="scanner_dialog"):
-            yield Label("Iniciando Escáner (Discogs)...", id="scanner_title", classes="modal_title")
-            yield RichLog(id="scanner_qr", markup=False, highlight=False)
-            yield Button("Cerrar Conexión Segura", variant="error", id="btn_cancel")
-
-    async def on_mount(self) -> None:
-        log = self.query_one("#scanner_qr", RichLog)
-        title = self.query_one("#scanner_title", Label)
-        log.write("Negociando túnel cifrado SSH...\n")
-        import asyncio
-        from pathlib import Path
-        import re
-        key_path = str(Path.home() / ".ssh" / "library_cli_key")
-        try:
-            self.tunnel_process = await asyncio.create_subprocess_exec(
-                "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                "ServerAliveInterval=60", "-R", "80:localhost:8009", "nokey@localhost.run",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-            )
-            asyncio.create_task(self.read_output(log, title))
-        except Exception as e:
-            log.write(f"Error crítico SSH: {e}")
-
-    async def read_output(self, log: RichLog, title: Label) -> None:
-        import re
-        while True:
-            line = await self.tunnel_process.stdout.readline()
-            if not line:
-                break
-            text_line = line.decode().strip()
-            match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", text_line)
-            if match:
-                url = match.group(1) + "/api/music/scanner-web/"
-                title.update(f"Escanea o visita:\n{url}")
-                self.render_qr(url, log)
-                break
-
-    def render_qr(self, url: str, log: RichLog) -> None:
-        import qrcode
-        import io
-        qr = qrcode.QRCode(version=1, box_size=1, border=2)
-        qr.add_data(url)
-        qr.make(fit=True)
-        f = io.StringIO()
-        qr.print_ascii(out=f, invert=True)
-        log.clear()
-        log.write(f.getvalue())
-        log.write(
-            "\n[El servidor de Discogs escucha. Escanea y cierra al terminar]")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.dismiss(None)
-
-    def on_unmount(self) -> None:
-        if hasattr(self, 'tunnel_process') and self.tunnel_process:
-            try:
-                self.tunnel_process.terminate()
-            except:
-                pass
-
-
 class EvacuationModal(ModalScreen[str]):
     """Menú de emergencia para el Protocolo de Evacuación de Datos."""
 

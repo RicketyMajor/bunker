@@ -1,4 +1,4 @@
-from config import BASE_URL
+from cli.config import BASE_URL
 import typer
 import re
 import httpx

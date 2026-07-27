@@ -25,12 +25,18 @@ services:
       - "8009:8000"
     depends_on:
       - db
+    # Las claves de API (TMDB, OMDB, Discogs, Last.fm) y el token de backup viven en .env;
+    # sin esto los oraculos dentro de Django resuelven a "" y caen a su rama mock.
+    env_file:
+      - .env
     environment:
       - POSTGRES_DB=library_db
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=supersecret
-      - POSTGRES_HOST=db  
+      - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
+      # Sin esto el contenedor corre en UTC y el cron de las 00:00 dispara a las 20:00 locales.
+      - TZ=America/Santiago
 
 # --- Microservicios Distribuidos Node.js ---
   scraper-books:
