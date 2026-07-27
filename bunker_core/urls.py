@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include
 from catalog.views import scanner_view
-from bunker_core.views import global_dashboard_view, backup_database, restore_database, health_check
+from bunker_core.views import (global_dashboard_view, backup_database, list_backups,
+                               restore_database, health_check)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -16,5 +17,6 @@ urlpatterns = [
 
     # --- RUTAS DEL PROTOCOLO DE EVACUACIÓN ---
     path('api/backup/', backup_database, name='backup'),
+    path('api/backups/', list_backups, name='list_backups'),
     path('api/restore/', restore_database, name='restore'),
 ]

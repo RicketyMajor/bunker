@@ -1,27 +1,25 @@
+import logging
 import os
 import requests
 
-# Reemplaza con tu token de Last.fm, o configúralo en tu archivo .env
+# Clave gratuita en https://www.last.fm/api/account/create, o configúrala en tu archivo .env
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY", "")
 USER_AGENT = "BunkerDisquera/1.0"
+
+logger = logging.getLogger(__name__)
 
 def enrich_album_data(artist: str, title: str):
     """
     Oráculo de Last.fm: Busca información detallada de un álbum.
-    Retorna un diccionario con duration_minutes, tracklist y cover_url.
+    Retorna un diccionario con duration_minutes, tracklist y cover_url, o None.
     """
     if not LASTFM_API_KEY or LASTFM_API_KEY == "TU_TOKEN_AQUI":
-        print("Aviso: Falta el token de Last.fm (LASTFM_API_KEY). Usando mock de prueba.")
-        return {
-            "duration_minutes": 61,
-            "tracklist": [
-                {"title": "One More Time", "duration": 320},
-                {"title": "Aerodynamic", "duration": 207},
-                {"title": "Digital Love", "duration": 298},
-                {"title": "Harder, Better, Faster, Stronger", "duration": 224}
-            ],
-            "cover_url": "https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png"
-        }
+        # Antes devolvia un mock fijo (el tracklist de Discovery de Daft Punk) que el llamador
+        # guardaba como si fuera real: cualquier album escaneado sin clave quedaba con las
+        # canciones y la duracion equivocadas. Sin clave no se enriquece, y ya.
+        logger.warning(
+            "Falta LASTFM_API_KEY: no se enriquecen los metadatos de '%s - %s'.", artist, title)
+        return None
 
     url = "https://ws.audioscrobbler.com/2.0/"
     headers = {"User-Agent": USER_AGENT}

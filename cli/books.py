@@ -1,4 +1,4 @@
-from cli.config import BASE_URL
+from cli.config import BASE_URL, API_PORT
 import typer
 import re
 import httpx
@@ -237,7 +237,7 @@ def add_book_wizard():
 
             tunnel_process = subprocess.Popen(
                 ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                 "ServerAliveInterval=60", "-R", "80:localhost:8009", "nokey@localhost.run"],
+                 "ServerAliveInterval=60", "-R", f"80:localhost:{API_PORT}", "nokey@localhost.run"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,

@@ -10,7 +10,9 @@ import datetime as _dt
 import calendar as _cal
 from textual_plotext import PlotextPlot
 
-API_POSADA_BASE = "http://127.0.0.1:8009/posada/api/"
+from cli.config import BASE_URL
+
+API_POSADA_BASE = f"{BASE_URL}/posada/api/"
 
 # --- GENERADOR DE RELOJ ASCII ---
 ASCII_NUMS = {

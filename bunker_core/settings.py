@@ -13,8 +13,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# El contenedor recibe las variables por `env_file` en docker-compose.yml, pero solo al
+# crearse: anadir una clave a .env obligaba a recrear el contenedor. .env esta bind-montado
+# en /app, asi que leerlo aqui cubre lo que falte. No sobrescribe lo que ya venga del entorno,
+# de modo que compose (y el propio host) siguen mandando.
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production

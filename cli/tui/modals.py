@@ -13,6 +13,7 @@ from pathlib import Path
 from textual import work
 from textual_plotext import PlotextPlot
 from .constants import API_GENRE_STATS
+from cli.config import API_PORT
 import httpx
 
 
@@ -377,7 +378,7 @@ class BaseScannerModal(ModalScreen[None]):
             # Levanta el túnel en background
             self.tunnel_process = await asyncio.create_subprocess_exec(
                 "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o",
-                "ServerAliveInterval=60", "-R", "80:localhost:8009", "nokey@localhost.run",
+                "ServerAliveInterval=60", "-R", f"80:localhost:{API_PORT}", "nokey@localhost.run",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )

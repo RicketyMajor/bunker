@@ -938,8 +938,13 @@ def list_upgrades(request):
 
 
 @api_view(['POST'])
+@transaction.atomic
 def buy_upgrade(request):
-    """Procesa la compra de una mejora de infraestructura con conversión y vuelto."""
+    """Procesa la compra de una mejora de infraestructura con conversión y vuelto.
+
+    Atomico: pay_with_change() descuenta y guarda el gremio antes de crear la
+    GuildUnlockedUpgrade. Si ese create fallaba, el dinero ya estaba gastado y la mejora no.
+    """
     key = request.data.get('key')
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
@@ -975,6 +980,7 @@ def buy_upgrade(request):
 
 
 @api_view(['POST'])
+@transaction.atomic
 def exchange_currency(request):
     """Permite el libre flujo entre divisas de la Senda Imperial y Mancomunidad."""
     direction = request.data.get('direction') # 'to_sueldo' or 'to_silver'

@@ -1,4 +1,7 @@
+import json
+import logging
 import os
+import secrets
 from django.core.management import call_command
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -10,6 +13,35 @@ from movies.models import Movie, MovieAnnualRecord
 from disquera.models import Album, MusicAnnualRecord
 from posada.models import GuildProfile, Adventurer, DeepWorkSession, DailyHabit, KanbanTask, CalendarEvent, JournalEntry
 from chess_study.models import ChessRoom, ChessVariation
+
+logger = logging.getLogger(__name__)
+
+# Las 5 apps que entran en la capsula del tiempo.
+BACKUP_APPS = ('catalog', 'movies', 'disquera', 'posada', 'chess_study')
+# Donde escribe el cron nocturno (volumen bunker_backups_data).
+BACKUP_DIR = '/app/backups'
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Lo que escribe el backup manual de la TUI, y el destino por defecto de restore.
+ROOT_BACKUP = os.path.join(PROJECT_ROOT, 'bunker_backup.json')
+
+
+def _reject_if_bad_token(request):
+    """Devuelve un JsonResponse de error si el token no es valido, o None si lo es.
+
+    Falla cerrado: sin BUNKER_BACKUP_TOKEN configurado no se atiende la peticion. Antes caia a
+    un valor por defecto escrito en el codigo, que es publico y por tanto no protege nada.
+    """
+    expected = os.environ.get("BUNKER_BACKUP_TOKEN")
+    if not expected:
+        return JsonResponse(
+            {"error": "BUNKER_BACKUP_TOKEN no esta configurado en el servidor."}, status=503)
+
+    received = request.headers.get("X-Bunker-Token") or ""
+    if not secrets.compare_digest(received, expected):
+        return JsonResponse(
+            {"error": "Acceso denegado: Token de seguridad inválido o ausente."}, status=403)
+    return None
+
 
 def global_dashboard_view(request):
     """BFF: Agrega datos de TODOS los módulos de forma hiper-robusta y granular."""
@@ -143,9 +175,10 @@ def global_dashboard_view(request):
             try:
                 if hasattr(h, 'is_completed_today') and h.is_completed_today():
                     habits_completed += 1
-                elif getattr(h, 'last_evaluated_date', None) == today: 
+                elif getattr(h, 'last_evaluated_date', None) == today:
                     habits_completed += 1
-            except: pass
+            except Exception:
+                logger.warning("Habito %s no evaluable para hoy", h.pk, exc_info=True)
         posada_data["habits_completed"] = habits_completed
         top_habit = habits.order_by('-current_streak').first()
         posada_data["top_streak"] = {"name": top_habit.name, "streak": top_habit.current_streak} if top_habit else None
@@ -158,12 +191,11 @@ def global_dashboard_view(request):
         feed.append(f"[red]Error Kanban:[/] {str(e)[:30]}")
 
     try:
-        try:
-            today_events = CalendarEvent.objects.filter(start_date__date=today).count()
-        except:
-            today_events = CalendarEvent.objects.filter(date=today).count()
-        posada_data["today_events"] = today_events
+        # CalendarEvent.date es un DateField: el intento previo con start_date__date lanzaba
+        # FieldError en cada carga del dashboard y caia a este mismo query por el except.
+        posada_data["today_events"] = CalendarEvent.objects.filter(date=today).count()
     except Exception as e:
+        logger.warning("Fallo el bloque Calendar del dashboard", exc_info=True)
         feed.append(f"[red]Error Calendar:[/] {str(e)[:30]}")
 
     data["posada"] = posada_data
@@ -172,19 +204,24 @@ def global_dashboard_view(request):
     try:
         for dw in DeepWorkSession.objects.filter(completed=True).order_by('-start_time')[:3]:
             feed.append(f"[cyan]⏱️  DW:[/] {dw.category} ({dw.duration_minutes}m)")
-    except: pass
-        
+    except Exception:
+        logger.warning("Fallo el feed de Deep Work", exc_info=True)
+
+    # Ambos registros guardan su propio title (son historicos inmutables y su FK es SET_NULL),
+    # asi que no hace falta ir al libro/pelicula para mostrarlo.
     try:
         for rb in BookAnnualRecord.objects.order_by('-date_finished')[:3]:
-            title = getattr(rb.book, 'title', 'Libro') if hasattr(rb, 'book') else 'Libro'
-            feed.append(f"[green]📚 Leído:[/] {str(title)[:25]}")
-    except: pass
-        
+            feed.append(f"[green]📚 Leído:[/] {rb.title[:25]}")
+    except Exception:
+        logger.warning("Fallo el feed de Biblioteca", exc_info=True)
+
     try:
-        for rm in MovieAnnualRecord.objects.order_by('-date_finished')[:2]:
-            title = getattr(rm.movie, 'title', 'Pelicula') if hasattr(rm, 'movie') else 'Pelicula'
-            feed.append(f"[yellow]🎬 Visto:[/] {str(title)[:25]}")
-    except: pass
+        # date_watched, no date_finished: ese era el nombre equivocado que hacia fallar el
+        # bloque entero en silencio, por lo que "Visto" nunca aparecio en el dashboard.
+        for rm in MovieAnnualRecord.objects.order_by('-date_watched')[:2]:
+            feed.append(f"[yellow]🎬 Visto:[/] {rm.title[:25]}")
+    except Exception:
+        logger.warning("Fallo el feed de Videoclub", exc_info=True)
 
     data["feed"] = feed
     return JsonResponse(data, status=200)
@@ -192,53 +229,86 @@ def global_dashboard_view(request):
 
 @csrf_exempt
 def backup_database(request):
-    """Genera una cápsula de tiempo (JSON) de la base de datos de los 4 módulos."""
-    if request.method == 'POST':
-        # 🛡️ Seguridad: Validar Token Secreto
-        token = request.headers.get("X-Bunker-Token")
-        expected_token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
-        if token != expected_token:
-            return JsonResponse({"error": "Acceso denegado: Token de seguridad inválido o ausente."}, status=403)
+    """Genera una cápsula de tiempo (JSON) de la base de datos de los 5 módulos."""
+    if request.method != 'POST':
+        return JsonResponse({"error": "Método no permitido."}, status=405)
 
-        try:
-            # Apunta a la raíz del proyecto (donde está el docker-compose)
-            backup_path = os.path.join(os.path.dirname(os.path.dirname(
-                os.path.abspath(__file__))), 'bunker_backup.json')
+    rejected = _reject_if_bad_token(request)
+    if rejected:
+        return rejected
 
-            with open(backup_path, 'w', encoding='utf-8') as f:
-                # vuelca específicamente las 5 aplicaciones
-                call_command('dumpdata', 'catalog', 'movies', 'disquera',
-                             'posada', 'chess_study', format='json', indent=4, stdout=f)
+    try:
+        with open(ROOT_BACKUP, 'w', encoding='utf-8') as f:
+            call_command('dumpdata', *BACKUP_APPS, format='json', indent=4, stdout=f)
 
-            return JsonResponse({"message": "Cápsula de seguridad generada con éxito.", "path": backup_path}, status=200)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-    return JsonResponse({"error": "Método no permitido."}, status=405)
+        return JsonResponse({"message": "Cápsula de seguridad generada con éxito.", "path": ROOT_BACKUP}, status=200)
+    except Exception as e:
+        logger.exception("Fallo generando el backup")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def list_backups(request):
+    """Lista las cápsulas automáticas del volumen, de la más reciente a la más antigua."""
+    rejected = _reject_if_bad_token(request)
+    if rejected:
+        return rejected
+
+    try:
+        names = sorted(
+            (n for n in os.listdir(BACKUP_DIR) if n.endswith('.json')), reverse=True)
+        archivos = [{
+            "filename": n,
+            "size_bytes": os.path.getsize(os.path.join(BACKUP_DIR, n)),
+        } for n in names]
+    except FileNotFoundError:
+        archivos = []
+
+    return JsonResponse({
+        "automaticos": archivos,
+        "manual": os.path.basename(ROOT_BACKUP) if os.path.exists(ROOT_BACKUP) else None,
+    }, status=200)
 
 
 @csrf_exempt
 def restore_database(request):
-    """Restaura todo el Búnker a partir de la cápsula de tiempo."""
-    if request.method == 'POST':
-        # 🛡️ Seguridad: Validar Token Secreto
-        token = request.headers.get("X-Bunker-Token")
-        expected_token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
-        if token != expected_token:
-            return JsonResponse({"error": "Acceso denegado: Token de seguridad inválido o ausente."}, status=403)
+    """Restaura el Búnker desde una cápsula.
 
+    Sin `filename` usa el backup manual de la raíz (comportamiento histórico). Con `filename`
+    restaura una de las cápsulas automáticas del volumen, que hasta ahora eran inalcanzables.
+    """
+    if request.method != 'POST':
+        return JsonResponse({"error": "Método no permitido."}, status=405)
+
+    rejected = _reject_if_bad_token(request)
+    if rejected:
+        return rejected
+
+    filename = request.POST.get('filename') or ''
+    if not filename and request.body:
         try:
-            backup_path = os.path.join(os.path.dirname(os.path.dirname(
-                os.path.abspath(__file__))), 'bunker_backup.json')
+            filename = json.loads(request.body).get('filename') or ''
+        except (ValueError, AttributeError):
+            filename = ''
+    filename = filename.strip()
+    if filename:
+        # basename() corta cualquier "../": el nombre viene de fuera y solo puede
+        # referirse a un archivo dentro del directorio de backups.
+        safe_name = os.path.basename(filename)
+        backup_path = os.path.join(BACKUP_DIR, safe_name)
+    else:
+        backup_path = ROOT_BACKUP
 
-            if not os.path.exists(backup_path):
-                return JsonResponse({"error": "No se encontró el archivo bunker_backup.json en la raíz."}, status=404)
+    if not os.path.exists(backup_path):
+        return JsonResponse({"error": f"No se encontró la cápsula '{os.path.basename(backup_path)}'."}, status=404)
 
-            call_command('loaddata', backup_path)
-
-            return JsonResponse({"message": "Búnker restaurado a su estado original."}, status=200)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-    return JsonResponse({"error": "Método no permitido."}, status=405)
+    try:
+        call_command('loaddata', backup_path)
+        return JsonResponse(
+            {"message": "Búnker restaurado a su estado original.", "restored_from": backup_path}, status=200)
+    except Exception as e:
+        logger.exception("Fallo restaurando desde %s", backup_path)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 def health_check(request):

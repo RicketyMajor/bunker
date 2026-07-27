@@ -829,8 +829,7 @@ class BunkerLauncherScreen(Screen):
     # ── FUNCIONES DE SEGURIDAD ──
     @work(thread=True)
     def process_backup(self) -> None:
-        import os
-        token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
+        from cli.config import BACKUP_TOKEN as token
         try:
             resp = httpx.post(API_BACKUP, headers={"X-Bunker-Token": token}, timeout=15.0)
             if resp.status_code == 200:
@@ -846,8 +845,7 @@ class BunkerLauncherScreen(Screen):
 
     @work(thread=True)
     def process_restore(self) -> None:
-        import os
-        token = os.environ.get("BUNKER_BACKUP_TOKEN", "bunker_local_secure_99")
+        from cli.config import BACKUP_TOKEN as token
         try:
             resp = httpx.post(API_RESTORE, headers={"X-Bunker-Token": token}, timeout=15.0)
             if resp.status_code == 200:

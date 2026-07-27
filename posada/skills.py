@@ -9,6 +9,13 @@ class SkillRegistry:
     @classmethod
     def register(cls, skill_id, name, skill_type, req_level, allowed_classes):
         def decorator(func):
+            # A repeated skill_id used to overwrite the previous entry in silence: "furia_feroz"
+            # was registered twice and the SESSION version was invisible to the engine for months.
+            if skill_id in cls._registry:
+                raise ValueError(
+                    f"skill_id duplicado: '{skill_id}' ya esta registrado como "
+                    f"'{cls._registry[skill_id]['name']}' ({cls._registry[skill_id]['type']})"
+                )
             cls._registry[skill_id] = {
                 "id": skill_id,
                 "name": name,
@@ -105,9 +112,9 @@ def golpe_brutal(context):
 
 
 @SkillRegistry.register(
-    skill_id="furia_feroz", name="Furia Feroz", skill_type="SESSION", req_level=1, allowed_classes=["BBN"]
+    skill_id="trance_feroz", name="Trance Feroz", skill_type="SESSION", req_level=1, allowed_classes=["BBN"]
 )
-def furia_feroz(context):
+def trance_feroz(context):
     caster = context['caster']
 
     # COSTO: 1 Furia
@@ -116,6 +123,10 @@ def furia_feroz(context):
             return 0
         return 90 if 'RAGING' not in context['adv_status'][caster.id] else 0
 
+    # El recurso se inicializa en engine/runner.py, pero la habilidad no debe asumirlo:
+    # estuvo dos meses inalcanzable por una colision de skill_id y nadie la ejecuto.
+    if caster.class_resources.get('furia', 0) < 1:
+        return False
     caster.class_resources['furia'] -= 1
     context['adv_status'][caster.id].add('RAGING')
     context['log'].append({"second": context['current_second'], "type": "flavor",

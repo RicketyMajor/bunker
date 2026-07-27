@@ -1,6 +1,7 @@
 import random
 from datetime import timedelta
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Sum
 from posada.models import GuildProfile, Adventurer, DeepWorkSession, Item, DailyHabit, DailyStatistic, InventorySlot, Monster, ItemRarity, CustomChart, ChartDataPoint, GuildUpgrade, JournalEntry, CalendarEvent
 from posada.skills import SkillRegistry
@@ -571,6 +572,10 @@ def evaluate_daily_penalties():
     return penalty_log
 
 
+# Reparte botin, XP, niveles y bestiario y recien al final marca session.completed. Sin la
+# transaccion, una excepcion a mitad dejaba las monedas pagadas y la sesion abierta: se podia
+# volver a completar y cobrar dos veces.
+@transaction.atomic
 def process_session_completion(session_id, survived_seconds=None, surrendered=False, focus_lock_broken=False):
     try:
         session = DeepWorkSession.objects.get(id=session_id)
