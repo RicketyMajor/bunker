@@ -426,7 +426,7 @@ class BaseScannerModal(ModalScreen[None]):
         if hasattr(self, 'tunnel_process') and self.tunnel_process:
             try:
                 self.tunnel_process.terminate()
-            except:
+            except Exception:
                 pass
 
 
@@ -635,7 +635,7 @@ class DeleteDirModal(ModalScreen[str]):
         if event.button.id == "btn_delete":
             try:
                 self.dismiss(self.query_one("#sel_dest", Select).value)
-            except:
+            except Exception:
                 self.dismiss("cancel")
         else:
             self.dismiss("cancel")

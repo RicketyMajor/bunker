@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db.models import Sum
+from django.db.models.functions import TruncDate
 from django.utils.timezone import localdate
 from datetime import timedelta
 from catalog.models import Book, AnnualRecord as BookAnnualRecord
@@ -57,7 +58,7 @@ def global_dashboard_view(request):
         books = Book.objects.all()
         data["books"]["total"] = books.count()
         data["books"]["read"] = books.filter(is_read=True).count()
-        total_pages = sum((b.page_count or 0) for b in books)
+        total_pages = books.aggregate(Sum('page_count'))['page_count__sum'] or 0
         data["books"]["hours"] = round((total_pages * 1.5) / 60, 1)
         
         # Calculate reading streak
@@ -144,45 +145,44 @@ def global_dashboard_view(request):
         feed.append(f"[red]Error Gremio:[/] {str(e)[:30]}")
         
     try:
-        # Extraer DW de hoy
-        dw = DeepWorkSession.objects.filter(start_time__date=today, completed=True)
-        posada_data["dw_minutes_today"] = dw.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
-        
-        # --- NUEVO: Historial de 7 días para el Sparkline ---
-        dw_history = []
-        for i in range(7):
-            d = today - timedelta(days=6 - i)
-            mins = DeepWorkSession.objects.filter(start_time__date=d, completed=True).aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
-            dw_history.append(mins)
-        posada_data["dw_history"] = dw_history
+        # Una sola consulta agrupada por dia cubre el sparkline de 7 dias y el total de hoy;
+        # antes eran 8 agregaciones, una por iteracion del bucle.
+        semana = (DeepWorkSession.objects
+                  .filter(completed=True, start_time__date__gte=today - timedelta(days=6))
+                  .annotate(dia=TruncDate('start_time'))
+                  .values('dia')
+                  .annotate(total=Sum('duration_minutes')))
+        minutos_por_dia = {row['dia']: row['total'] or 0 for row in semana}
+
+        posada_data["dw_minutes_today"] = minutos_por_dia.get(today, 0)
+        posada_data["dw_history"] = [
+            minutos_por_dia.get(today - timedelta(days=6 - i), 0) for i in range(7)]
 
     except Exception as e:
+        logger.warning("Fallo el bloque Deep Work del dashboard", exc_info=True)
         feed.append(f"[red]Error DW:[/] {str(e)[:30]}")
 
     try:
         advs = Adventurer.objects.all()
-        posada_data["active_adventurers"] = [a.id for a in advs]
+        posada_data["active_adventurers"] = list(advs.values_list('id', flat=True))
         top_adv = advs.order_by('-level', '-experience').first()
         posada_data["top_adventurer"] = {"name": top_adv.name, "level": top_adv.level} if top_adv else None
     except Exception as e:
+        logger.warning("Fallo el bloque Aventureros del dashboard", exc_info=True)
         feed.append(f"[red]Error Aventureros:[/] {str(e)[:30]}")
 
     try:
         habits = DailyHabit.objects.all()
         posada_data["habits_total"] = habits.count()
-        habits_completed = 0
-        for h in habits:
-            try:
-                if hasattr(h, 'is_completed_today') and h.is_completed_today():
-                    habits_completed += 1
-                elif getattr(h, 'last_evaluated_date', None) == today:
-                    habits_completed += 1
-            except Exception:
-                logger.warning("Habito %s no evaluable para hoy", h.pk, exc_info=True)
-        posada_data["habits_completed"] = habits_completed
+        # last_completed_date es lo que marca complete_habit, y es el mismo criterio que usa
+        # list_habits ("completed_today"). El bucle anterior probaba un metodo inexistente
+        # (is_completed_today) y caia en last_evaluated_date, que el cierre diario deja en
+        # AYER: el contador daba 0 aunque el usuario hubiera completado todo.
+        posada_data["habits_completed"] = habits.filter(last_completed_date=today).count()
         top_habit = habits.order_by('-current_streak').first()
         posada_data["top_streak"] = {"name": top_habit.name, "streak": top_habit.current_streak} if top_habit else None
     except Exception as e:
+        logger.warning("Fallo el bloque Habitos del dashboard", exc_info=True)
         feed.append(f"[red]Error Hábitos:[/] {str(e)[:30]}")
 
     try:

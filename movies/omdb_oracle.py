@@ -1,5 +1,8 @@
+import logging
 import os
 import requests
+
+logger = logging.getLogger(__name__)
 
 OMDB_API_KEY = os.getenv("OMDB_API_KEY", "")
 
@@ -27,6 +30,6 @@ def search_movie_omdb(title):
                 "cast": data.get('Actors'),
                 "poster_url": data.get('Poster') if data.get('Poster') != "N/A" else None
             }
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de oraculo OMDB", exc_info=True)
     return None

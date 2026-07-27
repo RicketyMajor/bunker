@@ -1239,7 +1239,7 @@ class EditKanbanTaskModal(ModalScreen[dict]):
             from datetime import date as dt_date
             try:
                 today = dt_date.fromisoformat(t_due)
-            except:
+            except (ValueError, TypeError):
                 today = _dt.date.today()
         else:
             today = _dt.date.today()
@@ -1328,7 +1328,7 @@ class EditCalendarEventModal(ModalScreen[dict]):
         from datetime import date as dt_date
         try:
             today = dt_date.fromisoformat(self.event_data.get('date', ''))
-        except:
+        except (ValueError, TypeError):
             today = _dt.date.today()
             
         with Vertical(id="edit_event_dialog"):
@@ -3380,7 +3380,7 @@ class PosadaMainScreen(Screen):
                 d = dt_date.fromisoformat(e['date'])
                 day_name = dias_semana[d.weekday()]
                 fecha_str = f"[{e['color']}]{day_name} {d.day:02d}[/]"
-            except:
+            except (ValueError, TypeError):
                 fecha_str = f"[{e['color']}]{e['date']}[/]"
                 
             if e['is_important']:

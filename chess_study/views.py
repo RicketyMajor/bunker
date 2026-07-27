@@ -1,3 +1,4 @@
+import logging
 import os
 import io
 import chess
@@ -8,6 +9,8 @@ from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from .models import ChessRoom, ChessNote, ChessDirectory, ChessVariation
 from .serializers import ChessRoomSerializer, ChessNoteSerializer, ChessDirectorySerializer, ChessVariationSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class ChessDirectoryViewSet(viewsets.ModelViewSet):
@@ -196,8 +199,17 @@ def evaluate_position(request):
     if engine_name == "lc0":
         engine_path = os.environ.get("LC0_PATH", "/usr/games/lc0")
 
+    # Un motor ausente no es un fallo del servidor: es una configuracion incompleta, y hay que
+    # decirlo asi. Lc0 no esta empaquetado en Debian, de modo que esta rama es hoy la normal
+    # para engine=lc0. Antes devolvia un 500 con el errno de popen_uci dentro del mensaje.
+    if not os.path.exists(engine_path):
+        return Response({
+            "error": f"El motor '{engine_name}' no está instalado en el servidor ({engine_path}).",
+            "engine": engine_name,
+            "available": False,
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
     try:
-        engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         board = chess.Board(fen)
 
         if initial_fen and history:
@@ -208,13 +220,13 @@ def evaluate_position(request):
                     continue
                 move = temp_board.parse_san(san_move)
                 temp_board.push(move)
-            # board will be the final position (should match fen theoretically)
-            # we use board for analyse, python-chess handles history internally if we want,
-            # but wait, `engine.analyse` takes a `Board` object which tracks move stack natively!
+            # engine.analyse recibe un Board, que ya arrastra su propia pila de jugadas
             board = temp_board
 
-        info = engine.analyse(board, chess.engine.Limit(depth=depth))
-        engine.quit()
+        # Como context manager: si analyse() lanza, el proceso del motor se cierra igual.
+        # Con el quit() suelto al final, cada error dejaba un stockfish huerfano en el contenedor.
+        with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+            info = engine.analyse(board, chess.engine.Limit(depth=depth))
 
         # Extraer evaluación
         score = info["score"].white()
@@ -235,6 +247,7 @@ def evaluate_position(request):
             "best_move": best_move_san
         }, status=status.HTTP_200_OK)
     except Exception as e:
+        logger.warning("Fallo la evaluacion con el motor %s", engine_name, exc_info=True)
         return Response({"error": f"Falla en el motor {engine_name}: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

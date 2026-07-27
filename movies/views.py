@@ -1,3 +1,4 @@
+import logging
 import re
 import os
 import requests
@@ -12,6 +13,8 @@ from .omdb_oracle import search_movie_omdb
 from django.shortcuts import render
 from django.db.models import Sum
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 BARCODE_LOOKUP_KEY = os.getenv("BARCODE_LOOKUP_KEY", "")
 
@@ -125,8 +128,8 @@ def search_barcode_lookup(barcode):
         if resp.status_code == 200:
             data = resp.json()
             return data['products'][0]['title']
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de resolucion de codigo de barras", exc_info=True)
     return None
 
 
@@ -137,8 +140,8 @@ def search_upcitemdb(barcode):
         resp = requests.get(url, timeout=4.0)
         if resp.status_code == 200 and resp.json().get('items'):
             return resp.json()['items'][0]['title']
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de resolucion de codigo de barras", exc_info=True)
     return None
 
 
@@ -168,8 +171,8 @@ def resolve_barcode_exhaustively(barcode):
                     "UPC", "").replace(barcode, "").strip()
                 if len(title) > 3 and "No found" not in title:
                     return clean_movie_title(title)
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de resolucion de codigo de barras", exc_info=True)
 
     return None
 

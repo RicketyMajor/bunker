@@ -1,5 +1,8 @@
+import logging
 import requests
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def clean_movie_title(raw_title):
@@ -18,8 +21,8 @@ def search_upcitemdb_api(barcode):
         resp = requests.get(url, timeout=5.0)
         if resp.status_code == 200 and resp.json().get('items'):
             return resp.json()['items'][0]['title']
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de oraculo comercial", exc_info=True)
     return None
 
 
@@ -38,8 +41,8 @@ def search_upcindex_scraper(barcode):
                     "UPC", "").replace(barcode, "").strip()
                 if len(title) > 3 and "No found" not in title:
                     return title
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de oraculo comercial", exc_info=True)
     return None
 
 
@@ -52,8 +55,8 @@ def search_searchupc_api(barcode):
             data = resp.json()
             if data.get('0') and data['0'].get('productname'):
                 return data['0']['productname']
-    except:
-        pass
+    except Exception:
+        logger.warning("Fallo un nodo de oraculo comercial", exc_info=True)
     return None
 
 

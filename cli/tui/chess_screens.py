@@ -508,7 +508,9 @@ class ChessMainScreen(Screen):
                         
                         # Recursividad: buscar sub-variaciones que nazcan en ESTE ply de ESTA variación
                         add_variations(curr, i + 1, board.fen(), var["id"])
-                    except:
+                    except (ValueError, KeyError):
+                        # push_san lanza IllegalMoveError (subclase de ValueError) si la
+                        # variacion no encaja en el tablero: se corta esa rama y sigue el resto.
                         break
 
         # Construir Línea Principal
