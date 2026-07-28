@@ -345,7 +345,7 @@ class BunkerLauncherScreen(Screen):
         text-style: bold;
     }
 
-    /* ── BODY: 3 PANELES ── */
+    /* ── BODY: 4 PANELES ── */
     #body_row {
         height: auto;
         min-height: 18;
@@ -363,6 +363,7 @@ class BunkerLauncherScreen(Screen):
     }
     #metrics_panel { border: tall $primary; margin-right: 1; }
     #collections_panel { border: tall $accent; margin-right: 1; }
+    #achievements_panel { border: tall $warning; margin-right: 1; }
     #feed_panel { border: tall $success; }
 
     .cyber_title {
@@ -514,6 +515,13 @@ class BunkerLauncherScreen(Screen):
                         yield Label("[#ff00ff]▸[/] DISQUERA", classes="col_header", id="mus_title")
                         yield Label("[dim]░░░░░░░░░░░░░░░░░░░░[/dim] 0%", id="bar_music", classes="col_bar")
                         yield Label("  --/-- escuch. • --h", id="stat_music", classes="col_stat")
+
+                # Panel Logros
+                with Vertical(id="achievements_panel", classes="cyber_panel"):
+                    yield Label("◈ SALA DE TROFEOS ◈", classes="cyber_title")
+                    yield Label("────────────────────────────", classes="cyber_separator")
+                    for i in range(10):
+                        yield Label("", id=f"logro_{i}", classes="metric_line")
 
                 # Panel Feed
                 with Vertical(id="feed_panel", classes="cyber_panel"):
@@ -777,6 +785,29 @@ class BunkerLauncherScreen(Screen):
             self.query_one("#stat_music", Label).update(
                 f"  [dim]{mu_listened}/{mu_total} escuchados • {mu_hours}h est.[/]"
             )
+
+            # ── LOGROS ──
+            logros = data.get("achievements") or []
+            for i in range(10):
+                lbl = self.query_one(f"#logro_{i}", Label)
+                if i >= len(logros):
+                    lbl.update("")
+                    continue
+                lg = logros[i]
+                nombre = lg.get("name", "")[:18]
+                if lg.get("unlocked_at"):
+                    fecha = lg["unlocked_at"][:10]
+                    lbl.update(f"  {lg.get('icon', '🏆')} [#ffb000]{nombre}[/] [#555555]│ {fecha}[/]")
+                else:
+                    prog = lg.get("progress") or 0
+                    lbl.update(f"  [dim]{lg.get('icon', '🏆')} {nombre} │ {prog}/{lg.get('threshold', 0)}[/]")
+
+            # Solo la respuesta que desbloquea trae just_unlocked, asi que la alerta suena una vez.
+            for lg in logros:
+                if lg.get("just_unlocked"):
+                    self.app.notify(
+                        f"{lg.get('icon', '🏆')} {lg.get('name')}",
+                        title="¡LOGRO DESBLOQUEADO!", severity="information", timeout=10.0)
 
             # ── FEED ──
             feed = data.get("feed") or []

@@ -793,6 +793,40 @@ class CalendarEvent(models.Model):
         return f"{self.date} - {self.title}"
 
 
+class Achievement(models.Model):
+    """Un logro: un hito que cruza módulos y paga UNA sola vez al gremio.
+
+    `unlocked_at IS NULL` significa bloqueado: un solo campo lleva el estado y la fecha, sin
+    tabla aparte ni booleano redundante. El catálogo se siembra con `load_achievements`, así que
+    añadir un logro es editar la semilla, no tocar código.
+
+    `metric` es la clave del contador que lo evalúa (ver `posada/achievements.py`) y `threshold`
+    el mínimo para desbloquearlo. Los dos juntos permiten una evaluación genérica: ningún logro
+    necesita su propia función.
+    """
+    key = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100, verbose_name="Nombre")
+    description = models.TextField(blank=True, verbose_name="Descripción")
+    icon = models.CharField(max_length=8, default="🏆")
+    module = models.CharField(max_length=20, default="posada")
+
+    metric = models.CharField(max_length=40, help_text="Clave del contador que lo evalúa")
+    threshold = models.PositiveIntegerField(default=1)
+
+    reward_prestige = models.PositiveIntegerField(default=0)
+    reward_coin = models.CharField(max_length=20, default="talento")
+    reward_amount = models.PositiveIntegerField(default=1)
+
+    unlocked_at = models.DateTimeField(null=True, blank=True, verbose_name="Desbloqueado")
+
+    class Meta:
+        ordering = ['module', 'threshold', 'key']
+
+    def __str__(self):
+        estado = self.unlocked_at.date() if self.unlocked_at else "bloqueado"
+        return f"{self.icon} {self.name} ({estado})"
+
+
 class BestiaryEntry(models.Model):
     """Registro de monstruos avistados y derrotados por el gremio."""
     guild = models.ForeignKey(GuildProfile, on_delete=models.CASCADE, related_name='bestiary_entries')

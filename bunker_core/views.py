@@ -13,7 +13,8 @@ from catalog.models import Book, AnnualRecord as BookAnnualRecord
 from movies.models import Movie, MovieAnnualRecord
 from disquera.models import Album, MusicAnnualRecord
 from posada.models import GuildProfile, Adventurer, DeepWorkSession, DailyHabit, KanbanTask, CalendarEvent, JournalEntry
-from chess_study.models import ChessRoom, ChessVariation
+from chess_study.models import ChessRoom, ChessVariation, SolvedPuzzle
+from posada.achievements import evaluate_achievements
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,9 @@ def global_dashboard_view(request):
     try:
         data["chess"]["rooms"] = ChessRoom.objects.count()
         data["chess"]["variations"] = ChessVariation.objects.count()
-    except Exception as e:
-        pass
+        data["chess"]["puzzles"] = SolvedPuzzle.objects.count()
+    except Exception:
+        logger.warning("Fallo el bloque Ajedrez del dashboard", exc_info=True)
 
     # 5. POSADA (MÉTRICAS BLINDADAS)
     posada_data = {}
@@ -157,6 +159,8 @@ def global_dashboard_view(request):
         posada_data["dw_minutes_today"] = minutos_por_dia.get(today, 0)
         posada_data["dw_history"] = [
             minutos_por_dia.get(today - timedelta(days=6 - i), 0) for i in range(7)]
+        # Historico completo, no solo la semana: es lo que mide el logro "Mente de Acero".
+        posada_data["dw_sessions_total"] = DeepWorkSession.objects.filter(completed=True).count()
 
     except Exception as e:
         logger.warning("Fallo el bloque Deep Work del dashboard", exc_info=True)
@@ -200,7 +204,35 @@ def global_dashboard_view(request):
 
     data["posada"] = posada_data
 
-    # 6. TRÁFICO DE RED (FEED GLOBAL SEGURO)
+    # 6. LOGROS
+    # Reaprovecha contadores que los bloques de arriba ya calcularon; solo aporta la consulta
+    # al catalogo y, cuando de verdad se desbloquea algo, la escritura. Una metrica ausente
+    # (su modulo fallo) se omite: sin dato no se desbloquea nada.
+    try:
+        top_streak = posada_data.get("top_streak") or {}
+        contadores = {
+            "books_read": data["books"].get("read"),
+            "movies_watched": data["movies"].get("watched"),
+            "albums_listened": data["music"].get("listened"),
+            "deep_work_sessions": posada_data.get("dw_sessions_total"),
+            "puzzles_solved": data["chess"].get("puzzles"),
+            "habit_streak": top_streak.get("streak"),
+        }
+        contadores = {k: v for k, v in contadores.items() if v is not None}
+
+        # El Renacentista pide >= 1 en los cinco modulos, que es justo el minimo de los cinco
+        # contadores. Expresarlo como una metrica mas evita que necesite su propia rama.
+        cinco = ("books_read", "movies_watched", "albums_listened",
+                 "deep_work_sessions", "puzzles_solved")
+        if all(m in contadores for m in cinco):
+            contadores["renacentista"] = min(contadores[m] for m in cinco)
+
+        data["achievements"] = evaluate_achievements(contadores)
+    except Exception:
+        logger.warning("Fallo la evaluacion de logros", exc_info=True)
+        data["achievements"] = []
+
+    # 7. TRÁFICO DE RED (FEED GLOBAL SEGURO)
     try:
         for dw in DeepWorkSession.objects.filter(completed=True).order_by('-start_time')[:3]:
             feed.append(f"[cyan]⏱️  DW:[/] {dw.category} ({dw.duration_minutes}m)")
