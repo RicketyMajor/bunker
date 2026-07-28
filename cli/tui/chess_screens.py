@@ -102,7 +102,6 @@ class ChessMainScreen(Screen):
         Binding("v", "show_variations", "Ver Vars"),
         Binding("b", "back_to_mainline", "Volver"),
         Binding("p", "solve_puzzle", "Puzzle Diario"),
-        Binding("m", "toggle_engine", "Motor"),
         Binding("delete, x", "delete_note", "Borrar Nota", show=False),
         Binding("backspace", "delete_node", "Borrar Árbol", show=False),
     ]
@@ -203,6 +202,9 @@ class ChessMainScreen(Screen):
         self.current_notes = {}
         self.current_ply = 0
         self.raw_dirs = []
+        # ponytail: fixed engine. Lc0 is not packaged for Debian, so the toggle offered a motor that
+        # never answered. The endpoint still honours `engine=` and 503s on a missing binary — change
+        # this string if another UCI engine ever gets installed in the image.
         self.current_engine = "stockfish"
 
         # --- Estado de Variaciones ---
@@ -1187,16 +1189,7 @@ class ChessMainScreen(Screen):
                 except Exception:
                     pass
 
-    # --- ORÁCULO MULTI-MOTOR ---
-
-    def action_toggle_engine(self) -> None:
-        """Alterna entre Stockfish y Leela Chess Zero (Lc0)."""
-        if self.current_engine == "stockfish":
-            self.current_engine = "lc0"
-        else:
-            self.current_engine = "stockfish"
-            
-        self.app.notify(f"Motor activo cambiado a: {self.current_engine.upper()}", severity="information")
+    # --- ORÁCULO ---
 
     def action_evaluate_pos(self) -> None:
         """Se activa al presionar la E."""
