@@ -202,18 +202,71 @@ class LoanViewSet(viewsets.ModelViewSet):
 
 @api_view(['POST'])
 def log_pages(request):
-    """Registra páginas leídas en el libro mayor (Ledger)"""
-    pages = request.data.get('pages', 0)
+    """Registra páginas leídas en el libro mayor (Ledger).
+
+    Dos modos. Con `book_id` + `current_page` calcula el delta contra la última posición
+    conocida de ese libro, que es lo que el Transmisor envía: el teléfono pregunta hasta
+    qué página llegaste, no cuántas leíste. Sin ellos mantiene el modo antiguo, una suma
+    suelta, que sigue siendo lo correcto para un ebook o un libro que no está en el vault.
+    """
     try:
-        pages = int(pages)
+        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"error": str(exc)}, status=400)
+
+    book_id = request.data.get('book_id')
+    current_page = request.data.get('current_page')
+
+    if current_page is not None and not book_id:
+        return Response({"error": "current_page necesita book_id."}, status=400)
+
+    book = None
+    if book_id:
+        book = Book.objects.filter(id=book_id).first()
+        if book is None:
+            return Response({"error": "El libro no existe."}, status=400)
+
+    if book is not None and current_page is not None:
+        try:
+            current_page = int(current_page)
+        except (TypeError, ValueError):
+            return Response({"error": "Valor numérico inválido"}, status=400)
+        if current_page < 0:
+            return Response({"error": "La página no puede ser negativa."}, status=400)
+        # Same trust boundary as occurred_on: this arrives from a numeric keypad, and 6080
+        # instead of 608 would silently inflate the month's total by thousands of pages.
+        # Only checked when the book declares a length, which many rows do not.
+        if book.page_count and current_page > book.page_count:
+            return Response(
+                {"error": f"'{book.title}' tiene {book.page_count} páginas."},
+                status=400,
+            )
+
+        previous = (ReadingSession.objects
+                    .filter(book=book, current_page__isnull=False)
+                    .order_by('-date', '-id')
+                    .values_list('current_page', flat=True)
+                    .first()) or 0
+        # ponytail: re-reading and a typo are indistinguishable from here, so a lower page
+        # records the new position with zero pages instead of a negative delta. If undo
+        # ever matters, that is a delete endpoint, not arithmetic.
+        pages = max(current_page - previous, 0)
+    else:
+        try:
+            pages = int(request.data.get('pages', 0))
+        except (TypeError, ValueError):
+            return Response({"error": "Valor numérico inválido"}, status=400)
         if pages <= 0:
             return Response({"error": "La cantidad de páginas debe ser mayor a 0"}, status=400)
+        current_page = None
 
-        # Simplemente añade un evento al registro
-        ReadingSession.objects.create(pages_read=pages)
-        return Response({"message": f"{pages} páginas registradas exitosamente para hoy."}, status=201)
-    except ValueError:
-        return Response({"error": "Valor numérico inválido"}, status=400)
+    ReadingSession.objects.create(
+        pages_read=pages,
+        date=occurred_on,
+        book=book,
+        current_page=current_page,
+    )
+    return Response({"message": f"{pages} páginas registradas."}, status=201)
 
 
 @api_view(['POST'])

@@ -127,6 +127,12 @@ class ReadingSession(models.Model):
     date = models.DateField(default=localdate)
     pages_read = models.PositiveIntegerField()
 
+    # Nullable on purpose: every row written before 2026-08 has no book, and loose page
+    # counts stay valid for ebooks and anything outside the inventory.
+    book = models.ForeignKey('Book', on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='reading_sessions')
+    current_page = models.PositiveIntegerField(null=True, blank=True)
+
     def __str__(self):
         return f"{self.date}: {self.pages_read} páginas"
 
