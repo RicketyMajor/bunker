@@ -5,7 +5,6 @@ import requests
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rich.markup import render
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieViewingSession, MovieAnnualRecord
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
