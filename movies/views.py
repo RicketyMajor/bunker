@@ -11,6 +11,7 @@ from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcher
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
 from django.shortcuts import render
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -330,16 +331,29 @@ def finish_movie(request):
     title = request.data.get('title')
     director = request.data.get('director', 'Desconocido')
     is_owned = request.data.get('is_owned', True)
+    movie_id = request.data.get('movie_id')
 
     if not title:
         return Response({"error": "Falta el título."}, status=status.HTTP_400_BAD_REQUEST)
 
+    movie = None
+    if movie_id:
+        movie = Movie.objects.filter(id=movie_id).first()
+        if movie is None:
+            return Response({"error": "La película no existe."}, status=status.HTTP_400_BAD_REQUEST)
+
     # Guarda en el registro inmutable
-    MovieAnnualRecord.objects.create(
-        title=title,
-        director=director,
-        is_owned=is_owned
-    )
+    with transaction.atomic():
+        MovieAnnualRecord.objects.create(
+            title=title,
+            director=director,
+            is_owned=is_owned,
+            movie=movie,
+        )
+        if movie is not None and not movie.is_watched:
+            movie.is_watched = True
+            movie.save(update_fields=['is_watched'])
+
     return Response({"message": "Película añadida al historial anual."}, status=status.HTTP_201_CREATED)
 
 

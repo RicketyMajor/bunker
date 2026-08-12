@@ -439,6 +439,10 @@ def _auto_equip(adv, item, event_log, pull_type):
         add_item_to_inventory(adv, item, event_log)
 
 
+# Toca el gremio, los habitos y los eventos del calendario en un solo barrido, y lo llaman
+# dos endpoints GET. Sin la transaccion, una excepcion a mitad dejaba habitos con el marcador
+# de evaluacion avanzado y el gremio sin cobrar ni pagar.
+@transaction.atomic
 def evaluate_daily_penalties():
     """Resta prestigio por pereza o PREMIA por evitar malos hábitos.
     
@@ -564,10 +568,16 @@ def evaluate_daily_penalties():
 
     if total_prestige_change != 0:
         guild.add_prestige(total_prestige_change)
-        
+
         if total_prestige_change < 0:
             penalty_log.append(
                 f"El Gremio pierde influencia. (Impacto Neto: {total_prestige_change})")
+
+    # add_prestige() guarda la fila, pero solo se llama cuando el prestigio neto no es cero —
+    # y los movimientos de monedas de arriba (penalizaciones y recompensas de eventos) se
+    # hicieron solo en memoria. Una penalizacion de -15 mas un evento de +15 suman cero y
+    # descartaban ambos. Guardar siempre.
+    guild.save()
 
     return penalty_log
 

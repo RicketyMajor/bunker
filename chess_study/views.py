@@ -70,8 +70,7 @@ class ChessRoomViewSet(viewsets.ModelViewSet):
             base_xp += int(base_xp * 0.3)  # Bono 30%
 
         # Otorgar Prestigio
-        guild.prestige_level += 2
-        guild.save()
+        guild.add_prestige(2)
 
         # Otorgar Experiencia
         adv.experience += base_xp
@@ -314,6 +313,7 @@ def solve_daily_puzzle(request):
         
         adv = Adventurer.objects.first()
         guild = GuildProfile.objects.first()
+        xp = 0
         if adv and guild:
             # Recompensas
             xp = max(100, int(rating) // 5)
@@ -338,8 +338,7 @@ def solve_daily_puzzle(request):
             session.save()
             
             # Add prestige at the end to prevent concurrent save issues
-            guild.prestige_level += 3
-            guild.save()
+            guild.add_prestige(3)
             
         SolvedPuzzle.objects.create(puzzle_id=puzzle_id, rating=int(rating))
         return Response({"status": "success", "message": f"Puzzle Resuelto! Ganaste {xp} XP."})

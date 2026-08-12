@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.db import transaction
 from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
@@ -28,6 +29,25 @@ class MusicWishlistViewSet(viewsets.ModelViewSet):
     queryset = MusicWishlist.objects.filter(
         is_rejected=False).order_by('-date_found')
     serializer_class = MusicWishlistSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Sobreescritura del POST para garantizar la idempotencia.
+
+        Mismo contrato que MovieWishlistViewSet: un título repetido responde 200 sin
+        guardar, de modo que el radar de Node no ve un error y sigue barriendo, y la
+        lista negra (is_rejected=True) también cuenta como 'ya conocido'.
+        """
+        title = request.data.get('title')
+
+        if title:
+            exists = MusicWishlist.objects.filter(title__iexact=title).exists()
+            if exists:
+                return Response(
+                    {"message": f"'{title}' ya está en el radar o fue rechazado. Ignorando."},
+                    status=status.HTTP_200_OK
+                )
+
+        return super().create(request, *args, **kwargs)
 
 
 class MusicInboxViewSet(viewsets.ModelViewSet):
@@ -176,15 +196,28 @@ def finish_album(request):
     title = request.data.get('title')
     artist = request.data.get('artist', 'Desconocido')
     is_owned = request.data.get('is_owned', True)
+    album_id = request.data.get('album_id')
 
     if not title:
         return Response({"error": "Falta el título del álbum."}, status=status.HTTP_400_BAD_REQUEST)
 
-    MusicAnnualRecord.objects.create(
-        title=title,
-        artist=artist,
-        is_owned=is_owned
-    )
+    album = None
+    if album_id:
+        album = Album.objects.filter(id=album_id).first()
+        if album is None:
+            return Response({"error": "El álbum no existe."}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        MusicAnnualRecord.objects.create(
+            title=title,
+            artist=artist,
+            is_owned=is_owned,
+            album=album,
+        )
+        if album is not None and not album.is_listened:
+            album.is_listened = True
+            album.save(update_fields=['is_listened'])
+
     return Response({"message": f"'{title}' registrado como escuchado."}, status=status.HTTP_201_CREATED)
 
 

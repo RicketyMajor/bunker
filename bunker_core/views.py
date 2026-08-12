@@ -212,8 +212,11 @@ def global_dashboard_view(request):
         top_streak = posada_data.get("top_streak") or {}
         contadores = {
             "books_read": data["books"].get("read"),
-            "movies_watched": data["movies"].get("watched"),
-            "albums_listened": data["music"].get("listened"),
+            # El logro cuenta lo VISTO/ESCUCHADO, que vive en el registro anual, no en el
+            # inventario: se ve mucho de lo que no se posee. data["movies"]["watched"] sigue
+            # siendo la metrica de inventario que pinta el TUI, y es correcta para eso.
+            "movies_watched": MovieAnnualRecord.objects.count(),
+            "albums_listened": MusicAnnualRecord.objects.count(),
             "deep_work_sessions": posada_data.get("dw_sessions_total"),
             "puzzles_solved": data["chess"].get("puzzles"),
             "habit_streak": top_streak.get("streak"),
