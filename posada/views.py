@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
+from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 import random
 from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills, calculate_sell_value, add_wealth_from_dict, pay_with_change
 from django.utils import timezone
@@ -432,6 +433,25 @@ def create_habit(request):
 def complete_habit(request):
     today = timezone.localdate()
     habit_id = request.data.get('habit_id')
+
+    # A habit cannot be applied retroactively: current_streak is a blind increment and the
+    # daily rollover is what breaks streaks, so a late completion would credit a run that
+    # never happened. The mobile queue is told the truth instead.
+    # The value still goes through parse_occurred_on so that garbage and future dates get
+    # the same 400 they get on every other verb, instead of being mislabelled as "late".
+    # ponytail: the upgrade, if it ever matters, is deriving the streak from a completion
+    # ledger rather than a counter — a much larger change than this guard.
+    try:
+        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"status": "error", "message": str(exc)}, status=400)
+
+    if occurred_on != today:
+        return Response(
+            {"status": "error",
+             "message": "No aplicado — los hábitos se marcan el mismo día."},
+            status=409,
+        )
 
     try:
         habit = DailyHabit.objects.get(id=habit_id)

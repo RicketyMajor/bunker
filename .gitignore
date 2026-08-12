@@ -3,6 +3,7 @@
 __pycache__/
 .env
 bunker_backup.json
+wishlist_duplicados_*.json
 node_modules/
 venv/
 context/

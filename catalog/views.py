@@ -2,6 +2,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
+from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
+from django.db import transaction
 from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Sum
@@ -225,23 +227,30 @@ def finish_book(request):
     if not title:
         return Response({"error": "El título es obligatorio"}, status=400)
 
-    # Crea el registro histórico
-    AnnualRecord.objects.create(
-        title=title,
-        author_name=author_name,
-        book_id=book_id,
-        is_owned=is_owned
-    )
+    try:
+        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"error": str(exc)}, status=400)
 
-    # Si el libro es mio, lo marca como leído en la base de datos central
-    if book_id and is_owned:
-        try:
-            book = Book.objects.get(id=book_id)
-            if not book.is_read:
-                book.is_read = True
-                book.save()
-        except Book.DoesNotExist:
-            pass
+    with transaction.atomic():
+        # Crea el registro histórico
+        AnnualRecord.objects.create(
+            title=title,
+            author_name=author_name,
+            book_id=book_id,
+            is_owned=is_owned,
+            date_finished=occurred_on,
+        )
+
+        # Si el libro es mio, lo marca como leído en la base de datos central
+        if book_id and is_owned:
+            try:
+                book = Book.objects.get(id=book_id)
+                if not book.is_read:
+                    book.is_read = True
+                    book.save()
+            except Book.DoesNotExist:
+                pass
 
     return Response({"message": f"¡Felicidades! '{title}' añadido al registro anual."}, status=201)
 

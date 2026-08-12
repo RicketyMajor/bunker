@@ -6,6 +6,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieViewingSession, MovieAnnualRecord
+from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -320,7 +321,12 @@ def log_minutes(request):
     if not minutes:
         return Response({"error": "Faltan los minutos."}, status=status.HTTP_400_BAD_REQUEST)
 
-    MovieViewingSession.objects.create(minutes_watched=int(minutes))
+    try:
+        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    MovieViewingSession.objects.create(minutes_watched=int(minutes), date=occurred_on)
     return Response({"message": f"Anotados {minutes} minutos de visionado."}, status=status.HTTP_201_CREATED)
 
 
@@ -335,6 +341,11 @@ def finish_movie(request):
     if not title:
         return Response({"error": "Falta el título."}, status=status.HTTP_400_BAD_REQUEST)
 
+    try:
+        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
     movie = None
     if movie_id:
         movie = Movie.objects.filter(id=movie_id).first()
@@ -348,6 +359,7 @@ def finish_movie(request):
             director=director,
             is_owned=is_owned,
             movie=movie,
+            date_watched=occurred_on,
         )
         if movie is not None and not movie.is_watched:
             movie.is_watched = True

@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
+from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
@@ -201,6 +202,11 @@ def finish_album(request):
     if not title:
         return Response({"error": "Falta el título del álbum."}, status=status.HTTP_400_BAD_REQUEST)
 
+    try:
+        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
     album = None
     if album_id:
         album = Album.objects.filter(id=album_id).first()
@@ -213,6 +219,7 @@ def finish_album(request):
             artist=artist,
             is_owned=is_owned,
             album=album,
+            date_listened=occurred_on,
         )
         if album is not None and not album.is_listened:
             album.is_listened = True
