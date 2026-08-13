@@ -35,8 +35,20 @@ SECRET_KEY = 'django-insecure-r57@yay8wlt5gifn*x9x5@k!*#&)tdhd*)f!&=qi&5#^ulj$^h
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
+
+# Django validates the Origin header on HTTPS POSTs against this list. Without the tailnet
+# origin here, every capture from the phone returns 403 with no useful message.
+# '*.lhr.life' is NOT vestigial: cli/main.py, cli/books.py and cli/tui/modals.py all open a
+# localhost.run SSH tunnel, and that wildcard is what lets the scanner they serve POST back.
+# It stays until those tunnels do.
 CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app',
-                        'https://*.ngrok.io', 'https://*.lhr.life']
+                        'https://*.ngrok.io', 'https://*.lhr.life',
+                        'http://localhost:8009', 'http://127.0.0.1:8009']
+
+# Origin the mobile companion is served from, e.g. https://bunker.tailXXXX.ts.net
+_public_origin = os.environ.get('BUNKER_PUBLIC_ORIGIN', '').strip().rstrip('/')
+if _public_origin:
+    CSRF_TRUSTED_ORIGINS.append(_public_origin)
 
 
 # Application definition
