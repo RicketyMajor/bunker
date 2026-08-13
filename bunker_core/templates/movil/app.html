@@ -113,6 +113,54 @@
           style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CERRAR</button>
 </dialog>
 
+<dialog id="hoja-paginas" aria-labelledby="t-paginas">
+  <h2 id="t-paginas" style="margin:0 0 16px;font-size:19px">¿Hasta qué página llegaste?</h2>
+  <!-- The picker is only displayed when no book is in progress, and it is first in the
+       markup on purpose: showModal() focuses the first focusable element, so with no book
+       chosen focus lands on the picker, and with one it is display:none and focus falls
+       through to the number field. Both are safe controls; this sheet has no destructive one. -->
+  <!-- The label is a sibling, not a wrapper. A <label> wrapping a <select> takes its whole
+       subtree as the accessible name, options included, and what a screen reader announces
+       then depends on how it resolves the embedded control. "Libro" on its own is not
+       ambiguous anywhere. -->
+  <div id="pg-libro-campo" style="display:block">
+    <label for="pg-libro" style="color:var(--dim);font-size:15px">Libro</label>
+    <select id="pg-libro"
+            style="width:100%;font:inherit;font-size:19px;padding:12px;margin:6px 0 16px;
+                   background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)"></select>
+  </div>
+  <input id="pg" type="number" inputmode="numeric" min="1" step="1" aria-labelledby="t-paginas"
+         autocomplete="off"
+         style="width:100%;font:inherit;font-size:36px;text-align:center;padding:12px;
+                background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
+  <p id="pg-delta" class="pos" aria-live="polite" style="text-align:center;min-height:24px"></p>
+  <label style="display:flex;gap:10px;align-items:center;min-height:48px;color:var(--dim)">
+    <input type="checkbox" id="pg-sueltas" style="width:22px;height:22px">
+    solo sumar páginas sueltas
+  </label>
+  <button class="act" id="pg-guardar" style="margin-top:12px">REGISTRAR</button>
+  <button class="act" id="pg-cerrar"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
+</dialog>
+
+<dialog id="hoja-terminar" aria-labelledby="t-terminar">
+  <h2 id="t-terminar" style="margin:0 0 12px;font-size:19px">¿Qué terminaste?</h2>
+  <!-- aria-pressed, not just a border colour: which collection is selected is state, and the
+       accessibility floor this plan sets forbids communicating state by colour alone. -->
+  <div class="grid" style="margin-bottom:12px">
+    <button data-tipo="libro" class="tsel" aria-pressed="true">LIBRO</button>
+    <button data-tipo="peli" class="tsel" aria-pressed="false">PELÍCULA</button>
+    <button data-tipo="disco" class="tsel" aria-pressed="false" style="grid-column:1/-1">DISCO</button>
+  </div>
+  <label for="ft-buscar" style="color:var(--dim);font-size:15px">Buscar</label>
+  <input id="ft-buscar" type="search" autocomplete="off" placeholder="título…"
+         style="width:100%;font:inherit;padding:12px;margin-top:6px;background:var(--bg-alt);
+                color:var(--fg);border:1px solid var(--dim)">
+  <ul id="ft-lista" style="list-style:none;padding:0;margin:12px 0;max-height:34vh;overflow:auto"></ul>
+  <button class="act" id="ft-cerrar"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg)">CANCELAR</button>
+</dialog>
+
 <div id="toast" role="status"></div>
 
 <script>window.CSRF_TOKEN = "{{ csrf_token }}";</script>

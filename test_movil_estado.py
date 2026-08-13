@@ -129,6 +129,31 @@ def test_leyendo_is_the_most_recent_session_with_a_position():
     print("OK · leyendo es la sesion mas reciente que tiene libro y posicion")
 
 
+def test_a_finished_book_stops_being_the_one_you_are_reading():
+    """Found while building Task 15, which is what made it reachable.
+
+    The book correctly leaves `libros` once is_read is set, but the session that carries its
+    last position outlives it, so `leyendo` kept offering a finished book — with a + PÁGINAS
+    button on it — until another book was logged. Nothing else in the project reads this.
+    """
+    def cuerpo():
+        libro = Book.objects.create(title="Libro terminado", page_count=300, is_read=False)
+        ReadingSession.objects.create(date=HOY, pages_read=150, book=libro, current_page=150)
+        assert pedir()["leyendo"]["book_id"] == libro.id, "no lo ofrecio ni estando en curso"
+
+        libro.is_read = True
+        libro.save(update_fields=["is_read"])
+        leyendo = pedir()["leyendo"]
+        assert leyendo is None or leyendo["book_id"] != libro.id, (
+            "un libro ya terminado sigue apareciendo como 'leyendo ahora'"
+        )
+        assert not any(x["id"] == libro.id for x in pedir()["libros"]), (
+            "y ademas se seguiria ofreciendo para terminar"
+        )
+    rollback(cuerpo)
+    print("OK · terminar un libro lo saca de 'leyendo ahora', no solo del inventario")
+
+
 def test_query_budget():
     """The constraint the spec sets: this is not a second dashboard."""
     with CaptureQueriesContext(connection) as ctx:
@@ -144,6 +169,7 @@ if __name__ == "__main__":
         test_habit_already_done_today_is_not_offered,
         test_habit_not_scheduled_today_is_not_offered,
         test_leyendo_is_the_most_recent_session_with_a_position,
+        test_a_finished_book_stops_being_the_one_you_are_reading,
         test_query_budget,
     ]
     for prueba in PRUEBAS:

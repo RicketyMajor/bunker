@@ -408,9 +408,12 @@ def movil_estado(request):
     # The book to offer first: the one most recently logged, not the one closest to being
     # finished. Those are different criteria — the briefing wants the latter, the capture
     # sheet wants whatever is physically on the table right now.
+    # `book__is_read=False` because the session outlives the book's state: finishing a book
+    # takes it out of `libros` but leaves the row that carries its last position, so without
+    # this the phone keeps offering + PÁGINAS on a book you already closed.
     leyendo = None
     ultima = (ReadingSession.objects
-              .filter(book__isnull=False, current_page__isnull=False)
+              .filter(book__isnull=False, current_page__isnull=False, book__is_read=False)
               .select_related('book', 'book__author')
               .order_by('-date', '-id')
               .first())
