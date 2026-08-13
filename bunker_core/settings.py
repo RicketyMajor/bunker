@@ -36,8 +36,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-# Django validates the Origin header on HTTPS POSTs against this list. Without the tailnet
-# origin here, every capture from the phone returns 403 with no useful message.
+# Origins Django will accept an HTTPS POST from when CSRF is actually enforced. Measured
+# 2026-08-13: it is NOT enforced on the capture endpoints today, because they are DRF
+# @api_view with SessionAuthentication + AllowAny and DRF only checks CSRF for a request it
+# authenticated by session — with nobody logged in, any Origin is accepted. This list becomes
+# load-bearing the moment a Django admin session exists in the phone's browser.
 # '*.lhr.life' is NOT vestigial: cli/main.py, cli/books.py and cli/tui/modals.py all open a
 # localhost.run SSH tunnel, and that wildcard is what lets the scanner they serve POST back.
 # It stays until those tunnels do.
