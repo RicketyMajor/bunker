@@ -9,7 +9,7 @@ from django.db.models import Sum
 from django.db.models.functions import TruncDate
 from django.utils.timezone import localdate
 from datetime import timedelta
-from catalog.models import Book, AnnualRecord as BookAnnualRecord
+from catalog.models import Book, ReadingSession, AnnualRecord as BookAnnualRecord
 from movies.models import Movie, MovieAnnualRecord
 from disquera.models import Album, MusicAnnualRecord
 from posada.models import GuildProfile, Adventurer, DeepWorkSession, DailyHabit, KanbanTask, CalendarEvent, JournalEntry
@@ -367,3 +367,53 @@ def health_check(request):
         "db": db_ok,
         "latency_ms": elapsed_ms
     }, status=200 if db_ok else 503)
+
+
+def movil_estado(request):
+    """The minimum the Transmisor needs in order to capture correctly.
+
+    This is NOT the dashboard. The dashboard costs 29 queries and aggregates five modules;
+    the phone needs none of them. If this endpoint grows past a handful of queries it has
+    become a second dashboard and the design has drifted.
+
+    Spec: context/specs/transmisor-de-campo.md
+    """
+    hoy = localdate()
+
+    # The book to offer first: the one most recently logged, not the one closest to being
+    # finished. Those are different criteria — the briefing wants the latter, the capture
+    # sheet wants whatever is physically on the table right now.
+    leyendo = None
+    ultima = (ReadingSession.objects
+              .filter(book__isnull=False, current_page__isnull=False)
+              .select_related('book', 'book__author')
+              .order_by('-date', '-id')
+              .first())
+    if ultima is not None:
+        leyendo = {
+            "book_id": ultima.book_id,
+            "title": ultima.book.title,
+            "author": ultima.book.author.name if ultima.book.author else "",
+            "current_page": ultima.current_page,
+            "page_count": ultima.book.page_count,
+        }
+
+    # Only habits that are actually due today. `valid_days` is a comma-separated list of
+    # weekday numbers, and it is what the penalty engine reads (legacy.py:481) — offering a
+    # Monday-only habit on a Sunday would pay prestige for a day the engine never scored.
+    # ponytail: substring match, correct because weekdays are single digits 0-6; if the
+    # field ever holds anything wider, this needs a real membership test.
+    habitos = list(
+        DailyHabit.objects
+        .filter(valid_days__contains=str(hoy.weekday()))
+        .exclude(last_completed_date=hoy)
+        .values("id", "name", "difficulty", "is_bad_habit")
+    )
+
+    return JsonResponse({
+        "leyendo": leyendo,
+        "habitos_pendientes": habitos,
+        "libros": list(Book.objects.filter(is_read=False).values("id", "title")[:500]),
+        "peliculas": list(Movie.objects.filter(is_watched=False).values("id", "title")[:500]),
+        "albums": list(Album.objects.filter(is_listened=False).values("id", "title")[:500]),
+    })
