@@ -64,6 +64,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_filters',
+    # The project package is an app so its templates/ and static/ are discovered by the same
+    # APP_DIRS + AppDirectoriesFinder mechanism every module already uses. Without it the
+    # Transmisor's templates raise TemplateDoesNotExist and its static files 404, because
+    # TEMPLATES['DIRS'] is empty and STATICFILES_DIRS is unset.
+    'bunker_core',
     'catalog',
     'rest_framework',
     'movies',

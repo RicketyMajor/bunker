@@ -3,6 +3,7 @@ import logging
 import os
 import secrets
 from django.core.management import call_command
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db.models import Sum
@@ -367,6 +368,25 @@ def health_check(request):
         "db": db_ok,
         "latency_ms": elapsed_ms
     }, status=200 if db_ok else 503)
+
+
+def movil_app(request):
+    """The PWA. One template, inline CSS, no build step and no CDN."""
+    return render(request, 'movil/app.html')
+
+
+def movil_sw(request):
+    """The service worker.
+
+    Served from /movil/ and not from /static/ on purpose: a service worker's scope is the
+    directory it is delivered from, so one served under /static/ would never control
+    /movil/ — and would fail silently, which is the worst thing it could do.
+    """
+    return render(request, 'movil/sw.js', content_type='application/javascript')
+
+
+def movil_manifest(request):
+    return render(request, 'movil/manifest.json', content_type='application/manifest+json')
 
 
 def movil_estado(request):

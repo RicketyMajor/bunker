@@ -1,0 +1,116 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#282828">
+<link rel="manifest" href="/movil/manifest.json">
+<title>Bunker · Transmisor</title>
+<style>
+  /* Gruvbox, matching BunkerApp.theme in the TUI.
+     --red is lifted from gruvbox's #fb4934 to #fd6355: the original measures 4.29:1 against
+     --bg, below the 4.5:1 floor this spec sets, and it carries the "sin enlace" state — the
+     one thing on this screen that must be readable in sunlight.
+     Rule for the sheets that come later: --dim and --red are for --bg only. On a --bg-alt
+     surface they measure 4.17:1 and 3.92:1; use --fg there. */
+  :root {
+    --bg: #282828; --bg-alt: #3c3836; --fg: #ebdbb2; --dim: #a89984;
+    --yellow: #fabd2f; --green: #b8bb26; --red: #fd6355; --blue: #83a598;
+    /* Without this the browser paints its own light chrome for form controls and
+       scrollbars. Every sheet from Task 14 on has an input; declared once, here. */
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: ui-monospace, "Roboto Mono", monospace;
+    font-size: 17px; line-height: 1.45;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    /* Kills the 300ms double-tap-zoom delay on every tap in the app, and replaces the
+       default blue tap flash, which reads as a rendering glitch on a dark surface. */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(250, 189, 47, .25);
+  }
+  h1 { font: inherit; margin: 0; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--bg-alt);
+    position: sticky; top: 0; background: var(--bg); z-index: 2;
+  }
+  #chip { background: none; border: 0; color: inherit; font: inherit;
+          min-height: 48px; padding: 0 4px; cursor: pointer; }
+  #chip.ok { color: var(--green); } #chip.pend { color: var(--yellow); }
+  #chip.off { color: var(--red); }
+  main { padding: 16px; display: grid; gap: 16px; }
+  .card { border: 1px solid var(--bg-alt); padding: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 13px; letter-spacing: .1em; color: var(--dim);
+             text-transform: uppercase; font-weight: normal; }
+  .title { font-size: 20px; margin: 0; }
+  .author { color: var(--dim); margin: 0 0 12px; }
+  .bar { height: 8px; background: var(--bg-alt); margin: 12px 0 6px; }
+  .bar > i { display: block; height: 100%; background: var(--yellow); }
+  .pos { color: var(--dim); font-size: 15px; }
+  button.act {
+    width: 100%; min-height: 56px; font: inherit; font-weight: bold;
+    background: var(--yellow); color: var(--bg); border: 0; cursor: pointer;
+    letter-spacing: .05em;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid button {
+    min-height: 72px; font: inherit; background: var(--bg);
+    border: 1px solid var(--bg-alt); color: var(--fg); cursor: pointer;
+  }
+  .grid button .n { color: var(--yellow); font-weight: bold; }
+  /* Pointer feedback for the desktop browser these sheets get verified in. Guarded by
+     hover:hover so a phone does not keep the hover state stuck after a tap. */
+  @media (hover: hover) {
+    .grid button:hover { border-color: var(--yellow); }
+    button.act:hover { background: var(--fg); }
+    #chip:hover { text-decoration: underline; }
+  }
+  .grid button:active, button.act:active { opacity: .8; }
+  /* Keyboard and switch users need to see where they are; the phone's own focus ring does
+     not survive a custom background. */
+  :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  /* overscroll-behavior stops a scroll inside a sheet from chaining to the page behind it,
+     which on a phone drags the whole app. Declared on the shared selector so every sheet
+     Tasks 14-18 add inherits it instead of each one remembering. */
+  dialog { border: 1px solid var(--bg-alt); background: var(--bg); color: var(--fg);
+           width: 100%; max-width: 100%; margin: auto auto 0; padding: 20px 16px 28px;
+           overscroll-behavior: contain; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  #toast { position: fixed; left: 16px; right: 16px; bottom: 24px; z-index: 5;
+           background: var(--bg-alt); border-left: 3px solid var(--green);
+           padding: 14px 16px; opacity: 0; transition: opacity .12s; }
+  #toast.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <button id="chip" class="off" aria-live="polite">○ SIN ENLACE</button>
+  <h1 style="color:var(--dim);font-size:13px;letter-spacing:.1em">TRANSMISOR</h1>
+</header>
+
+<main id="home">
+  <section class="card" id="leyendo"></section>
+  <div class="grid">
+    <button data-verb="terminar">TERMINÉ</button>
+    <button data-verb="habitos">HÁBITOS <span class="n" id="n-habitos"></span></button>
+    <button data-verb="escanear">ESCANEAR</button>
+    <button data-verb="wishlist">A LA LISTA</button>
+  </div>
+</main>
+
+<div id="toast" role="status"></div>
+
+<script>window.CSRF_TOKEN = "{{ csrf_token }}";</script>
+<script src="{% static 'movil/queue.js' %}"></script>
+<script src="{% static 'movil/app.js' %}"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/movil/sw.js', { scope: '/movil/' });
+  }
+</script>
+</body>
+</html>

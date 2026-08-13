@@ -231,6 +231,64 @@ def test_habit_today_still_works():
         pass
 
 
+def test_habit_refuses_a_day_it_is_not_scheduled_for():
+    """The sibling guard: right date, wrong day of the week.
+
+    Same 409 as the retroactive refusal, and for the same reason — the penalty engine only
+    scores days listed in `valid_days`, so anything paid outside them is free prestige.
+    Pinned here rather than in test_movil_estado.py because this is the write path: the
+    endpoint refuses it even when nothing offered it.
+    """
+    from django.db import transaction
+    from rest_framework.test import APIRequestFactory
+
+    from posada.models import DailyHabit, GuildProfile
+    from posada.views import complete_habit
+
+    otros_dias = ",".join(str(d) for d in range(7) if d != HOY.weekday())
+    f = APIRequestFactory()
+    try:
+        with transaction.atomic():
+            guild, _ = GuildProfile.objects.get_or_create(id=1)
+            prestigio_antes = guild.prestige
+
+            fuera = DailyHabit.objects.create(
+                name="Habito de otro dia", difficulty="B", valid_days=otros_dias,
+                current_streak=4)
+            resp = complete_habit(f.post("/", {"habit_id": fuera.id}, format="json"))
+            assert resp.status_code == 409, f"esperaba 409, llego {resp.status_code}"
+            fuera.refresh_from_db()
+            assert fuera.current_streak == 4, f"la racha se movio a {fuera.current_streak}"
+            assert fuera.last_completed_date is None, "marco la fecha de todas formas"
+            guild.refresh_from_db()
+            assert guild.prestige == prestigio_antes, "pago prestigio por un dia que no toca"
+
+            # A bad habit is refused by the same guard: the engine would not have counted
+            # that day as survived either, so it must not be charged as a relapse.
+            malo = DailyHabit.objects.create(
+                name="Mal habito de otro dia", difficulty="B", valid_days=otros_dias,
+                is_bad_habit=True, current_streak=9)
+            resp = complete_habit(f.post("/", {"habit_id": malo.id}, format="json"))
+            assert resp.status_code == 409, f"el mal habito dio {resp.status_code}"
+            malo.refresh_from_db()
+            assert malo.current_streak == 9, "reseteo la racha de un mal habito fuera de dia"
+            guild.refresh_from_db()
+            assert guild.prestige == prestigio_antes, "cobro penalizacion fuera de dia"
+
+            # And the day it *is* scheduled for still works, so the guard is not a wall.
+            hoy_si = DailyHabit.objects.create(
+                name="Habito de hoy", difficulty="B", valid_days=str(HOY.weekday()))
+            resp = complete_habit(f.post("/", {"habit_id": hoy_si.id}, format="json"))
+            assert resp.status_code == 200, f"el habito de hoy dio {resp.status_code}"
+            hoy_si.refresh_from_db()
+            assert hoy_si.current_streak == 1, "el habito de hoy no aplico"
+
+            print("OK · dia no programado -> 409 en ambas ramas, y el dia que toca sigue pagando")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+
+
 if __name__ == "__main__":
     # Listed rather than called one by one so the count in the summary cannot drift from
     # the number of checks. Later tasks in this plan keep appending here.
@@ -245,6 +303,7 @@ if __name__ == "__main__":
         test_every_verb_rejects_a_future_date,
         test_habit_refuses_a_past_date_and_leaves_the_streak_alone,
         test_habit_today_still_works,
+        test_habit_refuses_a_day_it_is_not_scheduled_for,
     ]
     for prueba in PRUEBAS:
         prueba()

@@ -1,0 +1,24 @@
+{
+  "name": "Bunker · Transmisor",
+  "short_name": "Bunker",
+  "start_url": "/movil/",
+  "scope": "/movil/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#282828",
+  "theme_color": "#282828",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23282828'/%3E%3Ctext x='96' y='128' font-family='monospace' font-size='104' font-weight='bold' text-anchor='middle' fill='%23fabd2f'%3EB%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23282828'/%3E%3Ctext x='96' y='128' font-family='monospace' font-size='104' font-weight='bold' text-anchor='middle' fill='%23fabd2f'%3EB%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

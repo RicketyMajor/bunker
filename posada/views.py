@@ -455,6 +455,23 @@ def complete_habit(request):
 
     try:
         habit = DailyHabit.objects.get(id=habit_id)
+
+        # A habit only exists on the days it is scheduled for. `valid_days` was read by
+        # exactly one place — the penalty engine (engine/legacy.py:481, :511), which counts a
+        # day as missed or survived only if it is in the list — so completing a Mon-Fri habit
+        # on a Sunday paid full prestige, coins and a streak increment for a day the engine
+        # never scored. The expression is copied verbatim from the engine so the two cannot
+        # drift apart: what is payable here is exactly what is scorable there.
+        # The guard sits before the good/bad branch on purpose. A relapse on an unscheduled
+        # day is refused too — the engine would not have counted that day as survived either,
+        # so charging double prestige for it is the same asymmetry in reverse.
+        if str(today.weekday()) not in habit.valid_days:
+            return Response(
+                {"status": "error",
+                 "message": f"No aplicado — '{habit.name}' no está programado para hoy."},
+                status=409,
+            )
+
         if habit.last_completed_date == today:
             return Response({"status": "warning", "message": "Ya interactuaste con este hábito hoy."})
 
