@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Transmisor · autotest</title>
+<style>body{background:#282828;color:#ebdbb2;font-family:ui-monospace,monospace;padding:16px}
+.ok{color:#b8bb26}.fail{color:#fd6355}</style></head>
+<body>
+<h1>queue.js</h1><pre id="out"></pre>
+<script src="/static/movil/queue.js"></script>
+<script>
+// The harness is `await`-ed and sequential on purpose. A try/catch around a bare call to an
+// async function catches nothing: the function returns a promise before its body runs, every
+// check reports OK, and the assertion failures become unhandled rejections that never reach
+// the counter. A check that cannot fail is worse than no check.
+const out = document.getElementById('out');
+const LLAVE = 'transmisor_cola';
+let fallos = 0;
+
+async function check(nombre, fn) {
+  try {
+    await fn();
+    out.innerHTML += `<span class="ok">OK   ${nombre}</span>\n`;
+  } catch (e) {
+    fallos++;
+    out.innerHTML += `<span class="fail">FAIL ${nombre}: ${e.message}</span>\n`;
+  }
+}
+function assert(cond, msg) { if (!cond) throw new Error(msg || 'assert'); }
+const ok201 = async () => ({ ok: true, status: 201, json: async () => ({}) });
+
+(async () => {
+  localStorage.removeItem(LLAVE);
+
+  await check('encolar guarda y cuenta', () => {
+    Cola.encolar('paginas', { book_id: 1, current_page: 30 });
+    assert(Cola.pendientes() === 1, `esperaba 1 pendiente, hay ${Cola.pendientes()}`);
+  });
+
+  await check('cada item lleva la fecha del evento', () => {
+    const it = Cola.items()[0];
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(it.payload.occurred_on), 'sin occurred_on valido');
+  });
+
+  await check('un verbo desconocido revienta en vez de encolar basura', () => {
+    let tiro = false;
+    try { Cola.encolar('teletransportar', {}); } catch (e) { tiro = true; }
+    assert(tiro, 'acepto un verbo que no existe');
+    assert(Cola.pendientes() === 1, 'encolo el verbo invalido igual');
+  });
+
+  await check('un 2xx borra el item', async () => {
+    await Cola.vaciar(ok201);
+    assert(Cola.pendientes() === 0, `quedaron ${Cola.pendientes()}`);
+  });
+
+  await check('un fallo de red NO borra el item', async () => {
+    Cola.encolar('paginas', { pages: 10 });
+    await Cola.vaciar(async () => { throw new Error('sin ruta'); });
+    assert(Cola.pendientes() === 1, 'se perdio una captura');
+    assert(Cola.items()[0].error, 'no guardo la razon del fallo');
+  });
+
+  await check('un 409 marca el item como rechazado, sin borrarlo', async () => {
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('habito', { habit_id: 1 });
+    await Cola.vaciar(async () => ({
+      ok: false, status: 409,
+      json: async () => ({ message: 'No aplicado — los hábitos se marcan el mismo día.' }),
+    }));
+    assert(Cola.pendientes() === 1, 'borro un rechazo');
+    assert(Cola.items()[0].error.includes('mismo día'), 'no guardo el mensaje real');
+  });
+
+  // The two below are the reason this file exists. Both failures are invisible in the UI:
+  // the capture simply is not there afterwards, and nothing reports it.
+  await check('una captura hecha DURANTE el vaciado no se pierde', async () => {
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('paginas', { pages: 1 });
+    await Cola.vaciar(async () => {
+      // The user taps a sheet while the flush is in flight. This lands in localStorage,
+      // but not in the array `vaciar` read before it started.
+      Cola.encolar('paginas', { pages: 2 });
+      return ok201();
+    });
+    assert(Cola.pendientes() === 1,
+      `la captura hecha durante el vaciado se perdio (quedan ${Cola.pendientes()})`);
+    assert(Cola.items()[0].payload.pages === 2, 'quedo la equivocada');
+  });
+
+  await check('dos vaciados simultaneos no envian la misma captura dos veces', async () => {
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('paginas', { pages: 1 });
+    let envios = 0;
+    const lento = async () => {
+      envios++;
+      await new Promise((r) => setTimeout(r, 60));
+      return ok201();
+    };
+    await Promise.all([Cola.vaciar(lento), Cola.vaciar(lento)]);
+    assert(envios === 1, `se envio ${envios} veces: el servidor recibio un duplicado`);
+    assert(Cola.pendientes() === 0, `quedaron ${Cola.pendientes()}`);
+  });
+
+  await check('un rechazo del servidor no se confunde con falta de red', async () => {
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('habito', { habit_id: 1 });
+    const r409 = await Cola.vaciar(async () => ({
+      ok: false, status: 409, json: async () => ({ message: 'no toca hoy' }),
+    }));
+    assert(r409.alcanzoElServidor === true,
+      'un 409 se reporto como si no hubiera enlace: el chip diria SIN ENLACE conectado');
+
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('habito', { habit_id: 1 });
+    const rRed = await Cola.vaciar(async () => { throw new Error('sin ruta'); });
+    assert(rRed.alcanzoElServidor === false, 'reporto contacto con el servidor sin haberlo tenido');
+  });
+
+  await check('descartar borra a mano', () => {
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('habito', { habit_id: 1 });
+    Cola.descartar(Cola.items()[0].id);
+    assert(Cola.pendientes() === 0, 'no borro');
+  });
+
+  out.innerHTML += fallos === 0
+    ? '\n<span class="ok">TODO OK</span>'
+    : `\n<span class="fail">${fallos} FALLOS</span>`;
+  localStorage.removeItem(LLAVE);
+})();
+</script>
+</body></html>

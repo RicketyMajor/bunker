@@ -5,9 +5,14 @@
 // `{%` sequence — the engine would eat it silently.
 //
 // ponytail: network-first, not cache-first. You are almost always reachable when you open
-// this at home, so an edited template is picked up without a version dance; the cache only
+// this at home, so an edited file is picked up without a version dance; the cache only
 // serves when there is no route. The ceiling: a slow-but-alive network makes the shell wait
 // for the timeout. Swap to stale-while-revalidate if that ever bites.
+//
+// The `cache: 'no-store'` below is what makes that true, and it was measured, not assumed:
+// a plain fetch(event.request) is still served by the browser's own HTTP cache, so an edited
+// queue.js kept executing the previous version with transferSize 0 and no error anywhere.
+// Network-first has to mean the network, or the second cache silently defeats the first.
 const CACHE = 'transmisor-v1';
 const SHELL = ['/movil/', '/movil/manifest.json', '/static/movil/queue.js', '/static/movil/app.js'];
 
@@ -39,7 +44,7 @@ self.addEventListener('fetch', (event) => {
   if (!url.pathname.startsWith('/movil/') && !url.pathname.startsWith('/static/movil/')) return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE).then((c) => c.put(event.request, copy));

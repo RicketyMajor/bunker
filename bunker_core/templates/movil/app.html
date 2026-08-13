@@ -102,6 +102,17 @@
   </div>
 </main>
 
+<dialog id="despachos" aria-labelledby="t-despachos">
+  <h2 id="t-despachos" style="margin:0 0 12px;font-size:13px;letter-spacing:.1em;color:var(--dim)">DESPACHOS</h2>
+  <ul id="lista-despachos" style="list-style:none;padding:0;margin:0 0 16px;max-height:50vh;overflow:auto"></ul>
+  <!-- autofocus is not decoration here. showModal() focuses the first focusable element,
+       and that is the DESCARTAR button of the first dispatch — a destructive control, armed,
+       one Enter away from dropping a capture. Focus goes to the primary action instead. -->
+  <button class="act" id="btn-transmitir" autofocus>TRANSMITIR AHORA</button>
+  <button class="act" id="cerrar-despachos"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CERRAR</button>
+</dialog>
+
 <div id="toast" role="status"></div>
 
 <script>window.CSRF_TOKEN = "{{ csrf_token }}";</script>

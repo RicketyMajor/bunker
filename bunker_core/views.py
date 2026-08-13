@@ -385,6 +385,11 @@ def movil_sw(request):
     return render(request, 'movil/sw.js', content_type='application/javascript')
 
 
+def movil_selftest(request):
+    """The browser-run check for queue.js. Not linked from the app; open it by hand."""
+    return render(request, 'movil/selftest.html')
+
+
 def movil_manifest(request):
     return render(request, 'movil/manifest.json', content_type='application/manifest+json')
 
