@@ -23,6 +23,7 @@ CHECKS_IN_CONTAINER = (
     "test_reading_progress.py",
     "test_movil_estado.py",
     "test_inbox_idempotente.py",
+    "test_insights.py",
 )
 
 
