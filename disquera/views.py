@@ -55,6 +55,22 @@ class MusicInboxViewSet(viewsets.ModelViewSet):
     queryset = MusicInbox.objects.all().order_by('-date_scanned')
     serializer_class = MusicInboxSerializer
 
+    def create(self, request, *args, **kwargs):
+        """Sobreescritura del POST para garantizar la idempotencia.
+
+        `barcode` es unique: sin esto un código repetido devuelve el error de campo de DRF y
+        la captura se queda atascada en la cola del Transmisor, que solo borra con un 2xx.
+        """
+        barcode = request.data.get('barcode')
+
+        if barcode and MusicInbox.objects.filter(barcode=barcode).exists():
+            return Response(
+                {"message": f"'{barcode}' ya estaba en el Purgatorio. Ignorando."},
+                status=status.HTTP_200_OK
+            )
+
+        return super().create(request, *args, **kwargs)
+
 
 class ListeningEntryViewSet(viewsets.ModelViewSet):
     queryset = ListeningEntry.objects.all().order_by('-date', '-id')

@@ -285,6 +285,14 @@ def finish_book(request):
     except InvalidOccurredOn as exc:
         return Response({"error": str(exc)}, status=400)
 
+    # Same guard finish_movie and finish_album already have. Without it an unknown id is not
+    # rejected here: Django's FKs are DEFERRABLE INITIALLY DEFERRED in PostgreSQL, so the
+    # violation surfaces at COMMIT — after this view has returned 201 — and the request dies
+    # as a 500. The mobile queue only drops an item on a 2xx, so that capture would be stuck
+    # for ever.
+    if book_id and not Book.objects.filter(id=book_id).exists():
+        return Response({"error": "El libro no existe."}, status=400)
+
     with transaction.atomic():
         # Crea el registro histórico
         AnnualRecord.objects.create(
@@ -382,3 +390,22 @@ class ScanInboxViewSet(viewsets.ModelViewSet):
     """Provee operaciones CRUD para la bandeja de entrada del escáner móvil."""
     queryset = ScanInbox.objects.all().order_by('date_scanned')
     serializer_class = ScanInboxSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Sobreescritura del POST para garantizar la idempotencia.
+
+        Mismo contrato que MusicWishlistViewSet: un ISBN repetido responde 200 sin guardar.
+        `isbn` es unique, así que sin esto un código escaneado dos veces devuelve el error de
+        campo de DRF, y la cola del Transmisor —que solo borra un ítem con un 2xx— se queda
+        con esa captura atascada para siempre. Escanear dos veces la misma estantería es lo
+        normal, no un caso raro.
+        """
+        isbn = request.data.get('isbn')
+
+        if isbn and ScanInbox.objects.filter(isbn=isbn).exists():
+            return Response(
+                {"message": f"'{isbn}' ya estaba en el Purgatorio. Ignorando."},
+                status=status.HTTP_200_OK
+            )
+
+        return super().create(request, *args, **kwargs)

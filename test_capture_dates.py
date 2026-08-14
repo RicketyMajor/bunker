@@ -289,6 +289,95 @@ def test_habit_refuses_a_day_it_is_not_scheduled_for():
         pass
 
 
+def test_finish_book_rejects_an_id_that_does_not_exist():
+    """The failure this guards is late and looks like a success.
+
+    Django creates its FKs in PostgreSQL as DEFERRABLE INITIALLY DEFERRED, so an unknown
+    book_id is not caught on the INSERT — it is caught at COMMIT, after the view has already
+    returned 201, and the request dies as a 500. A plain rolled-back check therefore reports
+    a false pass, which is why this one forces the constraint the way a real commit would.
+
+    It matters to the queue: an item only leaves it on a 2xx, so a book captured offline and
+    deleted from the vault before the flush would 500 for ever, and the only way out is
+    discarding a book that was actually finished.
+    """
+    from django.db import connection, transaction
+    from rest_framework.test import APIRequestFactory
+
+    from catalog.models import AnnualRecord
+    from catalog.views import finish_book
+
+    f = APIRequestFactory()
+    try:
+        with transaction.atomic():
+            resp = finish_book(f.post(
+                "/", {"title": "Libro fantasma", "book_id": 999999}, format="json"))
+            assert resp.status_code == 400, f"esperaba 400, llego {resp.status_code}"
+            assert not AnnualRecord.objects.filter(title="Libro fantasma").exists(), \
+                "escribio el registro igual"
+            # Would raise IntegrityError here if the row had been written with a dangling FK.
+            with connection.cursor() as cur:
+                cur.execute("SET CONSTRAINTS ALL IMMEDIATE")
+            print("OK · un book_id inexistente da 400, no un 201 que revienta en el commit")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+
+
+def test_finish_book_without_an_id_still_works():
+    """The TUI and any external book send no id at all. That path must not have moved."""
+    from django.db import transaction
+    from rest_framework.test import APIRequestFactory
+
+    from catalog.models import AnnualRecord
+    from catalog.views import finish_book
+
+    f = APIRequestFactory()
+    try:
+        with transaction.atomic():
+            resp = finish_book(f.post(
+                "/", {"title": "Libro prestado", "author_name": "Alguien"}, format="json"))
+            assert resp.status_code == 201, f"esperaba 201, llego {resp.status_code}"
+            rec = AnnualRecord.objects.filter(title="Libro prestado").first()
+            assert rec is not None and rec.book_id is None, "no acepto un libro sin id"
+            print("OK · sin book_id sigue siendo 201, que es como registra la TUI")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+
+
+def test_log_minutes_rejects_garbage_instead_of_crashing():
+    """Task 18b made the phone call this. `int(minutes)` used to raise straight through.
+
+    A 500 is not just noisy here: the mobile queue only drops an item on a 2xx, so a capture
+    that 500s is one the user can never clear except by discarding it.
+    """
+    from django.db import transaction
+    from rest_framework.test import APIRequestFactory
+
+    from movies.models import MovieViewingSession
+    from movies.views import log_minutes
+
+    f = APIRequestFactory()
+    try:
+        with transaction.atomic():
+            antes = MovieViewingSession.objects.count()
+            for basura in ("noventa", "45min", "-30", 0, ""):
+                resp = log_minutes(f.post("/", {"minutes": basura}, format="json"))
+                assert resp.status_code == 400, (
+                    f"{basura!r} devolvio {resp.status_code}, se esperaba 400"
+                )
+            assert MovieViewingSession.objects.count() == antes, "escribio alguna sesion"
+
+            resp = log_minutes(f.post("/", {"minutes": 95}, format="json"))
+            assert resp.status_code == 201, f"un valor bueno dio {resp.status_code}"
+            assert MovieViewingSession.objects.latest("id").minutes_watched == 95
+            print("OK · minutos: basura y negativos dan 400, un numero real sigue dando 201")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+
+
 if __name__ == "__main__":
     # Listed rather than called one by one so the count in the summary cannot drift from
     # the number of checks. Later tasks in this plan keep appending here.
@@ -304,6 +393,9 @@ if __name__ == "__main__":
         test_habit_refuses_a_past_date_and_leaves_the_streak_alone,
         test_habit_today_still_works,
         test_habit_refuses_a_day_it_is_not_scheduled_for,
+        test_finish_book_rejects_an_id_that_does_not_exist,
+        test_finish_book_without_an_id_still_works,
+        test_log_minutes_rejects_garbage_instead_of_crashing,
     ]
     for prueba in PRUEBAS:
         prueba()

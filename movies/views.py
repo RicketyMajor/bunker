@@ -106,6 +106,23 @@ class MovieInboxViewSet(viewsets.ModelViewSet):
     queryset = MovieInbox.objects.all().order_by('-date_scanned')
     serializer_class = MovieInboxSerializer
 
+    def create(self, request, *args, **kwargs):
+        """Sobreescritura del POST para garantizar la idempotencia.
+
+        `barcode` es unique: sin esto un código repetido devuelve el error de campo de DRF y
+        la captura se queda atascada en la cola del Transmisor, que solo borra con un 2xx.
+        `receive_barcode` ya era idempotente por su get_or_create; esta ruta no lo era.
+        """
+        barcode = request.data.get('barcode')
+
+        if barcode and MovieInbox.objects.filter(barcode=barcode).exists():
+            return Response(
+                {"message": f"'{barcode}' ya estaba en el Purgatorio. Ignorando."},
+                status=status.HTTP_200_OK
+            )
+
+        return super().create(request, *args, **kwargs)
+
 
 # --- HELPERS COMERCIALES EXHAUSTIVOS ---
 
@@ -326,7 +343,18 @@ def log_minutes(request):
     except InvalidOccurredOn as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    MovieViewingSession.objects.create(minutes_watched=int(minutes), date=occurred_on)
+    # Same trust boundary as log_pages: this arrives from a numeric keypad over the network,
+    # and int() on anything else raises straight through as a 500 — which the mobile queue
+    # cannot retry out of, because it only drops an item on a 2xx.
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        return Response({"error": "Valor numérico inválido"}, status=status.HTTP_400_BAD_REQUEST)
+    if minutes <= 0:
+        return Response({"error": "Los minutos deben ser mayor a 0."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    MovieViewingSession.objects.create(minutes_watched=minutes, date=occurred_on)
     return Response({"message": f"Anotados {minutes} minutos de visionado."}, status=status.HTTP_201_CREATED)
 
 

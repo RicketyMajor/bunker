@@ -99,6 +99,7 @@
     <button data-verb="habitos">HÁBITOS <span class="n" id="n-habitos"></span></button>
     <button data-verb="escanear">ESCANEAR</button>
     <button data-verb="wishlist">A LA LISTA</button>
+    <button data-verb="minutos" style="grid-column:1/-1">+ MINUTOS DE PELÍCULA</button>
   </div>
 </main>
 
@@ -159,6 +160,71 @@
   <ul id="ft-lista" style="list-style:none;padding:0;margin:12px 0;max-height:34vh;overflow:auto"></ul>
   <button class="act" id="ft-cerrar"
           style="background:none;border:1px solid var(--bg-alt);color:var(--fg)">CANCELAR</button>
+</dialog>
+
+<dialog id="hoja-habitos" aria-labelledby="t-habitos">
+  <h2 id="t-habitos" style="margin:0 0 12px;font-size:19px">Hábitos de hoy</h2>
+  <!-- The warning lives at capture time on purpose. This is the one verb whose deferred
+       capture can be refused, and saying so here is cheaper than surprising you in
+       Despachos tomorrow. -->
+  <p style="color:var(--dim);font-size:14px;margin:0 0 12px">
+    Se marcan el mismo día. Uno capturado sin enlace y transmitido mañana no se aplica.</p>
+  <ul id="hb-lista" style="list-style:none;padding:0;margin:0 0 12px;max-height:44vh;overflow:auto"></ul>
+  <!-- autofocus on CERRAR: the first focusable element would otherwise be the first habit in
+       the list, and showModal() would arm it. There is no single primary action in a list,
+       so focus goes to the one control that cannot write anything. -->
+  <button class="act" id="hb-cerrar" autofocus
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg)">CERRAR</button>
+</dialog>
+
+<dialog id="hoja-escaner" aria-labelledby="t-escaner">
+  <h2 id="t-escaner" style="margin:0 0 12px;font-size:19px">Escanear al Purgatorio</h2>
+  <div class="grid" style="margin-bottom:12px">
+    <button data-scan="libro" class="ssel" aria-pressed="true">LIBRO</button>
+    <button data-scan="peli" class="ssel" aria-pressed="false">PELÍCULA</button>
+    <button data-scan="disco" class="ssel" aria-pressed="false" style="grid-column:1/-1">DISCO</button>
+  </div>
+  <video id="sc-video" playsinline muted aria-label="Vista de la cámara trasera"
+         style="width:100%;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
+  <p id="sc-estado" class="pos" aria-live="polite" style="min-height:24px">Apunta al código de barras.</p>
+  <ul id="sc-lista" style="list-style:none;padding:0;margin:0 0 12px;max-height:20vh;overflow:auto"></ul>
+  <button class="act" id="sc-cerrar"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg)">CERRAR</button>
+</dialog>
+
+<dialog id="hoja-wishlist" aria-labelledby="t-wishlist">
+  <h2 id="t-wishlist" style="margin:0 0 12px;font-size:19px">A la lista</h2>
+  <div class="grid" style="margin-bottom:12px">
+    <button data-wl="libro" class="wsel" aria-pressed="true">LIBRO</button>
+    <button data-wl="peli" class="wsel" aria-pressed="false">PELÍCULA</button>
+    <button data-wl="disco" class="wsel" aria-pressed="false" style="grid-column:1/-1">DISCO</button>
+  </div>
+  <label for="wl-titulo" style="color:var(--dim);font-size:15px">Título</label>
+  <!-- One field. Capture in a shop window has seconds, not a form. -->
+  <input id="wl-titulo" type="text" autocomplete="off" placeholder="lo que viste…"
+         style="width:100%;font:inherit;font-size:19px;padding:14px;margin-top:6px;
+                background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
+  <button class="act" id="wl-guardar" style="margin-top:12px">ANOTAR</button>
+  <button class="act" id="wl-cerrar"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
+</dialog>
+
+<dialog id="hoja-minutos" aria-labelledby="t-minutos">
+  <h2 id="t-minutos" style="margin:0 0 16px;font-size:19px">¿Cuántos minutos viste?</h2>
+  <input id="mn" type="number" inputmode="numeric" min="1" step="1" autocomplete="off"
+         aria-labelledby="t-minutos"
+         style="width:100%;font:inherit;font-size:36px;text-align:center;padding:12px;
+                background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
+  <p id="mn-pista" class="pos" aria-live="polite" style="text-align:center;min-height:24px"></p>
+  <div class="grid" style="margin-bottom:12px">
+    <button data-mn="30" class="msel">30</button>
+    <button data-mn="45" class="msel">45</button>
+    <button data-mn="60" class="msel">60</button>
+    <button data-mn="90" class="msel">90</button>
+  </div>
+  <button class="act" id="mn-guardar">ANOTAR</button>
+  <button class="act" id="mn-cerrar"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
 </dialog>
 
 <div id="toast" role="status"></div>

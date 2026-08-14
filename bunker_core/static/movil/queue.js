@@ -20,6 +20,7 @@ const Cola = (() => {
     terminar_libro: '/api/books/tracker/finish/',
     terminar_peli:  '/api/movies/tracker/finish/',
     terminar_disco: '/api/music/tracker/finish/',
+    minutos:        '/api/movies/tracker/minutes/',
     habito:         '/posada/api/habits/complete/',
     escaneo_libro:  '/api/books/inbox/',
     escaneo_peli:   '/api/movies/inbox/',
@@ -83,7 +84,14 @@ const Cola = (() => {
           let detalle = `HTTP ${resp.status}`;
           try {
             const cuerpo = await resp.json();
-            detalle = cuerpo.message || cuerpo.error || detalle;
+            // Three shapes reach here. The hand-written views answer {message} or {error},
+            // but the ModelViewSets answer DRF's field-error dict —
+            // {"isbn": ["scan inbox with this isbn already exists."]} — which is exactly what
+            // a barcode scanned twice produces. Without the third branch Despachos shows a
+            // bare "HTTP 400" and the reason is only in a network tab the phone has not got.
+            const campo = Object.values(cuerpo || {})
+              .find((v) => Array.isArray(v) && v.length && typeof v[0] === 'string');
+            detalle = cuerpo.message || cuerpo.error || (campo && campo[0]) || detalle;
           } catch (_) { /* the body was not JSON; the status is all we have */ }
           quedan.push({ ...item, error: detalle });
         } catch (e) {

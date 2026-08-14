@@ -115,6 +115,29 @@ const ok201 = async () => ({ ok: true, status: 201, json: async () => ({}) });
     assert(rRed.alcanzoElServidor === false, 'reporto contacto con el servidor sin haberlo tenido');
   });
 
+  // The scanner's most likely failure, and it is not a crash: the same barcode scanned twice
+  // hits a unique constraint, and a ModelViewSet answers DRF's field-error dict rather than
+  // {message}. Reading only message/error leaves "HTTP 400" on screen with no reason.
+  await check('un error de campo de DRF se lee, no queda en "HTTP 400"', async () => {
+    localStorage.removeItem(LLAVE);
+    Cola.encolar('escaneo_libro', { isbn: '9788437604947' });
+    await Cola.vaciar(async () => ({
+      ok: false, status: 400,
+      json: async () => ({ isbn: ['scan inbox with this isbn already exists.'] }),
+    }));
+    assert(Cola.pendientes() === 1, 'borro un rechazo');
+    const e = Cola.items()[0].error;
+    assert(e && e.includes('already exists'), `mostro "${e}" en vez del motivo real`);
+  });
+
+  await check('los once verbos de las hojas resuelven a una ruta', () => {
+    for (const v of ['paginas', 'minutos', 'terminar_libro', 'terminar_peli', 'terminar_disco',
+                     'habito', 'escaneo_libro', 'escaneo_peli', 'escaneo_disco',
+                     'wishlist_libro', 'wishlist_peli', 'wishlist_disco']) {
+      assert(typeof Cola.RUTAS[v] === 'string', `el verbo ${v} no tiene ruta`);
+    }
+  });
+
   await check('descartar borra a mano', () => {
     localStorage.removeItem(LLAVE);
     Cola.encolar('habito', { habit_id: 1 });
