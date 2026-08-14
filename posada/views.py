@@ -4,6 +4,7 @@ from rest_framework import status
 from django.db import transaction
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
+from bunker_core.insights import feedback_habito, feedback_sesion
 import random
 from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills, calculate_sell_value, add_wealth_from_dict, pay_with_change
 from django.utils import timezone
@@ -245,9 +246,21 @@ def complete_session(request):
     if result.get("status") == "error":
         return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
+    # The engine marks every session completed, abandoned or not, and never adjusts
+    # `duration_minutes` — which is the target. Reporting it straight would tell someone who
+    # surrendered at 5 minutes that they did 50, so what was survived is what gets reported.
+    # Non-numeric input falls back to the target: the engine would have raised on it first.
+    sesion = DeepWorkSession.objects.filter(id=session_id).first()
+    minutos_reales = (round(survived_seconds / 60)
+                      if isinstance(survived_seconds, (int, float)) else None)
+
     return Response({
         "status": "success",
         "message": "Expedición finalizada.",
+        # `if sesion else` is not padding: process_session_completion can answer success for
+        # an id that no longer resolves, and feedback_sesion(None) would be a 500 on a path
+        # that had just succeeded.
+        "feedback": feedback_sesion(sesion, minutos_reales) if sesion else "Expedición finalizada.",
         "log": result.get("log", []),
         "engine_details": result
     })
@@ -496,7 +509,11 @@ def complete_habit(request):
             habit.last_completed_date = today
             guild.save()
             habit.save()
-            return Response({"status": "error", "message": f"¡Recaída en '{habit.name}'! Perdiste {prestige_penalty} Prestigio."})
+            return Response({
+                "status": "error",
+                "message": f"¡Recaída en '{habit.name}'! Perdiste {prestige_penalty} Prestigio.",
+                "feedback": feedback_habito(habit, es_recaida=True),
+            })
 
         else:
             # LÓGICA DE BUEN HÁBITO
@@ -562,7 +579,11 @@ def complete_habit(request):
                         color = ItemRarity.get_color(drop.rarity)
                         drop_msg = f"\n¡El Tablón Patrocinado te envió \\[[{color}]{drop.name}[/]\\] al cofre!"
 
-            return Response({"status": "success", "message": f"¡'{habit.name}' completado! +{r['prestige']} Prestigio.{lvl_msg}{drop_msg}"})
+            return Response({
+                "status": "success",
+                "message": f"¡'{habit.name}' completado! +{r['prestige']} Prestigio.{lvl_msg}{drop_msg}",
+                "feedback": feedback_habito(habit, es_recaida=False),
+            })
 
     except DailyHabit.DoesNotExist:
         return Response({"status": "error", "message": "Hábito no encontrado."})

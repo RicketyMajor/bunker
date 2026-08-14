@@ -438,6 +438,83 @@ def test_the_five_capture_verbs_answer_with_a_fact():
         pass
 
 
+def test_the_two_posada_verbs_answer_with_a_fact():
+    """Posada's two capture verbs, including the one that reports a failure.
+
+    A relapse returns `status: error` and is still a capture — the habit was recorded, the
+    streak was reset, the prestige was charged — so it earns a feedback like any other. The
+    refusals do not: a 409 answers something that did not happen.
+
+    The surrender case is the one worth pinning. `process_session_completion` marks every
+    session `completed` even when abandoned (engine/legacy.py:765) and never adjusts
+    `duration_minutes`, which is the TARGET duration. A feedback reading it straight would
+    tell someone who quit after 5 minutes that they did 50.
+    """
+    from django.db import transaction
+    from rest_framework.test import APIRequestFactory
+
+    from posada.models import DailyHabit, DeepWorkSession, GuildProfile
+    from posada.views import complete_habit, complete_session
+
+    hoy_toca = str(HOY.weekday())
+    f = APIRequestFactory()
+    try:
+        with transaction.atomic():
+            guild, _ = GuildProfile.objects.get_or_create(id=1)
+            prestigio_antes = guild.prestige
+
+            # --- Buen hábito: captura, feedback con la racha nueva ---
+            bueno = DailyHabit.objects.create(name="Habito bueno de prueba", difficulty="C",
+                                              valid_days=hoy_toca, current_streak=6)
+            resp = complete_habit(f.post("/", {"habit_id": bueno.id}, format="json"))
+            assert resp.status_code == 200, f"buen habito: {resp.status_code}"
+            assert resp.data.get("message"), "buen habito: se perdio message"
+            fb = resp.data.get("feedback")
+            assert isinstance(fb, str) and fb.strip(), f"buen habito: feedback {fb!r}"
+            assert "7" in fb, f"no nombra la racha ya incrementada: {fb!r}"
+
+            # --- Recaída: status error, y aun asi es una captura ---
+            malo = DailyHabit.objects.create(name="Mal habito de prueba", difficulty="C",
+                                             valid_days=hoy_toca, is_bad_habit=True,
+                                             current_streak=9)
+            resp = complete_habit(f.post("/", {"habit_id": malo.id}, format="json"))
+            assert resp.data.get("status") == "error", "la recaida cambio de status"
+            fb = resp.data.get("feedback")
+            assert isinstance(fb, str) and fb.strip(), f"recaida: feedback {fb!r}"
+            assert "días seguidos" not in fb, f"la recaida felicita por una racha: {fb!r}"
+
+            # --- Un rechazo NO lleva feedback: no hubo captura que comentar ---
+            resp = complete_habit(f.post("/", {"habit_id": bueno.id}, format="json"))
+            assert resp.data.get("status") == "warning", "el segundo intento no fue rechazado"
+            assert "feedback" not in resp.data, \
+                "un rechazo trae feedback: responde por algo que no ocurrio"
+
+            # --- Sesión abandonada: el hecho es lo sobrevivido, no lo planeado ---
+            sesion = DeepWorkSession.objects.create(duration_minutes=50,
+                                                    category="Programacion de prueba")
+            resp = complete_session(f.post(
+                "/", {"session_id": sesion.id, "survived_seconds": 300, "surrendered": True},
+                format="json"))
+            assert resp.status_code == 200, f"complete_session: {resp.status_code}"
+            assert resp.data.get("message"), "complete_session: se perdio message"
+            fb = resp.data.get("feedback")
+            assert isinstance(fb, str) and fb.strip(), f"sesion: feedback {fb!r}"
+            assert not fb.startswith("50"), \
+                f"reporta los 50 min planeados de una sesion abandonada a los 5: {fb!r}"
+            assert "5 min" in fb, f"no reporta los minutos sobrevividos: {fb!r}"
+
+            print("OK · habito y sesion devuelven un hecho; el rechazo no, y el abandono no miente")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+    finally:
+        # The rollback covers the writes, but this check runs the reward engine against the
+        # live guild row. Two test habits moved prestige 102 -> 57 once already.
+        from posada.models import GuildProfile as _GP
+        assert _GP.objects.get(id=1).prestige == prestigio_antes, \
+            "el prestigio del gremio no volvio a su valor: revisalo a mano"
+
+
 if __name__ == "__main__":
     # Listed rather than called one by one so the count in the summary cannot drift from
     # the number of checks. Later tasks in this plan keep appending here.
@@ -457,6 +534,7 @@ if __name__ == "__main__":
         test_finish_book_without_an_id_still_works,
         test_log_minutes_rejects_garbage_instead_of_crashing,
         test_the_five_capture_verbs_answer_with_a_fact,
+        test_the_two_posada_verbs_answer_with_a_fact,
     ]
     for prueba in PRUEBAS:
         prueba()

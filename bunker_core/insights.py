@@ -86,8 +86,18 @@ def feedback_habito(habit, es_recaida):
     return f"«{habit.name}»: {habit.current_streak} días seguidos."
 
 
-def feedback_sesion(session):
-    """Una sesión de Deep Work cerrada. El hecho es el acumulado de esa categoría este mes."""
+def feedback_sesion(session, minutos_reales=None):
+    """Una sesión de Deep Work cerrada. El hecho es el acumulado de esa categoría este mes.
+
+    `duration_minutes` is the session's TARGET, and `process_session_completion` marks a
+    session completed even when it was abandoned (engine/legacy.py:765) without ever
+    adjusting it. So a caller that knows what was actually survived passes it in
+    `minutos_reales`; otherwise the target is the honest figure, because the session ran.
+
+    ponytail: the monthly total can only ever sum targets — no field records survived time,
+    so an abandoned session still counts as its full length in the accumulated figure. The
+    upgrade is a `survived_minutes` column on DeepWorkSession, not arithmetic here.
+    """
     from posada.models import DeepWorkSession
     hoy = date.today()
     # ponytail: sin índice en (category, start_time). A 53 filas es invisible; si Deep Work
@@ -98,4 +108,5 @@ def feedback_sesion(session):
                  .aggregate(t=Sum('duration_minutes'))['t'] or 0)
     horas, resto = divmod(total_mes, 60)
     acumulado = f"{horas} h {resto} min" if horas else f"{resto} min"
-    return f"{session.duration_minutes} min de {session.category}. {acumulado} este mes."
+    minutos = session.duration_minutes if minutos_reales is None else minutos_reales
+    return f"{minutos} min de {session.category}. {acumulado} este mes."

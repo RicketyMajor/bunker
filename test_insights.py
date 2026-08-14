@@ -114,6 +114,13 @@ def run_tests():
         check(isinstance(t, str) and t.strip(), "sesión devuelve texto")
         check("50" in t or "Programación" in t, "sesión nombra minutos o categoría")
 
+        # Rendirse marca la sesión como `completed` igual (legacy.py:765) y nadie ajusta
+        # `duration_minutes`, que es la duración OBJETIVO. Sin esto, abandonar a los 5
+        # minutos de una sesión de 50 responde "50 min": el feedback inventando.
+        t_rendida = feedback_sesion(sesion, minutos_reales=5)
+        check("5 min de" in t_rendida, "una sesión abandonada reporta lo sobrevivido")
+        check(not t_rendida.startswith("50"), "no reporta la duración objetivo como cumplida")
+
         transaction.set_rollback(True)
 
     print(f"\ntest_insights: {_checks}/{_checks}")
