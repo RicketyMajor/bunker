@@ -8,7 +8,7 @@ from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
 from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
-from .modals import AddMovieMenuModal, MovieScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
+from .modals import AddMovieMenuModal, ScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
 from .tabs import MovieWishlistTab
 
 
@@ -440,7 +440,7 @@ class MovieMainScreen(Screen):
 
         def handle_menu_choice(choice: str) -> None:
             if choice == "scan":
-                self.app.push_screen(MovieScannerModal())
+                self.app.push_screen(ScannerModal("peli"))
             elif choice == "name":
                 def handle_title(title: str | None) -> None:
                     if title:

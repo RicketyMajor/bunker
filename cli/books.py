@@ -253,7 +253,7 @@ def add_book_wizard():
 
                 match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", line)
                 if match:
-                    url = match.group(1) + "/scanner/"
+                    url = match.group(1) + "/movil/"
                     break
 
             if not url:
@@ -283,6 +283,11 @@ def add_book_wizard():
         qr.print_tty()
 
         console.print("\n[dim]El servidor ya está escuchando...[/dim]")
+        # Ver la nota en cli/main.py: la cola del Transmisor es por origen y el túnel
+        # estrena subdominio cada sesión. Cerrar con pendientes los pierde en silencio.
+        console.print(
+            "[dim]Antes de cerrar: el chip del móvil debe marcar 0 pendientes. "
+            "El túnel cambia de dirección cada sesión y lo que quede en cola se pierde.[/dim]")
         Prompt.ask(
             "[bold yellow]Presiona ENTER cuando termines de escanear para cerrar la conexión y destruir el túnel[/bold yellow]")
 

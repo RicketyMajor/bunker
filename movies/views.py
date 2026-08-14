@@ -10,7 +10,6 @@ from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
-from django.shortcuts import render
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -272,10 +271,6 @@ def process_barcode(request):
 
     return Response({"message": f"'{movie_data['title']}' extraída y archivada con éxito."}, status=status.HTTP_201_CREATED)
 
-
-def movie_scanner_view(request):
-    """Renderiza el escáner QR aislado exclusivamente para películas."""
-    return render(request, 'movies/movie_scanner.html')
 
 # ================= TRACKER Y HÁBITOS (VIDEOCLUB) =================
 

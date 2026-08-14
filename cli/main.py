@@ -28,6 +28,7 @@ from cli.wishlist import wishlist_app
 from cli.tracker import tracker_app
 from cli.directories import dir_app
 from cli.tui.app import BunkerApp
+from cli.doctor import doctor
 from cli.config import BASE_URL, API_PORT
 
 console = Console()
@@ -39,6 +40,7 @@ app.add_typer(loan_app, name="loan")
 app.add_typer(wishlist_app, name="wishlist")
 app.add_typer(tracker_app, name="tracker")
 app.add_typer(dir_app, name="dir")
+app.command("doctor")(doctor)
 
 # Esta variable recordará si ya revisó la red
 _infrastructure_checked = False
@@ -241,7 +243,7 @@ def show_scanner_qr():
 
             match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", line)
             if match:
-                url = match.group(1) + "/scanner/"
+                url = match.group(1) + "/movil/"
                 break
 
         if not url:
@@ -270,6 +272,11 @@ def show_scanner_qr():
     qr.print_tty()
 
     console.print("\n[dim]El servidor ya está escuchando...[/dim]")
+    # El túnel estrena subdominio cada vez, y la cola del Transmisor vive en el
+    # localStorage de ese origen: lo que quede pendiente al cerrar no se recupera nunca.
+    console.print(
+        "[dim]Antes de cerrar: el chip del móvil debe marcar 0 pendientes. "
+        "El túnel cambia de dirección cada sesión y lo que quede en cola se pierde.[/dim]")
     Prompt.ask(
         "[bold yellow]Presiona ENTER cuando termines de escanear para cerrar la conexión[/bold yellow]")
 

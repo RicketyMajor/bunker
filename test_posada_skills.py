@@ -132,6 +132,7 @@ def run_tests():
             print(f"- {err}")
     else:
         print(f"All {len(skills)} skills tested successfully with 0 exceptions and strict constraints met.")
+    return len(errors)
 
 def simulate_combat_balance():
     print("\n--- Phase 2: Combat Balance Simulation ---")
@@ -208,5 +209,9 @@ def simulate_combat_balance():
         print(f"Class {cls:3}: Dealt {total_dmg:4} Dmg | Healed {total_heal:4} HP in 50 simulated turns.")
 
 if __name__ == '__main__':
-    run_tests()
+    # The exit code is the whole point of running this from `bunker doctor`: without it the
+    # script printed its errors and still exited 0, so the runner reported a green check
+    # against a broken module and swallowed the error list with it.
+    fallos = run_tests()
     simulate_combat_balance()
+    raise SystemExit(1 if fallos else 0)

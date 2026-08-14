@@ -286,7 +286,11 @@ const App = (() => {
       return;
     }
     scVistos.clear();
-    scTipo = 'libro';
+    // The TUI opens this from Biblioteca, Videoclub or Disquera and says which one in the
+    // URL. Without it every entry point defaults to LIBRO, and a CD scanned from Disquera
+    // goes to the book Purgatorio where its barcode can never resolve.
+    const pedido = new URLSearchParams(location.search).get('scan');
+    scTipo = SC[pedido] ? pedido : 'libro';
     marcarSel('.ssel', 'scan', scTipo);
     $('#sc-lista').innerHTML = '';
     $('#sc-estado').textContent = 'Apunta al código de barras.';

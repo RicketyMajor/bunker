@@ -21,7 +21,6 @@ router.register(r'inbox', views.ScanInboxViewSet, basename='inbox')
 urlpatterns = [
     # endpoints
     path('scan/', views.scan_book, name='scan-book'),
-    path('scanner/', views.scanner_view, name='scanner-ui'),
     path('watchers/', views.get_active_watchers, name='watchers-list'),
     path('wishlist/add/', views.add_wishlist_item, name='wishlist-add'),
     path('tracker/pages/', log_pages, name='log-pages'),

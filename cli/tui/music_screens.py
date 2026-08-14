@@ -14,7 +14,7 @@ from .constants import (
     API_MUSIC_WATCHERS, API_MUSIC_WISHLIST, API_MUSIC_TRACKER_LOG
 )
 from .modals import (
-    AddMusicMenuModal, MusicScannerModal, MusicTitleModal, MusicFullEditModal,
+    AddMusicMenuModal, ScannerModal, MusicTitleModal, MusicFullEditModal,
     FinishMusicModal, LendModal, ConfirmModal, DirModal, MoveToDirModal,
     DeleteDirModal, SyncConsoleModal, WatcherModal, WatchersListModal,
     LogMinutesModal
@@ -377,7 +377,7 @@ class MusicMainScreen(Screen):
 
         def handle_menu_choice(choice: str) -> None:
             if choice == "scan":
-                self.app.push_screen(MusicScannerModal())
+                self.app.push_screen(ScannerModal("disco"))
             elif choice == "name":
                 def handle_title(title: str | None) -> None:
                     if title:

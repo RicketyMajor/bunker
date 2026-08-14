@@ -4,7 +4,6 @@ from rest_framework import status
 from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from django.db import transaction
-from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework import viewsets
@@ -92,22 +91,6 @@ def scan_book(request):
             "author": book.author.name
         }
     }, status=status.HTTP_201_CREATED)
-
-
-def scanner_view(request):
-    """Renderiza el escáner QR. Acepta ?mode=book o ?mode=movie para decidir el destino."""
-    mode = request.GET.get('mode', 'book')
-
-    # Define la ruta de la API según el dominio
-    if mode == 'movie':
-        target_url = '/api/movies/receive-barcode/'
-    else:
-        target_url = '/api/books/inbox/'
-
-    return render(request, 'catalog/scanner.html', {
-        'target_url': target_url,
-        'mode': mode
-    })
 
 
 @api_view(['GET'])

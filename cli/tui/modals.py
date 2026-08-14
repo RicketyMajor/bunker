@@ -358,9 +358,18 @@ class ManualAddModal(ModalScreen[dict]):
             self.dismiss(None)
 
 
-class BaseScannerModal(ModalScreen[None]):
-    """Modal ciberpunk base que levanta un túnel SSH y dibuja el QR en ASCII."""
-    endpoint_suffix = ""
+class ScannerModal(ModalScreen[None]):
+    """Modal ciberpunk que levanta un túnel SSH y dibuja el QR del Transmisor en ASCII.
+
+    Sirve al teléfono que no está en la tailnet: el túnel expone el mismo `/movil/` que
+    la tailnet sirve. Un único modal para las tres colecciones, pero `tipo` viaja en la
+    URL: sin él la hoja abre siempre en LIBRO y un disco escaneado desde la Disquera
+    termina en el Purgatorio de libros.
+    """
+
+    def __init__(self, tipo: str = "libro") -> None:
+        super().__init__()
+        self.tipo = tipo
 
     def compose(self) -> ComposeResult:
         with Vertical(id="scanner_dialog"):
@@ -397,7 +406,7 @@ class BaseScannerModal(ModalScreen[None]):
             # Intercepta la URL segura
             match = re.search(r"(https://[a-zA-Z0-9-]+\.lhr\.life)", text_line)
             if match:
-                url = match.group(1) + self.endpoint_suffix
+                url = f"{match.group(1)}/movil/?scan={self.tipo}"
                 title.update(f"Escanea el QR o visita:\n{url}")
                 self.render_qr(url, log)
                 break  # Deja de leer la terminal para no saturar la pantalla
@@ -417,6 +426,10 @@ class BaseScannerModal(ModalScreen[None]):
         log.write(f.getvalue())
         log.write(
             "\n[El servidor ya está escuchando. Escanea y presiona el botón abajo para terminar]")
+        # La cola del Transmisor vive en el localStorage de este origen efímero.
+        log.write(
+            "\n[Cierra solo con 0 pendientes en el chip: el túnel estrena dirección cada"
+            " sesión y lo que quede en cola no vuelve]")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(None)
@@ -428,18 +441,6 @@ class BaseScannerModal(ModalScreen[None]):
                 self.tunnel_process.terminate()
             except Exception:
                 pass
-
-
-class ScannerModal(BaseScannerModal):
-    endpoint_suffix = "/scanner/"
-
-
-class MovieScannerModal(BaseScannerModal):
-    endpoint_suffix = "/api/movies/scanner-web/"
-
-
-class MusicScannerModal(BaseScannerModal):
-    endpoint_suffix = "/api/music/scanner-web/"
 
 
 class FinishBookModal(ModalScreen[dict]):
