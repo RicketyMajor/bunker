@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
+from bunker_core.insights import feedback_paginas, feedback_terminado
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
@@ -249,7 +250,10 @@ def log_pages(request):
         book=book,
         current_page=current_page,
     )
-    return Response({"message": f"{pages} páginas registradas."}, status=201)
+    return Response({
+        "message": f"{pages} páginas registradas.",
+        "feedback": feedback_paginas(pages, occurred_on, book=book, current_page=current_page),
+    }, status=201)
 
 
 @api_view(['POST'])
@@ -296,7 +300,10 @@ def finish_book(request):
             except Book.DoesNotExist:
                 pass
 
-    return Response({"message": f"¡Felicidades! '{title}' añadido al registro anual."}, status=201)
+    return Response({
+        "message": f"¡Felicidades! '{title}' añadido al registro anual.",
+        "feedback": feedback_terminado('libros', title, occurred_on),
+    }, status=201)
 
 
 @api_view(['GET'])

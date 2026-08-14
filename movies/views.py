@@ -7,6 +7,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieViewingSession, MovieAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
+from bunker_core.insights import feedback_minutos, feedback_terminado
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -350,7 +351,10 @@ def log_minutes(request):
                         status=status.HTTP_400_BAD_REQUEST)
 
     MovieViewingSession.objects.create(minutes_watched=minutes, date=occurred_on)
-    return Response({"message": f"Anotados {minutes} minutos de visionado."}, status=status.HTTP_201_CREATED)
+    return Response({
+        "message": f"Anotados {minutes} minutos de visionado.",
+        "feedback": feedback_minutos(minutes, occurred_on),
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -388,7 +392,10 @@ def finish_movie(request):
             movie.is_watched = True
             movie.save(update_fields=['is_watched'])
 
-    return Response({"message": "Película añadida al historial anual."}, status=status.HTTP_201_CREATED)
+    return Response({
+        "message": "Película añadida al historial anual.",
+        "feedback": feedback_terminado('peliculas', title, occurred_on),
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['DELETE'])

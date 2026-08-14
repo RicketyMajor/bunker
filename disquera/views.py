@@ -5,6 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
+from bunker_core.insights import feedback_terminado
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
@@ -236,7 +237,10 @@ def finish_album(request):
             album.is_listened = True
             album.save(update_fields=['is_listened'])
 
-    return Response({"message": f"'{title}' registrado como escuchado."}, status=status.HTTP_201_CREATED)
+    return Response({
+        "message": f"'{title}' registrado como escuchado.",
+        "feedback": feedback_terminado('discos', title, occurred_on),
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['DELETE'])

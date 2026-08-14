@@ -378,6 +378,66 @@ def test_log_minutes_rejects_garbage_instead_of_crashing():
         pass
 
 
+def test_the_five_capture_verbs_answer_with_a_fact():
+    """Every logging endpoint returns a fact alongside the acknowledgement.
+
+    Two things are pinned here, and the second is the one that breaks quietly. First, that
+    `feedback` exists and is non-empty on all five verbs. Second, that `message` survived
+    verbatim: the TUI, the phone's offline queue and three other checks in this project all
+    read `message`, so this change is additive or it is a regression.
+
+    `feedback != message` is what separates a real wiring from a constant string. An endpoint
+    answering `"feedback": "Registrado."` would pass a non-empty check and still deliver
+    nothing — which is the exact complaint this whole feature answers.
+    """
+    from django.db import transaction
+    from rest_framework.test import APIRequestFactory
+
+    from catalog.models import Author, Book
+    from catalog.views import finish_book, log_pages
+    from disquera.views import finish_album
+    from movies.views import finish_movie, log_minutes
+
+    f = APIRequestFactory()
+    try:
+        with transaction.atomic():
+            autor, _ = Author.objects.get_or_create(name="Autor de prueba")
+            libro = Book.objects.create(title="Libro con paginas", author=autor,
+                                        isbn="0000000000005", page_count=300)
+
+            # (vista, payload, etiqueta). log_pages appears twice on purpose: its two
+            # branches bind `book` and `current_page` differently, and a wiring that names
+            # the wrong variable only fails in one of them.
+            casos = [
+                (log_pages, {"pages": 10}, "log_pages suelto"),
+                (log_pages, {"book_id": libro.id, "current_page": 120}, "log_pages con libro"),
+                (finish_book, {"title": "Libro terminado de prueba"}, "finish_book"),
+                (finish_movie, {"title": "Pelicula terminada de prueba"}, "finish_movie"),
+                (log_minutes, {"minutes": 95}, "log_minutes"),
+                (finish_album, {"title": "Album terminado de prueba"}, "finish_album"),
+            ]
+
+            for vista, payload, etiqueta in casos:
+                resp = vista(f.post("/", payload, format="json"))
+                assert resp.status_code == 201, f"{etiqueta}: {resp.status_code}"
+
+                feedback = resp.data.get("feedback")
+                assert isinstance(feedback, str) and feedback.strip(), \
+                    f"{etiqueta}: feedback vacio o ausente ({feedback!r})"
+
+                mensaje = resp.data.get("message")
+                assert isinstance(mensaje, str) and mensaje.strip(), \
+                    f"{etiqueta}: se perdio la clave message, que leen la TUI y la cola"
+
+                assert feedback != mensaje, \
+                    f"{etiqueta}: el feedback es el acuse repetido, no un hecho"
+
+            print("OK · los 5 verbos devuelven un hecho y conservan su message")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+
+
 if __name__ == "__main__":
     # Listed rather than called one by one so the count in the summary cannot drift from
     # the number of checks. Later tasks in this plan keep appending here.
@@ -396,6 +456,7 @@ if __name__ == "__main__":
         test_finish_book_rejects_an_id_that_does_not_exist,
         test_finish_book_without_an_id_still_works,
         test_log_minutes_rejects_garbage_instead_of_crashing,
+        test_the_five_capture_verbs_answer_with_a_fact,
     ]
     for prueba in PRUEBAS:
         prueba()
