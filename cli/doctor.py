@@ -1,8 +1,11 @@
 """One command that answers "is anything broken?".
 
-The project has six assert-based scripts and no runner, so a human needs six commands and a
-mental note of which ones live inside the container. This is that runner, plus the two
+The project has eight assert-based scripts and no runner, so a human needs eight commands and
+a mental note of which ones live inside the container. This is that runner, plus the two
 reachability checks the Transmisor made necessary.
+
+Keep the count above in step with CHECKS_IN_CONTAINER: it is the reason this module exists,
+and a stale number is the first sign nobody registered a new check here.
 """
 import subprocess
 import sys

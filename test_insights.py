@@ -1,12 +1,18 @@
-"""Verificación de los textos de feedback. Corre dentro del contenedor:
+"""Check for the feedback strings. Runs inside the container:
 
     docker compose exec -T web python test_insights.py
 
-Todo ocurre dentro de una transacción con rollback forzado, así que no toca datos reales.
+Everything happens inside a transaction with a forced rollback, so it touches no real data.
 
-Lo que se comprueba no es la redacción, es la regla: un feedback nunca inventa. Con datos
-insuficientes tiene que caer en la confirmación simple, y nunca puede devolver vacío — un
-hueco en la interfaz es peor que una frase sosa, porque parece que el registro no llegó.
+What is checked is not the wording, it is the rule: a feedback never invents. With
+insufficient data it has to fall back to the plain confirmation, and it can never return
+empty — a hole in the interface is worse than a dull sentence, because it reads as if the
+capture never arrived.
+
+Counts are asserted against years and months that hold no live rows (the year 2000, June
+2001). Aggregating the current period would mean asserting against whatever the database
+happens to hold, which is how a check ends up passing against a function that returns
+nothing.
 """
 
 import os
@@ -18,14 +24,22 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bunker_core.settings')
 django.setup()
 
 from django.db import transaction  # noqa: E402
+from django.utils import timezone  # noqa: E402
 
 from bunker_core.insights import (  # noqa: E402
     feedback_habito, feedback_minutos, feedback_paginas, feedback_sesion, feedback_terminado,
 )
-from catalog.models import Author, Book, ReadingSession  # noqa: E402
+from catalog.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
+from disquera.models import MusicAnnualRecord  # noqa: E402
+from movies.models import MovieAnnualRecord, MovieViewingSession  # noqa: E402
 from posada.models import DailyHabit, DeepWorkSession  # noqa: E402
 
 _checks = 0
+
+# A year and a month with no live rows, so a count can be asserted exactly. They are also
+# not the current period, which is what the "ese mes" / "ese año" wording is for.
+ANNO_VACIO = date(2000, 6, 15)
+MES_VACIO = date(2001, 6, 15)
 
 
 def check(condicion, etiqueta):
@@ -36,7 +50,7 @@ def check(condicion, etiqueta):
 
 
 def run_tests():
-    hoy = date.today()
+    hoy = timezone.localdate()
 
     with transaction.atomic():
         autor, _ = Author.objects.get_or_create(name="Autor de prueba")
@@ -48,19 +62,20 @@ def run_tests():
         texto = feedback_paginas(40, hoy, book=libro, current_page=40)
         check(isinstance(texto, str) and texto.strip(), "paginas devuelve texto no vacío")
         check("40" in texto, "paginas nombra las páginas leídas")
+        check("este mes" in texto, "una captura de hoy habla de este mes")
 
-        # Cerca del final el hecho interesante es lo que queda, no el acumulado del mes.
+        # Near the end the interesting fact is what is left, not the month's total.
         texto_final = feedback_paginas(10, hoy, book=libro, current_page=280)
         check("20" in texto_final, "a 20 páginas del final, el feedback lo dice")
         check("Libro de prueba" in texto_final, "nombra el libro cuando habla de él")
 
-        # Sin libro no hay nada que inventar: confirmación simple, pero nunca vacía.
+        # With no book there is nothing to invent: plain confirmation, never empty.
         texto_suelto = feedback_paginas(15, hoy)
         check(isinstance(texto_suelto, str) and texto_suelto.strip(),
               "paginas sin libro sigue devolviendo texto")
         check("página" in texto_suelto.lower(), "paginas sin libro confirma lo registrado")
 
-        # Un libro sin page_count no puede afirmar cuánto falta, y no debe intentarlo.
+        # A book with no page_count cannot claim how much is left, and must not try.
         sin_paginas = Book.objects.create(title="Sin longitud", author=autor,
                                           isbn="0000000000009")
         texto_sin = feedback_paginas(12, hoy, book=sin_paginas, current_page=12)
@@ -69,13 +84,40 @@ def run_tests():
         check("quedan" not in texto_sin.lower(),
               "sin page_count no se inventa cuántas páginas faltan")
 
-        # --- feedback_terminado ---
-        for modulo in ("libros", "peliculas", "discos"):
-            t = feedback_terminado(modulo, "Título de prueba", hoy)
-            check(isinstance(t, str) and t.strip(), f"terminado({modulo}) devuelve texto")
-            check("Título de prueba" in t, f"terminado({modulo}) nombra el título")
+        # A backdated capture aggregates ITS month, so it must not call it "este mes".
+        # The mobile queue backdates by up to 30 days, so this crosses a month boundary
+        # once a month, and the number reported is real — about a period nobody asked about.
+        ReadingSession.objects.create(date=MES_VACIO, pages_read=70)
+        texto_viejo = feedback_paginas(70, MES_VACIO)
+        check("70" in texto_viejo, "una captura atrasada suma su propio mes")
+        check("ese mes" in texto_viejo,
+              "un mes que no es el actual no se anuncia como 'este mes'")
 
-        # Un módulo desconocido confirma, no explota: esto lo llama un endpoint.
+        # --- feedback_terminado ---
+        # The year 2000 holds nothing, so both branches can be asserted by count. The
+        # singular/plural table is the trap audit 3.1 named: one wire name, three models.
+        casos = [
+            ('libros', AnnualRecord, {"title": "Primero", "date_finished": ANNO_VACIO},
+             "primer libro", "libros"),
+            ('peliculas', MovieAnnualRecord, {"title": "Primera", "date_watched": ANNO_VACIO},
+             "primera película", "películas"),
+            ('discos', MusicAnnualRecord, {"title": "Primero", "date_listened": ANNO_VACIO},
+             "primer disco", "discos"),
+        ]
+        for modulo, modelo, campos, esperado_uno, plural in casos:
+            modelo.objects.create(**campos)
+            t = feedback_terminado(modulo, "Título de prueba", ANNO_VACIO)
+            check(esperado_uno in t, f"terminado({modulo}) anuncia el primero en singular")
+            check("ese año" in t, f"terminado({modulo}) no llama 'este año' a otro año")
+
+            modelo.objects.create(**{**campos, "title": "Segundo"})
+            t2 = feedback_terminado(modulo, "Título de prueba", ANNO_VACIO)
+            check(f"Van 2 {plural}" in t2, f"terminado({modulo}) cuenta y pluraliza")
+
+        t_hoy = feedback_terminado('libros', "De hoy", hoy)
+        check("este año" in t_hoy, "un terminado de hoy sí habla de este año")
+
+        # An unknown module confirms, it does not blow up: an endpoint calls this.
         t_raro = feedback_terminado("comics", "Algo", hoy)
         check(isinstance(t_raro, str) and "Algo" in t_raro,
               "un módulo desconocido cae en la confirmación simple")
@@ -84,6 +126,19 @@ def run_tests():
         t = feedback_minutos(110, hoy)
         check(isinstance(t, str) and t.strip(), "minutos devuelve texto")
         check("110" in t, "minutos nombra los minutos registrados")
+
+        # Exactly two hours, in an empty month: the formatter's whole-hour branch. The two
+        # formatters that existed disagreed here — one said "2 h", the other "2 h 0 min".
+        MovieViewingSession.objects.create(minutes_watched=120, date=MES_VACIO)
+        t_dos_horas = feedback_minutos(120, MES_VACIO)
+        check("2 h de cine" in t_dos_horas, "120 minutos se dicen '2 h'")
+        # Targets the accumulated figure, not the string: the leading "120 min" contains
+        # "0 min" as a substring, so a blanket check here fails against correct code.
+        check("2 h 0 min" not in t_dos_horas, "una hora exacta no arrastra '0 min'")
+
+        MovieViewingSession.objects.create(minutes_watched=30, date=MES_VACIO)
+        t_mixto = feedback_minutos(30, MES_VACIO)
+        check("2 h 30 min" in t_mixto, "150 minutos se dicen '2 h 30 min'")
 
         # --- feedback_habito ---
         habito = DailyHabit.objects.create(name="Hábito de prueba", difficulty='C',
@@ -95,12 +150,12 @@ def run_tests():
                                          is_bad_habit=True, current_streak=0)
         t_malo = feedback_habito(malo, es_recaida=True)
         check(isinstance(t_malo, str) and t_malo.strip(), "recaída devuelve texto")
-        # La regla no es "no digas la palabra racha", es "no felicites": el texto de recaída
-        # menciona la racha justamente para decir que se rompió.
+        # The rule is not "never say the word streak" — the relapse text mentions it exactly
+        # to say that it broke. The rule is "do not congratulate".
         check("días seguidos" not in t_malo,
               "una recaída no felicita por una racha")
 
-        # Racha de 1: un punto de dato no es una tendencia.
+        # A streak of 1: one data point is not a trend.
         nuevo = DailyHabit.objects.create(name="Primer día", difficulty='B', current_streak=1)
         t_nuevo = feedback_habito(nuevo, es_recaida=False)
         check(isinstance(t_nuevo, str) and t_nuevo.strip(), "racha de 1 devuelve texto")
@@ -108,15 +163,21 @@ def run_tests():
               "el primer día no se anuncia como una racha de días")
 
         # --- feedback_sesion ---
-        sesion = DeepWorkSession.objects.create(duration_minutes=50, category="Programación",
-                                                completed=True)
+        # A category of its own, so the monthly total is exactly what this check wrote.
+        sesion = DeepWorkSession.objects.create(duration_minutes=50,
+                                                category="Categoria de prueba", completed=True)
         t = feedback_sesion(sesion)
         check(isinstance(t, str) and t.strip(), "sesión devuelve texto")
-        check("50" in t or "Programación" in t, "sesión nombra minutos o categoría")
+        # `and`, not `or`: the category is in the string by construction, so an `or` here
+        # short-circuits every failure and the check can never go red. That is what let the
+        # target-vs-survived bug through.
+        check("50 min" in t and "Categoria de prueba" in t,
+              "sesión nombra los minutos Y la categoría")
+        check("este mes" in t, "una sesión de hoy habla de este mes")
 
-        # Rendirse marca la sesión como `completed` igual (legacy.py:765) y nadie ajusta
-        # `duration_minutes`, que es la duración OBJETIVO. Sin esto, abandonar a los 5
-        # minutos de una sesión de 50 responde "50 min": el feedback inventando.
+        # Surrendering marks the session `completed` all the same (legacy.py:765) and nobody
+        # adjusts `duration_minutes`, which is the TARGET duration. Without this, abandoning
+        # a 50-minute session after 5 answers "50 min": the feedback inventing.
         t_rendida = feedback_sesion(sesion, minutos_reales=5)
         check("5 min de" in t_rendida, "una sesión abandonada reporta lo sobrevivido")
         check(not t_rendida.startswith("50"), "no reporta la duración objetivo como cumplida")

@@ -13,16 +13,46 @@ package that owns `settings.py`, so importing app models at its top level makes 
 unimportable before the app registry is ready. These run once per capture, never in a loop,
 so the deferred import costs nothing worth measuring.
 """
-from datetime import date
-
 from django.db.models import Sum
+from django.utils import timezone
+
+
+def _horas_min(total):
+    """Minutes as "2 h", "1 h 30 min" or "45 min".
+
+    One formatter rather than one per caller: the two that existed disagreed on whole hours
+    (`2 h` against `2 h 0 min`), so the same quantity read two ways in the same TUI.
+    """
+    horas, resto = divmod(total, 60)
+    if not horas:
+        return f"{resto} min"
+    if not resto:
+        return f"{horas} h"
+    return f"{horas} h {resto} min"
+
+
+def _periodo(dia, unidad):
+    """"este mes" when the capture belongs to the current period, "ese mes" when it does not.
+
+    Captures are backdated by up to MAX_BACKDATE_DAYS, so a queue that drains on the 2nd
+    files pages under the previous month and aggregates that month's total. Calling it
+    "este mes" would report a real number about a period nobody asked about — the same class
+    of invention as a milestone that did not happen.
+    """
+    hoy = timezone.localdate()
+    if unidad == "año":
+        mismo = dia.year == hoy.year
+    else:
+        mismo = (dia.year, dia.month) == (hoy.year, hoy.month)
+    return f"{'este' if mismo else 'ese'} {unidad}"
 
 
 def feedback_paginas(pages_read, occurred_on, book=None, current_page=None):
-    """Páginas registradas. El hecho interesante es cuánto falta, cuando se sabe.
+    """Pages logged. The interesting fact is how much is left, when that is known.
 
-    `book.page_count` es nullable en la mitad del inventario, así que la rama de "te quedan
-    N" solo existe cuando el libro declara su longitud. Sin ella no se estima: se confirma.
+    `book.page_count` is nullable across half the inventory, so the "N pages left" branch
+    only exists when the book declares its length. Without it nothing is estimated: the
+    capture is confirmed instead.
     """
     if book is not None and current_page is not None and book.page_count:
         restantes = book.page_count - current_page
@@ -35,49 +65,50 @@ def feedback_paginas(pages_read, occurred_on, book=None, current_page=None):
     total_mes = (ReadingSession.objects
                  .filter(date__year=occurred_on.year, date__month=occurred_on.month)
                  .aggregate(t=Sum('pages_read'))['t'] or 0)
-    return f"{pages_read} páginas. Van {total_mes} este mes."
+    return f"{pages_read} páginas. Van {total_mes} {_periodo(occurred_on, 'mes')}."
 
 
 def feedback_terminado(modulo, title, occurred_on):
-    """Un ítem terminado. El hecho interesante es cuántos van este año."""
+    """An item finished. The interesting fact is how many that year holds."""
     from catalog.models import AnnualRecord
     from disquera.models import MusicAnnualRecord
     from movies.models import MovieAnnualRecord
 
+    # The milestone phrase is stored whole rather than built from the noun: "película" is
+    # feminine and takes "primera", so composing it from a singular produced "primer
+    # película". One string per module is smaller than agreeing gender in code.
     modelos = {
-        'libros': (AnnualRecord, 'date_finished', 'libro', 'libros'),
-        'peliculas': (MovieAnnualRecord, 'date_watched', 'película', 'películas'),
-        'discos': (MusicAnnualRecord, 'date_listened', 'disco', 'discos'),
+        'libros': (AnnualRecord, 'date_finished', 'primer libro', 'libros'),
+        'peliculas': (MovieAnnualRecord, 'date_watched', 'primera película', 'películas'),
+        'discos': (MusicAnnualRecord, 'date_listened', 'primer disco', 'discos'),
     }
     if modulo not in modelos:
-        # Lo llama un endpoint: un módulo inesperado confirma, no revienta la captura.
+        # An endpoint calls this: an unexpected module confirms rather than killing the
+        # capture that already succeeded.
         return f"«{title}» registrado."
 
-    modelo, campo, singular, plural = modelos[modulo]
+    modelo, campo, primero, plural = modelos[modulo]
     van = modelo.objects.filter(**{f"{campo}__year": occurred_on.year}).count()
+    periodo = _periodo(occurred_on, 'año')
     if van == 1:
-        return f"«{title}» es tu primer {singular} del año."
-    return f"«{title}». Van {van} {plural} este año."
+        return f"«{title}» es tu {primero} de {periodo}."
+    return f"«{title}». Van {van} {plural} {periodo}."
 
 
 def feedback_minutos(minutes, occurred_on):
-    """Minutos de cine. Se expresan en horas cuando pasan de una."""
+    """Cinema minutes. Expressed in hours once they pass one."""
     from movies.models import MovieViewingSession
     total_mes = (MovieViewingSession.objects
                  .filter(date__year=occurred_on.year, date__month=occurred_on.month)
                  .aggregate(t=Sum('minutes_watched'))['t'] or 0)
-    if total_mes >= 60:
-        horas, resto = divmod(total_mes, 60)
-        acumulado = f"{horas} h {resto} min" if resto else f"{horas} h"
-    else:
-        acumulado = f"{total_mes} min"
-    return f"{minutes} min. Llevas {acumulado} de cine este mes."
+    return (f"{minutes} min. Llevas {_horas_min(total_mes)} de cine "
+            f"{_periodo(occurred_on, 'mes')}.")
 
 
 def feedback_habito(habit, es_recaida):
-    """Un hábito marcado. La racha es el hecho; una recaída no se felicita.
+    """A habit marked. The streak is the fact; a relapse is not congratulated.
 
-    Se llama DESPUÉS de `habit.save()`, así que `current_streak` ya es el valor nuevo.
+    Called AFTER `habit.save()`, so `current_streak` is already the new value.
     """
     if es_recaida:
         return f"Recaída en «{habit.name}». La racha vuelve a empezar."
@@ -87,26 +118,28 @@ def feedback_habito(habit, es_recaida):
 
 
 def feedback_sesion(session, minutos_reales=None):
-    """Una sesión de Deep Work cerrada. El hecho es el acumulado de esa categoría este mes.
+    """A Deep Work session closed. The fact is that category's total for the session's month.
 
     `duration_minutes` is the session's TARGET, and `process_session_completion` marks a
     session completed even when it was abandoned (engine/legacy.py:765) without ever
     adjusting it. So a caller that knows what was actually survived passes it in
     `minutos_reales`; otherwise the target is the honest figure, because the session ran.
 
+    The month comes from `start_time`, not from today: a session started at 23:50 and closed
+    after midnight would otherwise be excluded from its own accumulated figure.
+
     ponytail: the monthly total can only ever sum targets — no field records survived time,
     so an abandoned session still counts as its full length in the accumulated figure. The
     upgrade is a `survived_minutes` column on DeepWorkSession, not arithmetic here.
     """
     from posada.models import DeepWorkSession
-    hoy = date.today()
-    # ponytail: sin índice en (category, start_time). A 53 filas es invisible; si Deep Work
-    # crece a miles, indexar ahí antes que tocar esta función.
+    dia = timezone.localdate(session.start_time)
+    # ponytail: no index on (category, start_time). Invisible at 53 rows; if Deep Work ever
+    # grows to thousands, index there before touching this function.
     total_mes = (DeepWorkSession.objects
                  .filter(completed=True, category=session.category,
-                         start_time__year=hoy.year, start_time__month=hoy.month)
+                         start_time__year=dia.year, start_time__month=dia.month)
                  .aggregate(t=Sum('duration_minutes'))['t'] or 0)
-    horas, resto = divmod(total_mes, 60)
-    acumulado = f"{horas} h {resto} min" if horas else f"{resto} min"
     minutos = session.duration_minutes if minutos_reales is None else minutos_reales
-    return f"{minutos} min de {session.category}. {acumulado} este mes."
+    return (f"{minutos} min de {session.category}. "
+            f"{_horas_min(total_mes)} {_periodo(dia, 'mes')}.")
