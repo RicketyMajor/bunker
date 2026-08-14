@@ -683,8 +683,11 @@ class MusicMainScreen(Screen):
                 if album_to_mark:
                     httpx.patch(
                         f"{API_MUSIC}{album_to_mark['id']}/", json={"is_listened": True}, timeout=5.0)
+                datos = resp.json()
                 self.app.call_from_thread(
-                    self.app.notify, "¡Sesión musical registrada!", title="Éxito")
+                    self.app.notify,
+                    datos.get("feedback") or datos.get("message", "¡Sesión musical registrada!"),
+                    title="Éxito")
                 self.app.call_from_thread(self.load_data)
         except Exception:
             pass

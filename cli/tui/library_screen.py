@@ -618,9 +618,17 @@ class LibraryMainScreen(Screen):
     @work(thread=True)
     def process_log_pages(self, pages: int) -> None:
         try:
-            if httpx.post(API_TRACKER_PAGES, json={"pages": pages}, timeout=5.0).status_code == 201:
+            # Bound rather than tested inline: the response carries the fact the server
+            # computed, and a one-liner has nothing left to read it from.
+            resp = httpx.post(API_TRACKER_PAGES, json={"pages": pages}, timeout=5.0)
+            if resp.status_code == 201:
+                datos = resp.json()
+                # `or`, not a .get default: an endpoint answering "feedback": "" must fall
+                # through to the message, and a default only covers a missing key.
                 self.app.call_from_thread(
-                    self.app.notify, f"{pages} páginas anotadas.", title="Éxito")
+                    self.app.notify,
+                    datos.get("feedback") or datos.get("message", f"{pages} páginas anotadas."),
+                    title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
         except Exception as e:
             self.app.call_from_thread(
@@ -651,8 +659,12 @@ class LibraryMainScreen(Screen):
                     httpx.patch(f"{API_LIBRARY}{book_id}/",
                                 json={"is_read": True}, timeout=5.0)
 
+                datos = resp.json()
                 self.app.call_from_thread(
-                    self.app.notify, "¡Victoria Registrada y Sincronizada!", title="Éxito")
+                    self.app.notify,
+                    datos.get("feedback") or datos.get(
+                        "message", "¡Victoria Registrada y Sincronizada!"),
+                    title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
         except Exception as e:
             self.app.call_from_thread(

@@ -2445,6 +2445,11 @@ class PosadaMainScreen(Screen):
                 f"{API_POSADA_BASE}session/complete/", json=payload, timeout=10.0)
             if resp.status_code == 200:
                 data = resp.json()
+                # The loot modal reports what the engine rolled; this reports what you did.
+                # Two different facts, so the toast is not a duplicate of the summary.
+                if data.get("feedback"):
+                    self.app.call_from_thread(
+                        self.app.notify, data["feedback"], title="Expedición")
                 self.app.call_from_thread(self.show_loot_summary, data)
             else:
                 self.app.call_from_thread(
@@ -2852,8 +2857,11 @@ class PosadaMainScreen(Screen):
             resp = httpx.post(f"{API_POSADA_BASE}habits/complete/",
                               json={"habit_id": habit_id}, timeout=5.0)
             if resp.status_code == 200:
+                datos = resp.json()
                 self.app.call_from_thread(
-                    self.app.notify, resp.json().get("message"), severity="success")
+                    self.app.notify,
+                    datos.get("feedback") or datos.get("message", "Hábito marcado."),
+                    severity="success")
                 self.app.call_from_thread(self.fetch_missions_data)
                 # Refrescar fatiga y XP en el gremio
                 self.app.call_from_thread(self.sync_guild_status)

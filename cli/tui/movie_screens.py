@@ -794,8 +794,11 @@ class MovieMainScreen(Screen):
                     httpx.patch(
                         f"{API_MOVIES}{movie_to_mark['id']}/", json={"is_watched": True}, timeout=5.0)
 
+                datos = resp.json()
                 self.app.call_from_thread(
-                    self.app.notify, "¡Cinta registrada!", title="Éxito")
+                    self.app.notify,
+                    datos.get("feedback") or datos.get("message", "¡Cinta registrada!"),
+                    title="Éxito")
                 self.app.call_from_thread(self.load_movies)
         except Exception as e:
             self.app.call_from_thread(
