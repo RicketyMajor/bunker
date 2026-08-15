@@ -12,6 +12,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
@@ -42,6 +43,12 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
         // flush rather than before it, so the snapshot it fetches already accounts for what was
         // just sent — otherwise the phone shows an inventory that contradicts its own capture.
         AssetStore(applicationContext).run { refrescarEstado(); revisarAssets() }
+
+        // Re-armed from what the queue looks like AFTER the flush, and only here: this is the one
+        // place that knows whether another wake-up is owed. `r.pendientes` is computed at the end
+        // of `vaciar()`, so it is the remainder, not the starting count; a null `r` means the
+        // queue was already empty. An empty queue arms nothing and the phone sleeps undisturbed.
+        Despertador.sincronizar(applicationContext, r?.pendientes ?: 0)
 
         return if (r != null && reintentar(r)) Result.retry() else Result.success()
     }
@@ -111,18 +118,37 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                     .build()
             )
-            ahora(context)
+            // No `ahora()` here, and the reason is measured, not stylistic. Registering the
+            // periodic work happens in `onCreate`, and MIUI recreates the Activity invisibly
+            // every time the system revives the process for a scheduled run — so an immediate
+            // flush hung off this call fired a redundant one-shot two seconds ahead of the
+            // periodic on every background wake (measured 2026-08-15, 13:45:51 vs 13:45:53).
+            // Two flushes per wake, and no way to attribute an arrival to the periodic alone.
+            // The immediate flush now hangs off the window actually taking focus instead.
         }
 
         fun ahora(context: Context) {
-            WorkManager.getInstance(context).enqueue(
-                OneTimeWorkRequestBuilder<SyncWorker>()
-                    .setConstraints(
-                        Constraints.Builder()
-                            .setRequiredNetworkType(NetworkType.CONNECTED).build()
-                    )
-                    .build()
-            )
+            val peticion = OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED).build()
+                )
+
+            // Expedited, because the alarm that calls this exists precisely to escape deferrable
+            // scheduling — enqueuing ordinary work from the receiver hands it straight back to
+            // the scheduler that was sitting on it for seven minutes. RUN_AS_NON_EXPEDITED and
+            // not DROP: when the quota is spent, late beats never, and the queue holds everything
+            // until a 2xx regardless.
+            //
+            // Only from API 31. Below it WorkManager runs expedited work as a foreground service
+            // and demands a `getForegroundInfoAsync` the worker would have to implement — which
+            // needs `androidx.concurrent.futures` on the compile classpath, a dependency for a
+            // code path no phone here will ever run. Below 31 this stays ordinary work, exactly
+            // as it was before, so nothing regresses.
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                peticion.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            }
+            WorkManager.getInstance(context).enqueue(peticion.build())
         }
     }
 }

@@ -5,6 +5,15 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- The queue's only reliable wake-up. WorkManager's periodic work is deferrable by
+         definition and this phone's power manager defers it indefinitely: measured 2026-08-15,
+         `Ready: true` and overdue by 7m21s in standby bucket RARE, never dispatched. Exact
+         alarms are the one primitive the platform still fires under Doze and app standby.
+         SCHEDULE_EXACT_ALARM is user-grantable ("Alarmas y recordatorios"); `Despertador`
+         checks `canScheduleExactAlarms()` and falls back to the inexact variant rather than
+         throwing where nobody is watching. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <!-- No android:icon on purpose: `@mipmap/ic_launcher` does not exist in a project created
          by hand rather than by Android Studio, and referencing a missing resource fails the
          build. The system default icon is correct until there is a real one to ship. -->
@@ -21,5 +30,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Not exported: the only thing that may fire this is the alarm this app set. An
+             exported receiver would let any app on the phone trigger a flush. -->
+        <receiver
+            android:name=".DespertadorReceiver"
+            android:exported="false" />
     </application>
 </manifest>

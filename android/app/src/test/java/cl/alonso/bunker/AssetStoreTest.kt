@@ -115,6 +115,51 @@ class AssetStoreTest {
     }
 
     @Test
+    fun `una version registrada cuyo directorio desaparecio se vuelve a bajar`() {
+        // The defect this replaces: `revisarAssets` compared only the recorded version, so once
+        // its directory was gone the early return fired for ever and `handler` fell back to the
+        // packaged assets permanently. Deleting the directory by hand is not a contrived case —
+        // `handler`'s own sweep did exactly this to a generation being staged.
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        AssetStore(ctx) { url ->
+            if (url.endsWith("/api/movil/assets/")) manifiesto("v9") else "contenido"
+        }.revisarAssets()
+
+        val dir = java.io.File(ctx.filesDir, "generaciones/v9")
+        assertTrue("la generacion no llego a instalarse", dir.exists())
+        dir.deleteRecursively()
+
+        var bajo = false
+        val s = AssetStore(ctx) { url ->
+            if (url.endsWith("/api/movil/assets/")) manifiesto("v9") else { bajo = true; "contenido" }
+        }
+        assertTrue("no reinstalo la generacion que falta", s.revisarAssets())
+        assertTrue("se quedo con la version registrada y nunca volvio a bajar", bajo)
+        assertTrue(s.hayGeneracionValida("v9"))
+    }
+
+    @Test
+    fun `un manifiesto con un nombre de archivo con ruta es rechazado`() {
+        // `version` and the keys become path segments. Our own Django bounds what can arrive; it
+        // does not validate it, and this is the trust boundary.
+        val s = store()
+        for (malo in listOf("../fuera", "v1/anidado", "")) {
+            try {
+                s.prepararGeneracion(malo, mapOf("app.html" to "x", "app.js" to "x",
+                                                 "queue.js" to "x"))
+                throw AssertionError("acepto una version con ruta: $malo")
+            } catch (e: IllegalArgumentException) { /* esperado */ }
+        }
+        try {
+            s.prepararGeneracion("abc", mapOf("../../settings.py" to "x"))
+            throw AssertionError("acepto un nombre de archivo con ruta")
+        } catch (e: IllegalArgumentException) { /* esperado */ }
+        assertFalse("escribio algo fuera de su directorio",
+                    java.io.File(ApplicationProvider.getApplicationContext<android.content.Context>()
+                        .filesDir, "fuera").exists())
+    }
+
+    @Test
     fun `la misma version no se vuelve a descargar`() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         AssetStore(ctx) { url ->

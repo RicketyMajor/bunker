@@ -27,4 +27,19 @@ class MainActivity : AppCompatActivity() {
         }
         SyncWorker.programar(this)
     }
+
+    // `onWindowFocusChanged` and not `onResume`: an invisible restore by MIUI runs the early
+    // lifecycle callbacks but never takes window focus, and focus is the only signal that
+    // separates "the user opened the app" from "the system revived the process".
+    //
+    // This fires more than once per visit — the permission dialog alone costs two, measured
+    // 2026-08-15 as one-shots at 14:07:10 and 14:07:13 — and each one is NOT free: `doWork`
+    // runs `refrescarEstado()` and `revisarAssets()` outside the `pendientes() > 0` guard, so
+    // every fire is two blocking round trips to the tailnet. That is wanted here, because the
+    // reason to return to the app is to read a fresh snapshot; it is not wanted from a
+    // background wake, which is the whole point of hanging it off focus instead of `onCreate`.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) SyncWorker.ahora(this)
+    }
 }

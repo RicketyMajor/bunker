@@ -74,7 +74,12 @@ class AssetStore(
     fun revisarAssets(): Boolean = try {
         val manifiesto = JSONObject(fetch(BuildConfig.BUNKER_URL + "/api/movil/assets/"))
         val version = manifiesto.getString("version")
-        if (version == prefs.getString("assets_version", null)) {
+        // `hayGeneracionValida` and not the recorded version alone. The two used to be conflated,
+        // and the moment the recorded directory stopped existing — swept by `handler` below, wiped
+        // by a storage cleanup, truncated by an interrupted write — nothing ever re-downloaded it:
+        // this returned early for ever and `handler` served the packaged assets for ever. Found by
+        // review 2026-08-15, and it is the half that made the sweep race permanent.
+        if (version == prefs.getString("assets_version", null) && hayGeneracionValida(version)) {
             false
         } else {
             val archivos = manifiesto.getJSONObject("files")
@@ -84,19 +89,36 @@ class AssetStore(
             // as a MalformedURLException that the catch below swallows whole.
             val bajados = archivos.keys().asSequence()
                 .associateWith { fetch(BuildConfig.BUNKER_URL + archivos.getString(it)) }
-            prepararGeneracion(version, bajados)
-            // The version is recorded only once every file is on disk. Recording it first would
-            // mark a half-downloaded set as installed and there would be no way back.
-            if (hayGeneracionValida(version)) {
-                prefs.edit().putString("assets_version", version).apply()
-                true
-            } else false
+            // Staging and recording are ONE critical section against `handler`'s sweep, which
+            // deletes every directory that is not the recorded version — and between the two
+            // statements below, the generation just downloaded is exactly such a directory. The
+            // download itself stays outside the lock: it is the slow part and it touches nothing.
+            synchronized(CANDADO) {
+                prepararGeneracion(version, bajados)
+                // The version is recorded only once every file is on disk. Recording it first
+                // would mark a half-downloaded set as installed and there would be no way back.
+                if (hayGeneracionValida(version)) {
+                    prefs.edit().putString("assets_version", version).apply()
+                    true
+                } else false
+            }
         }
     } catch (e: Exception) {
         false
     }
 
     fun prepararGeneracion(version: String, archivos: Map<String, String>) {
+        // `version` and every key are used as path segments and both arrive from the server's
+        // manifest. Our own Django over the tailnet bounds what can turn up; it does not validate
+        // it, and this is the trust boundary — a `..` in either one writes outside filesDir, and a
+        // name carrying a subdirectory throws into the blanket catch above and fails silently for
+        // ever. `REQUERIDOS` is already the set of names this app will serve.
+        require(version.isNotEmpty() && version.all { it.isLetterOrDigit() }) {
+            "la version del manifiesto no es un hash: $version"
+        }
+        require(archivos.keys.all { it in REQUERIDOS }) {
+            "el manifiesto nombra un archivo inesperado: ${archivos.keys - REQUERIDOS.toSet()}"
+        }
         val dir = File(generaciones, version).apply { mkdirs() }
         archivos.forEach { (nombre, contenido) -> File(dir, nombre).writeText(contenido) }
     }
@@ -117,13 +139,18 @@ class AssetStore(
      * mid-session means the HTML of one version running the JS of another.
      */
     fun handler(): WebViewAssetLoader.PathHandler {
-        val version = prefs.getString("assets_version", null)
-        val dir = version?.let { File(generaciones, it) }?.takeIf { hayGeneracionValida(version) }
-
         // Superseded generations are deleted HERE and not in `revisarAssets`, which runs from the
         // worker while the app may be open and serving the very directory it would remove.
-        // At launch nothing is being served yet, so this is the one safe moment.
-        generaciones.listFiles()?.forEach { if (it.name != version) it.deleteRecursively() }
+        // At launch nothing is being served yet, so this is the one safe moment as far as the
+        // WebView goes — but NOT as far as the worker goes, which `MainActivity` wakes on the very
+        // same event. So the read, the sweep and the validity check are one critical section:
+        // `revisarAssets` stages a generation and records it as two steps, and a sweep landing
+        // between them deletes the directory the recorded version is about to name.
+        val dir = synchronized(CANDADO) {
+            val version = prefs.getString("assets_version", null)
+            generaciones.listFiles()?.forEach { if (it.name != version) it.deleteRecursively() }
+            version?.let { File(generaciones, it) }?.takeIf { hayGeneracionValida(version) }
+        }
 
         val empaquetados = WebViewAssetLoader.AssetsPathHandler(context)
 
@@ -147,18 +174,32 @@ class AssetStore(
     companion object {
         val REQUERIDOS = listOf("app.html", "app.js", "queue.js")
 
-        // ponytail: no redirect guard and no response-code check, unlike Transmisor.postReal —
-        // these are GETs, so a followed redirect costs a wrong body, not a deleted capture, and
-        // a non-2xx already throws on `inputStream`. Ceiling: a 200 carrying the wrong content
-        // is indistinguishable from a good one here. Upgrade path is the same check postReal
-        // has, the day an asset arrives corrupted on the phone.
+        // Guards the generations directory. `handler` sweeps it and `revisarAssets` stages into
+        // it, from the Activity and the worker respectively, on the same event.
+        private val CANDADO = Any()
+
+        // ponytail: still no response-code check, unlike Transmisor.postReal — a non-2xx already
+        // throws on `inputStream`. Ceiling: a 200 carrying the wrong content is indistinguishable
+        // from a good one here, and `hayGeneracionValida` only asks whether the files are
+        // non-empty. Upgrade path is postReal's explicit code check, the day an asset arrives
+        // corrupted on the phone.
         fun leerReal(url: String): String {
             val con = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000
+                // Redirects off, for the same reason postReal turns them off. A captive portal
+                // answering 200 with an HTML login page passes every check this class makes —
+                // the three files are non-empty — so that page gets written as app.js and served
+                // to the WebView. Following a redirect is how it arrives.
+                instanceFollowRedirects = false
             }
-            val texto = con.inputStream.bufferedReader().readText()
-            con.disconnect()
-            return texto
+            return try {
+                con.inputStream.bufferedReader().readText()
+            } finally {
+                // In a `finally` because being offline is the NORMAL condition here, and the
+                // disconnect used to sit after the throwing call — so the failure path, the
+                // common one, leaked the connection every time.
+                con.disconnect()
+            }
         }
     }
 }
