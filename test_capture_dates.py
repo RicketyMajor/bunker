@@ -469,6 +469,34 @@ def test_the_two_posada_verbs_answer_with_a_fact():
             assert not fb.startswith("50"), \
                 f"reporta los 50 min planeados de una sesion abandonada a los 5: {fb!r}"
             assert "5 min" in fb, f"no reporta los minutos sobrevividos: {fb!r}"
+            # Y queda ESCRITO, no solo dicho: si vive unicamente en esta respuesta, el total
+            # del mes no tiene de donde leerlo y vuelve a sumar objetivos.
+            sesion.refresh_from_db()
+            assert sesion.survived_minutes == 5, \
+                f"complete_session no persistio lo sobrevivido: {sesion.survived_minutes!r}"
+
+            # Un reintento (la TUI postea con timeout=10.0, asi que una respuesta perdida se
+            # reintenta) NO puede sobrescribir lo ya archivado: el motor responde `warning` y no
+            # paga nada, pero la escritura llegaba igual y dejaba el campo en 0.
+            resp = complete_session(f.post(
+                "/", {"session_id": sesion.id, "survived_seconds": 0}, format="json"))
+            assert resp.data.get("engine_details", {}).get("status") == "warning", \
+                "el motor ya no marca el reintento como procesado; este check quedo ciego"
+            sesion.refresh_from_db()
+            assert sesion.survived_minutes == 5, \
+                f"un reintento borro lo sobrevivido: {sesion.survived_minutes!r}"
+
+            # Un valor fuera de rango se rechaza ANTES de que el motor pague, no despues: si
+            # pasa, el IntegrityError es un 500 por trabajo ya cobrado, y la cola del movil
+            # solo suelta un item con 2xx.
+            otra = DeepWorkSession.objects.create(duration_minutes=15,
+                                                  category="Rango de prueba")
+            resp = complete_session(f.post(
+                "/", {"session_id": otra.id, "survived_seconds": -899}, format="json"))
+            assert resp.status_code == 400, \
+                f"un tiempo negativo no fue rechazado: {resp.status_code}"
+            otra.refresh_from_db()
+            assert not otra.completed, "el motor cobro una sesion con tiempo invalido"
 
             print("OK · habito y sesion devuelven un hecho; el rechazo no, y el abandono no miente")
             raise transaction.TransactionManagementError("rollback")

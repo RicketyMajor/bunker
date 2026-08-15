@@ -14,6 +14,7 @@ unimportable before the app registry is ready. These run once per capture, never
 so the deferred import costs nothing worth measuring.
 """
 from django.db.models import Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 
@@ -117,19 +118,19 @@ def feedback_sesion(session, minutos_reales=None):
 
     The month comes from `start_time`, not from today: a session started at 23:50 and closed
     after midnight would otherwise be excluded from its own accumulated figure.
-
-    ponytail: the monthly total can only ever sum targets — no field records survived time,
-    so an abandoned session still counts as its full length in the accumulated figure. The
-    upgrade is a `survived_minutes` column on DeepWorkSession, not arithmetic here.
     """
     from posada.models import DeepWorkSession
     dia = timezone.localdate(session.start_time)
     # ponytail: no index on (category, start_time). Invisible at 53 rows; if Deep Work ever
     # grows to thousands, index there before touching this function.
+    # Survived minutes when the row has them, the target when it does not. COALESCE rather
+    # than a Python fallback because this is one grouped query and must stay one: every row
+    # written before survived_minutes existed carries NULL, and NULL must read as "unknown,
+    # assume the target", never as zero — that would erase real work from the total.
     total_mes = (DeepWorkSession.objects
                  .filter(completed=True, category=session.category,
                          start_time__year=dia.year, start_time__month=dia.month)
-                 .aggregate(t=Sum('duration_minutes'))['t'] or 0)
+                 .aggregate(t=Sum(Coalesce('survived_minutes', 'duration_minutes')))['t'] or 0)
     minutos = session.duration_minutes if minutos_reales is None else minutos_reales
     return (f"{minutos} min de {session.category}. "
             f"{_horas_min(total_mes)} {_periodo(dia, 'mes')}.")

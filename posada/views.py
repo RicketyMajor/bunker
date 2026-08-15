@@ -246,6 +246,19 @@ def complete_session(request):
     if not session_id:
         return Response({"status": "error", "message": "Falta el ID de la sesión."}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Validated BEFORE the engine runs, and this is the whole point: the engine commits loot,
+    # XP and prestige in autocommit, so a value rejected afterwards is a 500 for work that was
+    # already paid — and the phone's queue only drops an item on a 2xx, so that 500 is
+    # permanent. `record_session:324` has enforced this exact range since it was written; this
+    # endpoint never did, and answered 200 reporting "-15 min" for a negative.
+    sesion = DeepWorkSession.objects.filter(id=session_id).first()
+    if isinstance(survived_seconds, (int, float)) and not isinstance(survived_seconds, bool):
+        tope = (sesion.duration_minutes if sesion else 480) * 60
+        if not 0 <= survived_seconds <= tope:
+            return Response({"status": "error",
+                             "message": f"El tiempo sobrevivido debe estar entre 0 y {tope} s."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
     # El motor procesa la realidad basándose en cuánto tiempo se aguantate sin distracciones, y devuelve el resultado de la expedición
     result = process_session_completion(session_id, survived_seconds, surrendered, focus_lock_broken)
 
@@ -256,9 +269,21 @@ def complete_session(request):
     # `duration_minutes` — which is the target. Reporting it straight would tell someone who
     # surrendered at 5 minutes that they did 50, so what was survived is what gets reported.
     # Non-numeric input falls back to the target: the engine would have raised on it first.
-    sesion = DeepWorkSession.objects.filter(id=session_id).first()
     minutos_reales = (round(survived_seconds / 60)
                       if isinstance(survived_seconds, (int, float)) else None)
+
+    # Persist what the response has been reporting since 2026-08-14. Without the column the
+    # figure lived only in that one response, so the monthly total had no choice but to sum
+    # targets — which is what made an abandoned session count as its full length.
+    #
+    # `status == "success"` and not `!= "error"`: the engine answers **warning** for a session
+    # it has already processed, and pays nothing. A retry after a lost response — the TUI posts
+    # with `timeout=10.0` — would otherwise overwrite 50 survived minutes with the 0 of a replay,
+    # erasing the very work this column exists to count. `record_session` already treats a
+    # replay as sacred ("the row wins"); this writer now does too.
+    if sesion and minutos_reales is not None and result.get("status") == "success":
+        sesion.survived_minutes = minutos_reales
+        sesion.save(update_fields=["survived_minutes"])
 
     return Response({
         "status": "success",

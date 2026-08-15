@@ -7,7 +7,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db.models import Sum
-from django.db.models.functions import TruncDate
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils.timezone import localdate
 from datetime import timedelta
 from catalog.models import Book, ReadingSession, AnnualRecord as BookAnnualRecord
@@ -155,7 +155,10 @@ def global_dashboard_view(request):
                   .filter(completed=True, start_time__date__gte=today - timedelta(days=6))
                   .annotate(dia=TruncDate('start_time'))
                   .values('dia')
-                  .annotate(total=Sum('duration_minutes')))
+                  # Same COALESCE as insights.feedback_sesion: survived when the row has it,
+                  # the target when it does not. Without it the toast says "5 min" and this
+                  # sparkline says 50 for the same abandoned session, in the same TUI.
+                  .annotate(total=Sum(Coalesce('survived_minutes', 'duration_minutes'))))
         minutos_por_dia = {row['dia']: row['total'] or 0 for row in semana}
 
         posada_data["dw_minutes_today"] = minutos_por_dia.get(today, 0)

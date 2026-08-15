@@ -16,7 +16,7 @@ nothing.
 """
 
 import os
-from datetime import date
+from datetime import date, datetime, time
 
 import django
 
@@ -174,6 +174,28 @@ def run_tests():
         t_rendida = feedback_sesion(sesion, minutos_reales=5)
         check("5 min de" in t_rendida, "una sesión abandonada reporta lo sobrevivido")
         check(not t_rendida.startswith("50"), "no reporta la duración objetivo como cumplida")
+
+        # The leading figure was already honest; the ACCUMULATED one was not. An abandoned
+        # session must not inflate the month. Two sessions in an empty month, in a category
+        # of its own: one honest 50, one surrendered at 5 of 50. The total is 55, never 100.
+        DeepWorkSession.objects.create(
+            category="Mes vacío", duration_minutes=50, completed=True, survived_minutes=50,
+            start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(12, 0))))
+        abandonada = DeepWorkSession.objects.create(
+            category="Mes vacío", duration_minutes=50, completed=True, survived_minutes=5,
+            start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(13, 0))))
+        t_mes = feedback_sesion(abandonada, 5)
+        check("55 min" in t_mes, f"el total del mes suma objetivos, no lo sobrevivido: {t_mes!r}")
+        check("1 h 40" not in t_mes, f"contó 100 minutos: {t_mes!r}")
+
+        # A row written before the column existed carries NULL, and NULL must read as
+        # "unknown, assume the target" — never as zero, which would erase real work from
+        # the accumulated figure. 53 rows in this database are exactly that.
+        DeepWorkSession.objects.create(
+            category="Mes vacío", duration_minutes=30, completed=True, survived_minutes=None,
+            start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(14, 0))))
+        t_null = feedback_sesion(abandonada, 5)
+        check("1 h 25" in t_null, f"una fila sin survived_minutes cuenta como 0: {t_null!r}")
 
         transaction.set_rollback(True)
 
