@@ -13,3 +13,9 @@ scraper_logs/
 library_cli.egg-info/
 CLAUDE.md
 .claude/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.keystore
