@@ -80,6 +80,11 @@ def guild_status(request):
             "level": adv.level,
             "xp": adv.experience,
             "hp": f"{adv.current_hp}/{adv.max_hp}",
+            # Two consumers read this and both defaulted it to False, so every adventurer in
+            # the infirmary rendered as "Disponible" and the active-party filter offered them
+            # for expeditions. The model has had the field since the beginning; only the
+            # payload was missing it.
+            "is_recovering": adv.is_recovering,
             "reputation_title": adv.reputation_title,
             "sessions_survived": adv.sessions_survived,
             "monsters_killed": adv.monsters_killed,

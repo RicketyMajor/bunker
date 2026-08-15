@@ -2058,9 +2058,16 @@ class PosadaMainScreen(Screen):
                 # regardless of class. A missing key must look missing, never like a barbarian.
                 adv.get("class_name", "?"),
                 str(adv.get("level", 1)),
-                f"{adv.get('current_hp', 0)}/{adv.get('max_hp', 0)}",
-                status,
+                str(adv.get("xp", 0)),
+                # `wealth_summary` ("0T, 0i, 0a"), never `wealth`: that one is the raw dict of
+                # six coin denominations and renders as a Python literal across the column.
+                adv.get("wealth_summary", "?"),
                 resumen_equipo,
+                # `hp` arrives preformatted as "24/30". `current_hp` and `max_hp` are not in
+                # this payload at all and defaulted to 0, so this read "0/0" for everyone —
+                # the same defect as `class_name` above, one line apart. A key that is missing
+                # must look missing, and `dict.get` with a default never lets it.
+                f"{status} · {adv.get('hp', '?')}",
                 key=str(adv.get("id"))
             )
 

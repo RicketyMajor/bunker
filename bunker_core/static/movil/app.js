@@ -99,13 +99,24 @@ const App = (() => {
     const { enviados, pendientes, retirados, alcanzoElServidor, ocupado } = await Cola.vaciar();
     // A flush already running is not evidence about the link either way; leave the chip alone.
     if (ocupado) return;
-    enLinea = alcanzoElServidor;
-    // Said out loud rather than swallowed: this is the one path that removes a capture without
-    // the server ever seeing it, so it does not get to look like a successful transmission.
-    if (retirados > 0) toast(`${retirados} despacho(s) de una función retirada, descartado(s).`, 'error');
-    if (enviados > 0) toast(`${enviados} despacho(s) transmitido(s).`);
-    else if (alcanzoElServidor) toast(`${pendientes} despacho(s) rechazado(s). Mira DESPACHOS.`, 'error');
-    else toast('Sin enlace. Guardado igual.', 'error');
+    // Only when something was actually attempted. A flush that did nothing but discard retired
+    // verbs never opened a socket, so it is no more evidence about the link than a flush that
+    // was already running — and without this guard the chip flips to SIN ENLACE on a phone
+    // that is online, and stays there until the next capture.
+    if (enviados > 0 || pendientes > 0) enLinea = alcanzoElServidor;
+
+    // One toast, never two: `toast()` writes into a single shared element, so a second call in
+    // the same task erases the first before the browser has painted it. The retired-verb line
+    // leads because it is the only path that removes a capture the server never saw, and it is
+    // exactly the message that was being erased — a flush that discarded three captures used
+    // to report "Sin enlace. Guardado igual.", which was the opposite of what happened.
+    const retiro = retirados > 0
+      ? `${retirados} despacho(s) de una función retirada, descartado(s). ` : '';
+    const tono = retirados > 0 ? 'error' : undefined;
+    if (enviados > 0) toast(`${retiro}${enviados} despacho(s) transmitido(s).`, tono);
+    else if (alcanzoElServidor) toast(`${retiro}${pendientes} despacho(s) rechazado(s). Mira DESPACHOS.`, 'error');
+    else if (pendientes > 0) toast(`${retiro}Sin enlace. Guardado igual.`, 'error');
+    else if (retiro) toast(retiro.trim(), 'error');
     pintarDespachos();
     refrescarChip();
     // The link can drop with the app already open, and this is one of the two places that

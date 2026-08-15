@@ -497,6 +497,18 @@ class DeepWorkSession(models.Model):
     completed = models.BooleanField(
         default=False, help_text="¿Se terminó el tiempo sin cancelar?")
 
+    # Set by a client that filed this session after the fact, so a retry arriving after a lost
+    # response is recognised instead of paying loot twice. NULL for every session started from
+    # the TUI: Postgres allows many NULLs under a unique index, which is what makes a backfill
+    # unnecessary.
+    client_uuid = models.UUIDField(null=True, blank=True, unique=True)
+
+    # Minutes actually survived, which `duration_minutes` is not — that one is the target, and
+    # the engine marks a session completed whether it ran to the end or was abandoned at five
+    # minutes. NULL means "never recorded", which is every row written before this field
+    # existed; a reader must treat NULL as unknown and fall back to the target, never as zero.
+    survived_minutes = models.PositiveIntegerField(null=True, blank=True)
+
     # Registro narrativo tipo MUD
     event_log = models.JSONField(
         default=list, blank=True, help_text="Historial de eventos ocurridos en esta sesión")

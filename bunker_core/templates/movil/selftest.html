@@ -27,6 +27,20 @@ async function check(nombre, fn) {
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assert'); }
 const ok201 = async () => ({ ok: true, status: 201, json: async () => ({}) });
 
+// This suite drives the real Cola, which is hardcoded to the real key, on the real origin —
+// so the nine removeItem calls below destroy whatever the phone was carrying. Opening the
+// page documented as the way to verify the queue was the surest way to empty it, which is
+// the precise silent loss the queue exists to prevent.
+//
+// Same guarantee the Python checks buy with transaction.atomic(): exercise the real thing,
+// leave it exactly as found. `finally` and not a trailing line, because a check that throws
+// must restore too.
+const respaldo = localStorage.getItem(LLAVE);
+const restaurar = () => {
+  if (respaldo === null) localStorage.removeItem(LLAVE);
+  else localStorage.setItem(LLAVE, respaldo);
+};
+
 (async () => {
   localStorage.removeItem(LLAVE);
 
@@ -142,6 +156,27 @@ const ok201 = async () => ({ ok: true, status: 201, json: async () => ({}) });
            `rutas: ${reales.join(',')}`);
   });
 
+  // The one exception to "an item leaves only on a 2xx", and until now the only exit path in
+  // the file without a check. A typo in a RUTAS key makes this branch true for a live verb and
+  // every capture using it is deleted on the next flush, with the suite still saying TODO OK.
+  await check('un verbo retirado se descarta una vez y sin llamar al servidor', async () => {
+    localStorage.removeItem(LLAVE);
+    // Written straight into storage, because `encolar` refuses an unknown verb — which means
+    // this branch is only ever reached by items an OLDER version of the app left behind, and
+    // that is the scenario worth testing: a phone updated with `minutos` still in its queue.
+    localStorage.setItem(LLAVE, JSON.stringify([{
+      id: 'viejo-1', verbo: 'minutos', payload: { minutes: 90, occurred_on: '2026-08-13' },
+      creado: '2026-08-13T20:00:00.000Z', error: null,
+    }]));
+    Cola.encolar('paginas', { book_id: 1, current_page: 42 });
+    let llamadas = 0;
+    const r = await Cola.vaciar(async (...args) => { llamadas++; return ok201(...args); });
+    assert(r.retirados === 1, `retirados: ${r.retirados}, se esperaba 1`);
+    assert(r.enviados === 1, `enviados: ${r.enviados} — un retirado no se cuenta como enviado`);
+    assert(llamadas === 1, `llamo al servidor ${llamadas} veces; el retirado no debe viajar`);
+    assert(Cola.pendientes() === 0, `quedaron ${Cola.pendientes()} pendientes`);
+  });
+
   await check('descartar borra a mano', () => {
     localStorage.removeItem(LLAVE);
     Cola.encolar('habito', { habit_id: 1 });
@@ -153,6 +188,6 @@ const ok201 = async () => ({ ok: true, status: 201, json: async () => ({}) });
     ? '\n<span class="ok">TODO OK</span>'
     : `\n<span class="fail">${fallos} FALLOS</span>`;
   localStorage.removeItem(LLAVE);
-})();
+})().finally(restaurar);
 </script>
 </body></html>

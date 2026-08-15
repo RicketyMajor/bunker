@@ -1,11 +1,12 @@
 """One command that answers "is anything broken?".
 
-The project has eight assert-based scripts and no runner, so a human needs eight commands and
-a mental note of which ones live inside the container. This is that runner, plus the two
+The project has a pile of assert-based scripts and no runner, so a human needs one command per
+script and a mental note of which ones live inside the container. This is that runner, plus the
 reachability checks the Transmisor made necessary.
 
-Keep the count above in step with CHECKS_IN_CONTAINER: it is the reason this module exists,
-and a stale number is the first sign nobody registered a new check here.
+No count is written here on purpose. The number lived in this docstring and went stale one
+commit after it was written; it is the fifth prose count to drift in this project. Read
+CHECKS_IN_CONTAINER — registering a script there is the only step.
 """
 import subprocess
 import sys
@@ -27,6 +28,7 @@ CHECKS_IN_CONTAINER = (
     "test_movil_estado.py",
     "test_inbox_idempotente.py",
     "test_insights.py",
+    "test_guild_contract.py",
 )
 
 
