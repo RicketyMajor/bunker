@@ -111,13 +111,14 @@ def global_dashboard_view(request):
         data["music"]["listened"] = albums.filter(is_listened=True).count()
         data["music"]["hours"] = round(data["music"]["listened"] * 0.75, 1)
 
-        # Minutes listened this week
-        from disquera.models import ListeningEntry
+        # Albums listened this week. This used to sum ListeningEntry.minutes_listened; the
+        # minute ledger was removed because an album is the unit that gets logged, and a
+        # count of records is the same fact without a number nobody types honestly.
         start_of_week = today - timedelta(days=today.weekday())
-        entries = ListeningEntry.objects.filter(date__gte=start_of_week)
-        minutes_this_week = entries.aggregate(Sum('minutes_listened'))['minutes_listened__sum'] or 0
-        data["music"]["minutes_week"] = minutes_this_week
-        
+        data["music"]["albums_week"] = MusicAnnualRecord.objects.filter(
+            date_listened__gte=start_of_week).count()
+
+
         top_album = albums.filter(personal_rating__isnull=False).order_by('-personal_rating').first()
         if top_album:
             data["music"]["top_rated"] = {"title": top_album.title, "rating": float(top_album.personal_rating)}

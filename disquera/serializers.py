@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
+from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 
 
 class AlbumDirectorySerializer(serializers.ModelSerializer):
@@ -35,10 +35,4 @@ class MusicInboxSerializer(serializers.ModelSerializer):
 class MusicAnnualRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = MusicAnnualRecord
-        fields = '__all__'
-
-
-class ListeningEntrySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ListeningEntry
         fields = '__all__'

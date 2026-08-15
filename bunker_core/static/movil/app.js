@@ -1,8 +1,53 @@
 // Screens, sheets and rendering. All capture goes through Cola.encolar; nothing here talks
 // to the network except cargarEstado() and the flush it triggers.
 const App = (() => {
-  let estado = { leyendo: null, habitos_pendientes: [], libros: [], peliculas: [], albums: [] };
+  // The lists every sheet reads. Cached in localStorage because /api/movil/estado/ is the one
+  // thing the app cannot fetch with the desktop off, and without a copy a cold start offline
+  // opens an app with no book, no habits and nothing to finish — which is every capture except
+  // loose pages and the scanner. That is not a degraded mode, it is the normal one.
+  //
+  // The service worker still must NOT cache that response (see sw.js). A response cache would
+  // be invalidated only by the network; this copy is invalidated by our own captures, which is
+  // what stops a finished book from being offered again while offline.
+  const LLAVE_ESTADO = 'transmisor_estado';
+  const VACIO = { leyendo: null, habitos_pendientes: [], libros: [], peliculas: [], albums: [] };
+
+  function leerCache() {
+    try {
+      const crudo = JSON.parse(localStorage.getItem(LLAVE_ESTADO) || 'null');
+      return crudo && crudo.estado ? crudo : null;
+    } catch (_) { return null; }
+  }
+
+  // The device's local date, as a string that can be compared. Same convention as the queue's
+  // occurred_on, deliberately: both answer "which day is this device on".
+  const diaLocal = (d = new Date()) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+
+  const cache = leerCache();
+  let estado = cache ? cache.estado : { ...VACIO };
+  let sincronizado = cache ? cache.sincronizado : null;
   let enLinea = false;
+
+  // Every list in the snapshot is day-independent except this one: the server derives it from
+  // today's weekday and today's completions. Kept past midnight it offers habits not scheduled
+  // for the new day — which the server answers 409, leaving an item stuck in the queue — and
+  // hides the ones that are. The inventories survive; only this list is dropped.
+  let habitosCaducados = false;
+  if (sincronizado && diaLocal(new Date(sincronizado)) !== diaLocal()) {
+    estado.habitos_pendientes = [];
+    habitosCaducados = true;
+  }
+
+  // Failing to persist must never cost a capture: the queue has its own key and is written
+  // first everywhere in this file.
+  function guardarEstado() {
+    try {
+      localStorage.setItem(LLAVE_ESTADO, JSON.stringify({ estado, sincronizado }));
+    } catch (_) { /* quota or private mode; the app keeps working against memory */ }
+  }
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -38,7 +83,10 @@ const App = (() => {
       const r = await fetch('/api/movil/estado/', { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
       estado = await r.json();
+      sincronizado = new Date().toISOString();
+      habitosCaducados = false;
       enLinea = true;
+      guardarEstado();
     } catch (e) {
       enLinea = false;
     }
@@ -48,15 +96,22 @@ const App = (() => {
 
   async function transmitir() {
     if (Cola.pendientes() === 0) { await cargarEstado(); return; }
-    const { enviados, pendientes, alcanzoElServidor, ocupado } = await Cola.vaciar();
+    const { enviados, pendientes, retirados, alcanzoElServidor, ocupado } = await Cola.vaciar();
     // A flush already running is not evidence about the link either way; leave the chip alone.
     if (ocupado) return;
     enLinea = alcanzoElServidor;
+    // Said out loud rather than swallowed: this is the one path that removes a capture without
+    // the server ever seeing it, so it does not get to look like a successful transmission.
+    if (retirados > 0) toast(`${retirados} despacho(s) de una función retirada, descartado(s).`, 'error');
     if (enviados > 0) toast(`${enviados} despacho(s) transmitido(s).`);
     else if (alcanzoElServidor) toast(`${pendientes} despacho(s) rechazado(s). Mira DESPACHOS.`, 'error');
     else toast('Sin enlace. Guardado igual.', 'error');
     pintarDespachos();
     refrescarChip();
+    // The link can drop with the app already open, and this is one of the two places that
+    // learns it. Without the repaint the staleness line stays blank all evening — it would
+    // only ever appear on a cold start, which is not when you need to be told.
+    pintarInstantanea();
     if (enviados > 0) await cargarEstado();
   }
 
@@ -79,7 +134,26 @@ const App = (() => {
         <p class="author">Elige uno y empieza a marcar la página.</p>
         <button class="act" data-verb="elegir-libro" style="margin-top:12px">ELEGIR LIBRO</button>`;
     }
-    $('#n-habitos').textContent = estado.habitos_pendientes.length || '';
+    $('#n-habitos').textContent = (estado.habitos_pendientes || []).length || '';
+    pintarInstantanea();
+  }
+
+  // Cached lists are worth trusting for a day and worth doubting after a week. Naming when the
+  // snapshot was taken is the whole warning: nothing shown is wrong, it is just old. Silent
+  // while online, because then the lists are the server's.
+  function pintarInstantanea() {
+    const el = $('#instantanea');
+    if (!el) return;
+    if (enLinea || !sincronizado) { el.textContent = ''; return; }
+    // Calendar days, not 24-hour blocks: a snapshot taken at 23:00 and read at 08:00 is from
+    // yesterday, and saying "de hoy" there is the same day-boundary lie that makes the cached
+    // habit list wrong. Both now answer to diaLocal().
+    const tomada = new Date(sincronizado);
+    const dias = Math.round(
+      (new Date(diaLocal()) - new Date(diaLocal(tomada))) / 86400000);
+    el.textContent = dias <= 0
+      ? 'inventario de hoy'
+      : `inventario de hace ${dias} día${dias === 1 ? '' : 's'}`;
   }
 
   function pintarDespachos() {
@@ -218,7 +292,9 @@ const App = (() => {
                   color:${h.is_bad_habit ? 'var(--red)' : 'var(--fg)'}">${
              h.is_bad_habit ? '⚠ ' : ''}${escapar(h.name)}<span style="color:var(--dim)">
              · Rango ${escapar(h.difficulty)}</span></button></li>`).join('')
-      : '<li style="color:var(--dim)">Nada pendiente hoy.</li>';
+      : `<li style="color:var(--dim)">${habitosCaducados
+           ? 'Sin enlace desde ayer: no se sabe qué hábitos tocan hoy.'
+           : 'Nada pendiente hoy.'}</li>`;
   }
 
   function alPulsarHabito(e) {
@@ -237,6 +313,7 @@ const App = (() => {
     Cola.encolar('habito', { habit_id: h.id });
     toast(h.is_bad_habit ? `Recaída en “${h.name}” registrada.` : `“${h.name}” marcado.`);
     estado.habitos_pendientes = estado.habitos_pendientes.filter((x) => x.id !== h.id);
+    guardarEstado();
     pintarHB();
     pintarHome();
     refrescarChip();
@@ -342,14 +419,6 @@ const App = (() => {
   const WL = { libro: 'wishlist_libro', peli: 'wishlist_peli', disco: 'wishlist_disco' };
   let wlTipo = 'libro';
 
-  // --- Minutos de película -------------------------------------------------------------
-  function pintarPistaMinutos() {
-    const v = parseInt($('#mn').value, 10);
-    $('#mn-pista').textContent = isNaN(v) || v <= 0
-      ? ''
-      : (v >= 60 ? `${Math.floor(v / 60)} h ${v % 60} min` : `${v} min`);
-  }
-
   function alPulsarDescartar(e) {
     const boton = e.target.closest('[data-descartar]');
     if (!boton) return;
@@ -378,7 +447,11 @@ const App = (() => {
     $('#btn-transmitir').addEventListener('click', transmitir);
     $('#lista-despachos').addEventListener('click', alPulsarDescartar);
     window.addEventListener('online', transmitir);
-    window.addEventListener('offline', () => { enLinea = false; refrescarChip(); });
+    window.addEventListener('offline', () => {
+      enLinea = false;
+      refrescarChip();
+      pintarInstantanea();  // the other place that learns the link dropped
+    });
 
     // Delegated: pintarHome() replaces the card's markup on every sync, so a listener bound
     // to the button itself would survive exactly one refresh.
@@ -395,10 +468,6 @@ const App = (() => {
         marcarSel('.wsel', 'wl', wlTipo);
         $('#wl-titulo').value = '';
         abrirHoja('hoja-wishlist');
-      } else if (verbo === 'minutos') {
-        $('#mn').value = '';
-        pintarPistaMinutos();
-        abrirHoja('hoja-minutos');
       }
     });
 
@@ -435,25 +504,6 @@ const App = (() => {
     });
     $('#wl-cerrar').addEventListener('click', () => $('#hoja-wishlist').close());
 
-    // Minutos
-    $('#mn').addEventListener('input', pintarPistaMinutos);
-    $('#hoja-minutos').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-mn]');
-      if (!b) return;
-      $('#mn').value = b.dataset.mn;
-      pintarPistaMinutos();
-    });
-    $('#mn-guardar').addEventListener('click', () => {
-      const v = parseInt($('#mn').value, 10);
-      if (isNaN(v) || v <= 0) { toast('Escribe los minutos.', 'error'); return; }
-      Cola.encolar('minutos', { minutes: v });
-      toast(`${v} minutos anotados.`);
-      $('#hoja-minutos').close();
-      refrescarChip();
-      transmitir();
-    });
-    $('#mn-cerrar').addEventListener('click', () => $('#hoja-minutos').close());
-
     $('#hoja-habitos').addEventListener('click', alPulsarHabito);
     $('#hb-cerrar').addEventListener('click', () => $('#hoja-habitos').close());
     // Same as Despachos above: pintarHB() runs on the way in, which is what clears a
@@ -470,6 +520,19 @@ const App = (() => {
       const item = (estado[cfg.lista] || []).find((i) => String(i.id) === fila.dataset.ft);
       if (!item) return;
       Cola.encolar(cfg.verbo, { title: item.title, [cfg.id]: item.id, ...cfg.extra });
+      // Drop it from the cached list too. Online the next cargarEstado() would do it; offline
+      // nothing else will, and the same book would keep being offered — and finished — on every
+      // opening until the desktop comes back.
+      estado[cfg.lista] = (estado[cfg.lista] || []).filter((i) => i.id !== item.id);
+      // `leyendo` is a separate field and the server keeps it consistent with a `is_read=False`
+      // filter we cannot run here. Finishing the book you are reading has to clear it by hand,
+      // or the home card goes on offering + PÁGINAS on a closed book across restarts, and every
+      // page captured after that is logged against a book already queued as finished.
+      if (ftTipo === 'libro' && estado.leyendo && estado.leyendo.book_id === item.id) {
+        estado.leyendo = null;
+      }
+      guardarEstado();
+      pintarHome();
       toast(`“${item.title}” registrado.`);
       $('#hoja-terminar').close();
       refrescarChip();
@@ -499,6 +562,14 @@ const App = (() => {
         toast(estado.leyendo
           ? `${Math.max(v - estado.leyendo.current_page, 0)} páginas guardadas.`
           : `Vas en la página ${v}.`);
+        // Advance the local position AFTER the toast has read the old one. Without this a
+        // second capture before the next sync shows "eran 100" all evening; with it in the
+        // wrong order the toast reports zero pages every time. The server recomputes the real
+        // delta from its own row either way.
+        if (estado.leyendo && estado.leyendo.book_id === libroId && v > estado.leyendo.current_page) {
+          estado.leyendo.current_page = v;
+          guardarEstado();
+        }
       }
       $('#hoja-paginas').close();
       refrescarChip();

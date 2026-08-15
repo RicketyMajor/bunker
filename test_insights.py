@@ -27,11 +27,11 @@ from django.db import transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.insights import (  # noqa: E402
-    feedback_habito, feedback_minutos, feedback_paginas, feedback_sesion, feedback_terminado,
+    _horas_min, feedback_habito, feedback_paginas, feedback_sesion, feedback_terminado,
 )
 from catalog.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
 from disquera.models import MusicAnnualRecord  # noqa: E402
-from movies.models import MovieAnnualRecord, MovieViewingSession  # noqa: E402
+from movies.models import MovieAnnualRecord  # noqa: E402
 from posada.models import DailyHabit, DeepWorkSession  # noqa: E402
 
 _checks = 0
@@ -122,23 +122,16 @@ def run_tests():
         check(isinstance(t_raro, str) and "Algo" in t_raro,
               "un módulo desconocido cae en la confirmación simple")
 
-        # --- feedback_minutos ---
-        t = feedback_minutos(110, hoy)
-        check(isinstance(t, str) and t.strip(), "minutos devuelve texto")
-        check("110" in t, "minutos nombra los minutos registrados")
-
-        # Exactly two hours, in an empty month: the formatter's whole-hour branch. The two
-        # formatters that existed disagreed here — one said "2 h", the other "2 h 0 min".
-        MovieViewingSession.objects.create(minutes_watched=120, date=MES_VACIO)
-        t_dos_horas = feedback_minutos(120, MES_VACIO)
-        check("2 h de cine" in t_dos_horas, "120 minutos se dicen '2 h'")
-        # Targets the accumulated figure, not the string: the leading "120 min" contains
-        # "0 min" as a substring, so a blanket check here fails against correct code.
-        check("2 h 0 min" not in t_dos_horas, "una hora exacta no arrastra '0 min'")
-
-        MovieViewingSession.objects.create(minutes_watched=30, date=MES_VACIO)
-        t_mixto = feedback_minutos(30, MES_VACIO)
-        check("2 h 30 min" in t_mixto, "150 minutos se dicen '2 h 30 min'")
+        # --- _horas_min ---
+        # Checked directly rather than through a caller. Its whole-hour branch used to be
+        # reached only by feedback_minutos, so deleting the minute ledger would have deleted
+        # the only check on it — and that is the exact branch where the two formatters this
+        # function replaced disagreed, one saying "2 h" and the other "2 h 0 min".
+        # feedback_sesion is now its only caller and never exercises the boundary on purpose.
+        check(_horas_min(0) == "0 min", f"0 → {_horas_min(0)!r}")
+        check(_horas_min(45) == "45 min", f"45 → {_horas_min(45)!r}")
+        check(_horas_min(120) == "2 h", f"120 → {_horas_min(120)!r}, se esperaba '2 h'")
+        check(_horas_min(150) == "2 h 30 min", f"150 → {_horas_min(150)!r}")
 
         # --- feedback_habito ---
         habito = DailyHabit.objects.create(name="Hábito de prueba", difficulty='C',

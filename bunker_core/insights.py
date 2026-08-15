@@ -95,16 +95,6 @@ def feedback_terminado(modulo, title, occurred_on):
     return f"«{title}». Van {van} {plural} {periodo}."
 
 
-def feedback_minutos(minutes, occurred_on):
-    """Cinema minutes. Expressed in hours once they pass one."""
-    from movies.models import MovieViewingSession
-    total_mes = (MovieViewingSession.objects
-                 .filter(date__year=occurred_on.year, date__month=occurred_on.month)
-                 .aggregate(t=Sum('minutes_watched'))['t'] or 0)
-    return (f"{minutes} min. Llevas {_horas_min(total_mes)} de cine "
-            f"{_periodo(occurred_on, 'mes')}.")
-
-
 def feedback_habito(habit, es_recaida):
     """A habit marked. The streak is the fact; a relapse is not congratulated.
 

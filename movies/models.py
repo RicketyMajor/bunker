@@ -103,7 +103,13 @@ class MovieInbox(models.Model):
 
 
 class MovieViewingSession(models.Model):
-    """Libro mayor de minutos vistos por día (Event Sourcing)"""
+    """Libro mayor de minutos vistos por día (Event Sourcing)
+
+    ponytail: nothing reads or writes this any more — the minute ledger was removed on
+    2026-08-14 because a film is the unit that gets logged, not its runtime. The table held
+    0 rows at that point. Kept rather than dropped because a destructive migration buys
+    nothing here; drop it if a schema cleanup ever runs for its own reasons.
+    """
     date = models.DateField(default=localdate)
     minutes_watched = models.PositiveIntegerField()
 

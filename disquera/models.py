@@ -97,7 +97,12 @@ class MusicAnnualRecord(models.Model):
         return f"{self.title} - Escuchado el {self.date_listened}"
 
 class ListeningEntry(models.Model):
-    """Diario de escucha (Event Sourcing)"""
+    """Diario de escucha (Event Sourcing)
+
+    ponytail: same removal as MovieViewingSession, 2026-08-14. The table held one row of 45
+    minutes, which is the whole evidence that the feature was never used. Kept, not dropped;
+    the dashboard counts MusicAnnualRecord rows for the week instead.
+    """
     album = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='listening_entries')
     date = models.DateField(default=localdate)
     minutes_listened = models.PositiveIntegerField(default=0)

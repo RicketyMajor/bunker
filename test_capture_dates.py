@@ -79,11 +79,11 @@ def test_boundaries_are_inclusive():
 
 
 def test_every_verb_files_under_the_event_date():
-    """One name on the wire, four field names behind it.
+    """One name on the wire, three field names behind it.
 
     The three collection modules named their date field differently — `date_finished`,
     `date_watched`, `date_listened` — and that divergence already caused one months-long
-    bug (audit 3.1). Testing only one verb would leave the other three mappings unproven,
+    bug (audit 3.1). Testing only one verb would leave the other two mappings unproven,
     which is exactly how the last one survived.
     """
     from django.db import transaction
@@ -93,8 +93,8 @@ def test_every_verb_files_under_the_event_date():
     from catalog.views import finish_book
     from disquera.models import MusicAnnualRecord
     from disquera.views import finish_album
-    from movies.models import MovieAnnualRecord, MovieViewingSession
-    from movies.views import finish_movie, log_minutes
+    from movies.models import MovieAnnualRecord
+    from movies.views import finish_movie
 
     anteayer = HOY - timedelta(days=2)
     fecha = anteayer.isoformat()
@@ -108,8 +108,6 @@ def test_every_verb_files_under_the_event_date():
          MovieAnnualRecord, "date_watched", {"title": "Pelicula de prueba"}),
         (finish_album, {"title": "Album de prueba", "occurred_on": fecha},
          MusicAnnualRecord, "date_listened", {"title": "Album de prueba"}),
-        (log_minutes, {"minutes": 42, "occurred_on": fecha},
-         MovieViewingSession, "date", {"minutes_watched": 42}),
     ]
 
     try:
@@ -124,7 +122,10 @@ def test_every_verb_files_under_the_event_date():
                     f"{vista.__name__} archivo bajo {real} en {modelo.__name__}.{campo}, "
                     f"se esperaba {anteayer}"
                 )
-            print("OK · los 4 verbos archivan bajo la fecha del evento, cada uno en su campo")
+            # Counted from the list rather than written in the string: this project has
+            # already shipped three prose counts that drifted from what the code did.
+            print(f"OK · los {len(casos)} verbos archivan bajo la fecha del evento, "
+                  f"cada uno en su campo")
             raise transaction.TransactionManagementError("rollback")
     except transaction.TransactionManagementError:
         pass
@@ -135,7 +136,7 @@ def test_every_verb_rejects_a_future_date():
 
     from disquera.views import finish_album
     from catalog.views import finish_book
-    from movies.views import finish_movie, log_minutes
+    from movies.views import finish_movie
 
     manana = (HOY + timedelta(days=1)).isoformat()
     f = APIRequestFactory()
@@ -143,14 +144,13 @@ def test_every_verb_rejects_a_future_date():
         (finish_book, {"title": "Libro futuro", "occurred_on": manana}),
         (finish_movie, {"title": "Pelicula futura", "occurred_on": manana}),
         (finish_album, {"title": "Album futuro", "occurred_on": manana}),
-        (log_minutes, {"minutes": 10, "occurred_on": manana}),
     ]
     for vista, payload in casos:
         resp = vista(f.post("/", payload, format="json"))
         assert resp.status_code == 400, (
             f"{vista.__name__}: esperaba 400, llego {resp.status_code}"
         )
-    print("OK · los 4 verbos rechazan el futuro con 400")
+    print("OK · los 3 verbos rechazan el futuro con 400")
 
 
 def test_habit_refuses_a_past_date_and_leaves_the_streak_alone():
@@ -346,39 +346,7 @@ def test_finish_book_without_an_id_still_works():
         pass
 
 
-def test_log_minutes_rejects_garbage_instead_of_crashing():
-    """Task 18b made the phone call this. `int(minutes)` used to raise straight through.
-
-    A 500 is not just noisy here: the mobile queue only drops an item on a 2xx, so a capture
-    that 500s is one the user can never clear except by discarding it.
-    """
-    from django.db import transaction
-    from rest_framework.test import APIRequestFactory
-
-    from movies.models import MovieViewingSession
-    from movies.views import log_minutes
-
-    f = APIRequestFactory()
-    try:
-        with transaction.atomic():
-            antes = MovieViewingSession.objects.count()
-            for basura in ("noventa", "45min", "-30", 0, ""):
-                resp = log_minutes(f.post("/", {"minutes": basura}, format="json"))
-                assert resp.status_code == 400, (
-                    f"{basura!r} devolvio {resp.status_code}, se esperaba 400"
-                )
-            assert MovieViewingSession.objects.count() == antes, "escribio alguna sesion"
-
-            resp = log_minutes(f.post("/", {"minutes": 95}, format="json"))
-            assert resp.status_code == 201, f"un valor bueno dio {resp.status_code}"
-            assert MovieViewingSession.objects.latest("id").minutes_watched == 95
-            print("OK · minutos: basura y negativos dan 400, un numero real sigue dando 201")
-            raise transaction.TransactionManagementError("rollback")
-    except transaction.TransactionManagementError:
-        pass
-
-
-def test_the_five_capture_verbs_answer_with_a_fact():
+def test_the_collection_capture_verbs_answer_with_a_fact():
     """Every logging endpoint returns a fact alongside the acknowledgement.
 
     Two things are pinned here, and the second is the one that breaks quietly. First, that
@@ -396,7 +364,7 @@ def test_the_five_capture_verbs_answer_with_a_fact():
     from catalog.models import Author, Book
     from catalog.views import finish_book, log_pages
     from disquera.views import finish_album
-    from movies.views import finish_movie, log_minutes
+    from movies.views import finish_movie
 
     f = APIRequestFactory()
     try:
@@ -413,7 +381,6 @@ def test_the_five_capture_verbs_answer_with_a_fact():
                 (log_pages, {"book_id": libro.id, "current_page": 120}, "log_pages con libro"),
                 (finish_book, {"title": "Libro terminado de prueba"}, "finish_book"),
                 (finish_movie, {"title": "Pelicula terminada de prueba"}, "finish_movie"),
-                (log_minutes, {"minutes": 95}, "log_minutes"),
                 (finish_album, {"title": "Album terminado de prueba"}, "finish_album"),
             ]
 
@@ -432,7 +399,7 @@ def test_the_five_capture_verbs_answer_with_a_fact():
                 assert feedback != mensaje, \
                     f"{etiqueta}: el feedback es el acuse repetido, no un hecho"
 
-            print("OK · los 5 verbos devuelven un hecho y conservan su message")
+            print("OK · los 4 verbos devuelven un hecho y conservan su message")
             raise transaction.TransactionManagementError("rollback")
     except transaction.TransactionManagementError:
         pass
@@ -532,8 +499,7 @@ if __name__ == "__main__":
         test_habit_refuses_a_day_it_is_not_scheduled_for,
         test_finish_book_rejects_an_id_that_does_not_exist,
         test_finish_book_without_an_id_still_works,
-        test_log_minutes_rejects_garbage_instead_of_crashing,
-        test_the_five_capture_verbs_answer_with_a_fact,
+        test_the_collection_capture_verbs_answer_with_a_fact,
         test_the_two_posada_verbs_answer_with_a_fact,
     ]
     for prueba in PRUEBAS:

@@ -99,8 +99,8 @@
     <button data-verb="habitos">HÁBITOS <span class="n" id="n-habitos"></span></button>
     <button data-verb="escanear">ESCANEAR</button>
     <button data-verb="wishlist">A LA LISTA</button>
-    <button data-verb="minutos" style="grid-column:1/-1">+ MINUTOS DE PELÍCULA</button>
   </div>
+  <p id="instantanea" class="pos" style="text-align:center;margin:14px 0 0"></p>
 </main>
 
 <dialog id="despachos" aria-labelledby="t-despachos">
@@ -206,24 +206,6 @@
                 background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
   <button class="act" id="wl-guardar" style="margin-top:12px">ANOTAR</button>
   <button class="act" id="wl-cerrar"
-          style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
-</dialog>
-
-<dialog id="hoja-minutos" aria-labelledby="t-minutos">
-  <h2 id="t-minutos" style="margin:0 0 16px;font-size:19px">¿Cuántos minutos viste?</h2>
-  <input id="mn" type="number" inputmode="numeric" min="1" step="1" autocomplete="off"
-         aria-labelledby="t-minutos"
-         style="width:100%;font:inherit;font-size:36px;text-align:center;padding:12px;
-                background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
-  <p id="mn-pista" class="pos" aria-live="polite" style="text-align:center;min-height:24px"></p>
-  <div class="grid" style="margin-bottom:12px">
-    <button data-mn="30" class="msel">30</button>
-    <button data-mn="45" class="msel">45</button>
-    <button data-mn="60" class="msel">60</button>
-    <button data-mn="90" class="msel">90</button>
-  </div>
-  <button class="act" id="mn-guardar">ANOTAR</button>
-  <button class="act" id="mn-cerrar"
           style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
 </dialog>
 

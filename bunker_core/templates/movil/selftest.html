@@ -130,12 +130,16 @@ const ok201 = async () => ({ ok: true, status: 201, json: async () => ({}) });
     assert(e && e.includes('already exists'), `mostro "${e}" en vez del motivo real`);
   });
 
-  await check('los once verbos de las hojas resuelven a una ruta', () => {
-    for (const v of ['paginas', 'minutos', 'terminar_libro', 'terminar_peli', 'terminar_disco',
-                     'habito', 'escaneo_libro', 'escaneo_peli', 'escaneo_disco',
-                     'wishlist_libro', 'wishlist_peli', 'wishlist_disco']) {
-      assert(typeof Cola.RUTAS[v] === 'string', `el verbo ${v} no tiene ruta`);
-    }
+  // The exact set, not a loop over expected names: a route left behind after a verb is
+  // deleted is invisible to a one-way check, and that is precisely what the minutes removal
+  // could have left. Sorted so the comparison does not depend on declaration order.
+  await check('los verbos de las hojas y las rutas son el mismo conjunto', () => {
+    const esperados = ['escaneo_disco', 'escaneo_libro', 'escaneo_peli', 'habito', 'paginas',
+                       'terminar_disco', 'terminar_libro', 'terminar_peli',
+                       'wishlist_disco', 'wishlist_libro', 'wishlist_peli'];
+    const reales = Object.keys(Cola.RUTAS).sort();
+    assert(reales.join(',') === esperados.join(','),
+           `rutas: ${reales.join(',')}`);
   });
 
   await check('descartar borra a mano', () => {

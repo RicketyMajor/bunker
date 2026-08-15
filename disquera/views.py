@@ -3,10 +3,10 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db import transaction
 from django.utils import timezone
-from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord, ListeningEntry
+from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer, ListeningEntrySerializer
+from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
 
@@ -71,10 +71,6 @@ class MusicInboxViewSet(viewsets.ModelViewSet):
 
         return super().create(request, *args, **kwargs)
 
-
-class ListeningEntryViewSet(viewsets.ModelViewSet):
-    queryset = ListeningEntry.objects.all().order_by('-date', '-id')
-    serializer_class = ListeningEntrySerializer
 
 # --- ENDPOINTS DEL ORÁCULO DISCOGS ---
 

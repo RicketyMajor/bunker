@@ -132,8 +132,7 @@ class MusicLoansTab(TabPane):
 
 
 class MusicTrackerTab(TabPane):
-    BINDINGS = [("p", "screen.log_minutes", "Anotar Minutos"),
-                ("f", "screen.finish_album", "Registrar Escucha"),
+    BINDINGS = [("f", "screen.finish_album", "Registrar Escucha"),
                 ("x", "screen.delete_habit", "Revertir Registro")]
 
     def compose(self) -> ComposeResult:

@@ -7,7 +7,7 @@ from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedCo
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
-from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_MINUTES, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
+from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
 from .modals import AddMovieMenuModal, ScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
 from .tabs import MovieWishlistTab
 
@@ -119,7 +119,6 @@ class MovieDetailsScreen(Screen):
 
 class MovieTrackerTab(TabPane):
     BINDINGS = [
-        ("m", "screen.log_minutes", "Anotar Minutos"),
         ("f", "screen.finish_movie", "Registrar Cinta Vista"),
     ]
 

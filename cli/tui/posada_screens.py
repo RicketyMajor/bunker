@@ -2053,7 +2053,10 @@ class PosadaMainScreen(Screen):
             # key=str(adv['id']) ancla la fila de la tabla a la base de datos
             table_adv.add_row(
                 adv.get("name", "Unknown"),
-                adv.get("adv_class", "BBN"),
+                # `class_name` is what guild_status sends; `adv_class` never existed in that
+                # payload, so this column defaulted to the literal "BBN" for every adventurer
+                # regardless of class. A missing key must look missing, never like a barbarian.
+                adv.get("class_name", "?"),
                 str(adv.get("level", 1)),
                 f"{adv.get('current_hp', 0)}/{adv.get('max_hp', 0)}",
                 status,

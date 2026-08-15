@@ -5,9 +5,9 @@ import requests
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieViewingSession, MovieAnnualRecord
+from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
-from bunker_core.insights import feedback_minutos, feedback_terminado
+from bunker_core.insights import feedback_terminado
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -325,36 +325,6 @@ def tracker_heatmap(request):
         counts[r.date_watched.month - 1] += 1
 
     return Response({"counts": counts})
-
-
-@api_view(['POST'])
-def log_minutes(request):
-    """Anota minutos vistos en el día actual."""
-    minutes = request.data.get('minutes')
-    if not minutes:
-        return Response({"error": "Faltan los minutos."}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        occurred_on = parse_occurred_on(request.data.get('occurred_on'))
-    except InvalidOccurredOn as exc:
-        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Same trust boundary as log_pages: this arrives from a numeric keypad over the network,
-    # and int() on anything else raises straight through as a 500 — which the mobile queue
-    # cannot retry out of, because it only drops an item on a 2xx.
-    try:
-        minutes = int(minutes)
-    except (TypeError, ValueError):
-        return Response({"error": "Valor numérico inválido"}, status=status.HTTP_400_BAD_REQUEST)
-    if minutes <= 0:
-        return Response({"error": "Los minutos deben ser mayor a 0."},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    MovieViewingSession.objects.create(minutes_watched=minutes, date=occurred_on)
-    return Response({
-        "message": f"Anotados {minutes} minutos de visionado.",
-        "feedback": feedback_minutos(minutes, occurred_on),
-    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])

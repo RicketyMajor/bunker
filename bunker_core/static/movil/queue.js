@@ -14,13 +14,14 @@ const Cola = (() => {
 
   // Wire verb -> endpoint. The phone writes to the real endpoints; only barcodes go to an
   // inbox, because a barcode is an incomplete fact and the Purgatorio exists for exactly that.
-  // All eleven were confirmed to resolve against the URL conf before this file was written.
+  // All eleven resolve against the URL conf. Do not write that number anywhere else: the
+  // count in this comment used to say eleven while the map held twelve. /movil/selftest/
+  // asserts the exact key set instead, so a route added or removed here fails there.
   const RUTAS = {
     paginas:        '/api/books/tracker/pages/',
     terminar_libro: '/api/books/tracker/finish/',
     terminar_peli:  '/api/movies/tracker/finish/',
     terminar_disco: '/api/music/tracker/finish/',
-    minutos:        '/api/movies/tracker/minutes/',
     habito:         '/posada/api/habits/complete/',
     escaneo_libro:  '/api/books/inbox/',
     escaneo_peli:   '/api/movies/inbox/',
@@ -72,7 +73,15 @@ const Cola = (() => {
       // talking to the server.
       let alcanzoElServidor = false;
 
+      let retirados = 0;
+
       for (const item of items) {
+        // A verb this version no longer knows can never be accepted: its route is gone from
+        // the URL conf too. Without this it POSTs to `undefined` — literally `/undefined` —
+        // gets a 404, is re-queued, and pins the chip at "1 SIN TRANSMITIR" for ever, with
+        // DESCARTAR as the only escape. This is the one exception to "an item leaves only on
+        // a 2xx", and it is narrow on purpose: the item cannot succeed, now or later.
+        if (!RUTAS[item.verbo]) { retirados++; continue; }
         try {
           const resp = await enviar(RUTAS[item.verbo], {
             method: 'POST',
@@ -107,8 +116,11 @@ const Cola = (() => {
       escribir([...quedan, ...llegadosDurante]);
 
       return {
-        enviados: items.length - quedan.length,
+        // `retirados` is subtracted rather than folded in: a dropped verb was not transmitted,
+        // and reporting it as sent would be the app lying about a capture reaching the Bunker.
+        enviados: items.length - quedan.length - retirados,
         pendientes: quedan.length + llegadosDurante.length,
+        retirados,
         alcanzoElServidor,
       };
     } finally {
