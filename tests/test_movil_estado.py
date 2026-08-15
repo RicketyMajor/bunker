@@ -1,6 +1,6 @@
 """Standalone check for the capture-support endpoint the Transmisor reads on every open.
 
-Run: docker compose exec web python test_movil_estado.py
+Run: docker compose exec web python -m tests.test_movil_estado
 
 Two things can break here without anything else noticing. The payload's five keys are a
 contract: Tasks 14-18 render exactly those names, so a rename is a blank screen on the
@@ -18,6 +18,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bunker_core.settings')
 django.setup()
 
+from django.conf import settings  # noqa: E402
 from django.db import connection, transaction  # noqa: E402
 from django.test import RequestFactory  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
@@ -50,12 +51,13 @@ def rollback(fn):
 
 def test_payload_shape_is_the_contract():
     datos = pedir()
-    esperadas = {"leyendo", "habitos_pendientes", "libros", "peliculas", "albums"}
+    esperadas = {"leyendo", "habitos_pendientes", "libros", "peliculas", "albums",
+                 "aventureros"}
     assert set(datos) == esperadas, f"claves {sorted(datos)}, se esperaba {sorted(esperadas)}"
-    for clave in ("habitos_pendientes", "libros", "peliculas", "albums"):
+    for clave in ("habitos_pendientes", "libros", "peliculas", "albums", "aventureros"):
         assert isinstance(datos[clave], list), f"{clave} no es una lista"
     assert datos["leyendo"] is None or isinstance(datos["leyendo"], dict)
-    print("OK · las cinco claves que renderizan las tareas 14-18")
+    print("OK · las seis claves que renderizan las hojas de captura y el temporizador")
 
 
 def test_habit_due_today_is_offered():
@@ -162,6 +164,50 @@ def test_query_budget():
     print(f"OK · {len(ctx)} consultas, dentro del presupuesto de 6")
 
 
+def test_el_estado_trae_la_nomina():
+    """The timer sheet picks an adventurer from this, so the roster travels with the snapshot."""
+    from posada.models import AdventurerClass
+    datos = pedir()
+    assert "aventureros" in datos, "el estado no trae la nomina"
+    for a in datos["aventureros"]:
+        assert {"id", "name", "class_name", "level"} <= set(a), f"aventurero incompleto: {a}"
+        # Not `!= a.get("adv_class")`: that key is not in the payload, so the comparison is
+        # against None and the check could never go red. The raw 3-letter code is the thing
+        # that must not arrive — the TUI shipped "BBN" for every class by reading it.
+        assert a["class_name"] not in AdventurerClass.values, \
+            f"esta mandando el codigo crudo: {a['class_name']!r}"
+    print(f"OK · el estado trae {len(datos['aventureros'])} aventurero(s) con clase legible")
+
+
+def test_el_manifiesto_sigue_el_contenido():
+    """The hash is the whole mechanism; a constant would be worse than no endpoint."""
+    from bunker_core.views import MOVIL_ASSETS, movil_assets
+
+    def version():
+        resp = movil_assets(FABRICA.get('/api/movil/assets/'))
+        assert resp.status_code == 200, f"el manifiesto devolvio {resp.status_code}"
+        return json.loads(resp.content)
+
+    uno = version()
+    assert set(uno["files"]) == set(MOVIL_ASSETS), \
+        f"el manifiesto no declara los tres archivos: {sorted(uno['files'])}"
+    # Relative, never absolute: build_absolute_uri reflects the Host header and ALLOWED_HOSTS
+    # is ['*'], and the APK runs whatever these point at inside a WebView.
+    for nombre, url in uno["files"].items():
+        assert url.startswith("/"), f"{nombre} trae una URL absoluta: {url!r}"
+
+    ruta = settings.BASE_DIR / MOVIL_ASSETS["queue.js"]
+    original = ruta.read_bytes()
+    try:
+        ruta.write_bytes(original + b"\n// tocado por el test\n")
+        dos = version()
+    finally:
+        ruta.write_bytes(original)
+    assert uno["version"] != dos["version"], "el hash no cambio al cambiar un archivo"
+    assert version()["version"] == uno["version"], "no volvio al hash original"
+    print("OK · el manifiesto sigue el contenido y sirve rutas relativas")
+
+
 if __name__ == "__main__":
     PRUEBAS = [
         test_payload_shape_is_the_contract,
@@ -170,6 +216,8 @@ if __name__ == "__main__":
         test_habit_not_scheduled_today_is_not_offered,
         test_leyendo_is_the_most_recent_session_with_a_position,
         test_a_finished_book_stops_being_the_one_you_are_reading,
+        test_el_estado_trae_la_nomina,
+        test_el_manifiesto_sigue_el_contenido,
         test_query_budget,
     ]
     for prueba in PRUEBAS:

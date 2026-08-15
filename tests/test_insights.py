@@ -1,6 +1,6 @@
 """Check for the feedback strings. Runs inside the container:
 
-    docker compose exec -T web python test_insights.py
+    docker compose exec -T web python -m tests.test_insights
 
 Everything happens inside a transaction with a forced rollback, so it touches no real data.
 

@@ -1,6 +1,6 @@
 """Standalone check for the three barcode inboxes the Transmisor's scanner writes to.
 
-Run: docker compose exec web python test_inbox_idempotente.py
+Run: docker compose exec web python -m tests.test_inbox_idempotente
 
 The scanner's most likely failure is not a crash, it is a stuck queue. `isbn` and `barcode`
 are unique, and the mobile queue only removes an item once the server answers 2xx — so a

@@ -1,6 +1,6 @@
 """Standalone check for the capture date parser and the endpoints that use it.
 
-Run: docker compose exec web python test_capture_dates.py
+Run: docker compose exec web python -m tests.test_capture_dates
 
 This is the failure the offline queue produces silently: a capture made on Friday and
 synced on Wednesday must be filed under Friday. Nothing else in the project would notice

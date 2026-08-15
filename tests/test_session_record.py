@@ -1,6 +1,6 @@
 """Standalone check for the endpoint that files a Deep Work session after the fact.
 
-Run: docker compose exec -T web python test_session_record.py
+Run: docker compose exec -T web python -m tests.test_session_record
 
 The assertion that matters is the third: a session pays prestige and loot, it is transmitted by
 a background worker with nobody watching, and a retry after a lost response must not be able to

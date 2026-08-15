@@ -5,7 +5,7 @@ imported `from config import BASE_URL` — a top-level name that only resolves w
 is on sys.path, not when the installed `cli` package is imported. Nothing caught it until the
 entry point was run by hand.
 
-Run: python test_cli_imports.py
+Run: python -m tests.test_cli_imports
 """
 import importlib
 import pkgutil

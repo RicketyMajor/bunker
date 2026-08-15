@@ -20,16 +20,21 @@ from cli.config import BASE_URL, project_root
 console = Console()
 
 # These import Django models, so they only run inside `web`.
+#
+# Module paths, not file paths, and `python -m`: run as `python tests/test_x.py`, Python puts
+# `tests/` on sys.path instead of the project root and every one of these dies on
+# `ModuleNotFoundError: No module named 'bunker_core'`. `-m` puts the CWD on sys.path, which is
+# what django.setup() needs. The label is the exact thing to type to run one by hand.
 CHECKS_IN_CONTAINER = (
-    "test_posada_skills.py",
-    "test_achievements.py",
-    "test_capture_dates.py",
-    "test_reading_progress.py",
-    "test_movil_estado.py",
-    "test_inbox_idempotente.py",
-    "test_insights.py",
-    "test_guild_contract.py",
-    "test_session_record.py",
+    "tests.test_posada_skills",
+    "tests.test_achievements",
+    "tests.test_capture_dates",
+    "tests.test_reading_progress",
+    "tests.test_movil_estado",
+    "tests.test_inbox_idempotente",
+    "tests.test_insights",
+    "tests.test_guild_contract",
+    "tests.test_session_record",
 )
 
 
@@ -82,10 +87,12 @@ def doctor():
         fallos += 1
 
     console.print("\n[bold cyan]Checks[/bold cyan]")
-    for script in CHECKS_IN_CONTAINER:
-        if not _run(script, ["docker", "compose", "exec", "-T", "web", "python", script]):
+    for modulo in CHECKS_IN_CONTAINER:
+        if not _run(modulo, ["docker", "compose", "exec", "-T", "web",
+                             "python", "-m", modulo]):
             fallos += 1
-    if not _run("test_cli_imports.py", [sys.executable, "test_cli_imports.py"]):
+    if not _run("tests.test_cli_imports",
+                [sys.executable, "-m", "tests.test_cli_imports"]):
         fallos += 1
 
     if fallos:

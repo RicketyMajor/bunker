@@ -1,7 +1,9 @@
+import hashlib
 import json
 import logging
 import os
 import secrets
+from django.conf import settings
 from django.core.management import call_command
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -379,6 +381,40 @@ def movil_app(request):
     return render(request, 'movil/app.html')
 
 
+# The three files the APK installs and runs in its WebView. Declared once, at module level,
+# because the manifest hashes them and the asset route serves them: two readers of one fact.
+MOVIL_ASSETS = {
+    "app.html": "bunker_core/templates/movil/app.html",
+    "app.js": "bunker_core/static/movil/app.js",
+    "queue.js": "bunker_core/static/movil/queue.js",
+}
+
+
+def movil_assets(request):
+    """The manifest the APK compares against what it has installed.
+
+    A hash of the contents rather than a version number nobody would remember to bump: the
+    files are three, they are small, and a number maintained by hand is a number that drifts —
+    this project has shipped that mistake five times in prose already.
+
+    The paths are RELATIVE, not absolute. `request.build_absolute_uri()` reflects the `Host`
+    header, and `ALLOWED_HOSTS` is `['*']`, so an absolute URL here is a URL the server does
+    not actually control — and the APK downloads its UI from it and runs it in a WebView.
+    Letting the APK join these against `BuildConfig.BUNKER_URL` is less code and the whole
+    class disappears.
+    """
+    h = hashlib.sha256()
+    urls = {}
+    for nombre in sorted(MOVIL_ASSETS):
+        ruta = settings.BASE_DIR / MOVIL_ASSETS[nombre]
+        if not ruta.exists():
+            return JsonResponse({"error": f"falta {nombre} en el servidor"}, status=500)
+        h.update(ruta.read_bytes())
+        urls[nombre] = ("/movil/asset/app.html" if nombre == "app.html"
+                        else f"/static/movil/{nombre}")
+    return JsonResponse({"version": h.hexdigest(), "files": urls})
+
+
 def movil_sw(request):
     """The service worker.
 
@@ -445,6 +481,14 @@ def movil_estado(request):
     return JsonResponse({
         "leyendo": leyendo,
         "habitos_pendientes": habitos,
+        # The timer sheet picks from this. `class_name` and not `adv_class`: the raw code is
+        # what a reader cannot decode, and the TUI's own table shipped "BBN" for every class
+        # because it read the wrong key. One name for this fact across every surface.
+        "aventureros": [
+            {"id": a.id, "name": a.name, "class_name": a.get_adv_class_display(),
+             "level": a.level}
+            for a in Adventurer.objects.all().order_by("name")
+        ],
         "libros": list(Book.objects.filter(is_read=False).values("id", "title")[:500]),
         "peliculas": list(Movie.objects.filter(is_watched=False).values("id", "title")[:500]),
         "albums": list(Album.objects.filter(is_listened=False).values("id", "title")[:500]),

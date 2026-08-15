@@ -1,6 +1,6 @@
 """Verificación del sistema de logros. Corre dentro del contenedor:
 
-    docker compose exec web python test_achievements.py
+    docker compose exec web python -m tests.test_achievements
 
 Todo ocurre dentro de una transacción con rollback forzado, así que no toca datos reales:
 ni el prestigio del gremio ni los logros ya desbloqueados quedan modificados al terminar.

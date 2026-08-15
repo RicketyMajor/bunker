@@ -1,6 +1,6 @@
 """Standalone check for the contract between `guild_status` and the TUI that renders it.
 
-Run: docker compose exec -T web python test_guild_contract.py
+Run: docker compose exec -T web python -m tests.test_guild_contract
 
 This exists because the same defect has now shipped three times in one table, and every
 time it looked like data:

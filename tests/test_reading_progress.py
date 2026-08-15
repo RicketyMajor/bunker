@@ -1,6 +1,6 @@
 """Standalone check for per-book reading progress.
 
-Run: docker compose exec web python test_reading_progress.py
+Run: docker compose exec web python -m tests.test_reading_progress
 
 The migration's blast radius is case 4: rows written before the FK existed must keep being
 counted, by tracker_stats and by the reading streak in the BFF. Everything else here is new
