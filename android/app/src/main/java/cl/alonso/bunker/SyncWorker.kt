@@ -45,10 +45,16 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
         AssetStore(applicationContext).run { refrescarEstado(); revisarAssets() }
 
         // Re-armed from what the queue looks like AFTER the flush, and only here: this is the one
-        // place that knows whether another wake-up is owed. `r.pendientes` is computed at the end
-        // of `vaciar()`, so it is the remainder, not the starting count; a null `r` means the
-        // queue was already empty. An empty queue arms nothing and the phone sleeps undisturbed.
-        Despertador.sincronizar(applicationContext, r?.pendientes ?: 0)
+        // place that knows whether another wake-up is owed. An empty queue arms nothing and the
+        // phone sleeps undisturbed.
+        //
+        // Read fresh instead of taken from `r`, which is where this was wrong: `r.pendientes` is
+        // computed inside `vaciar()`, and the two lines above it can block for a minute of
+        // timeouts with the tailnet down. A capture landing in that window — or a concurrent
+        // worker's flush, since `ahora()` enqueues without a unique name — left this call
+        // cancelling the alarm with the queue still full, and nothing re-arms it until the next
+        // `doWork`: the deferrable path this whole mechanism exists to escape.
+        Despertador.sincronizar(applicationContext, store.pendientes())
 
         return if (r != null && reintentar(r)) Result.retry() else Result.success()
     }
@@ -127,7 +133,7 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
             // The immediate flush now hangs off the window actually taking focus instead.
         }
 
-        fun ahora(context: Context) {
+        fun ahora(context: Context, expedito: Boolean = false) {
             val peticion = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(
                     Constraints.Builder()
@@ -140,12 +146,19 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
             // not DROP: when the quota is spent, late beats never, and the queue holds everything
             // until a 2xx regardless.
             //
+            // ONLY from the alarm, which is what `expedito` is for. It used to be every caller,
+            // and that spends the wrong budget: the quota is per standby bucket, and
+            // `MainActivity` calls this on every window focus gain — two per visit, measured —
+            // while the app is TOP, where ordinary work is dispatched promptly anyway and
+            // expediting buys nothing. Drain it there and the run that cannot afford to be
+            // deferred, the alarm's in RARE, is the one that gets downgraded.
+            //
             // Only from API 31. Below it WorkManager runs expedited work as a foreground service
             // and demands a `getForegroundInfoAsync` the worker would have to implement — which
             // needs `androidx.concurrent.futures` on the compile classpath, a dependency for a
             // code path no phone here will ever run. Below 31 this stays ordinary work, exactly
             // as it was before, so nothing regresses.
-            if (android.os.Build.VERSION.SDK_INT >= 31) {
+            if (expedito && android.os.Build.VERSION.SDK_INT >= 31) {
                 peticion.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             }
             WorkManager.getInstance(context).enqueue(peticion.build())

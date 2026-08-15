@@ -3,10 +3,14 @@ package cl.alonso.bunker
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.IOException
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 @RunWith(RobolectricTestRunner::class)
 class AssetStoreTest {
@@ -172,6 +176,48 @@ class AssetStoreTest {
         }
         assertFalse("dijo que instalo algo nuevo", s.revisarAssets())
         assertFalse("volvio a bajar una version ya instalada", bajo)
+    }
+
+    @Test
+    fun `un cuarto asset en el servidor no congela las actualizaciones`() {
+        // The freeze this replaces: membership in REQUERIDOS was a `require`, so the day the
+        // server shipped a file this version does not know about, the exception went into the
+        // blanket catch and every installed phone stopped updating — silently, permanently, and
+        // over a file it did not need. Unknown names are ignored; names with a path still throw,
+        // which is the check above this one.
+        val s = conFetch { url ->
+            if (url.endsWith("/api/movil/assets/")) {
+                """{"version":"v9","files":{"app.html":"/a","app.js":"/b",
+                   "queue.js":"/c","sw.js":"/d"}}"""
+            } else "contenido"
+        }
+        assertTrue("un archivo de mas congelo la instalacion", s.revisarAssets())
+        assertTrue("no instalo los tres que si conoce", s.hayGeneracionValida("v9"))
+    }
+
+    @Test
+    fun `un 302 no se instala como si fuera un asset`() {
+        // The one place in this class that touches a real socket, so the one check that needs
+        // one — twelve lines of ServerSocket, no dependency. With `instanceFollowRedirects` off,
+        // `inputStream` throws only from 400 up: the body of a captive portal's redirect comes
+        // back as an ordinary string, gets written as `app.js`, and passes `hayGeneracionValida`,
+        // which only asks whether the file is non-empty.
+        val server = ServerSocket(0)
+        thread {
+            runCatching {
+                server.accept().use {
+                    it.getOutputStream().write(
+                        ("HTTP/1.1 302 Found\r\nLocation: /login\r\n" +
+                         "Content-Length: 5\r\n\r\nhola!").toByteArray()
+                    )
+                }
+            }
+        }
+        server.use {
+            assertThrows(IOException::class.java) {
+                AssetStore.leerReal("http://127.0.0.1:${it.localPort}/api/movil/assets/")
+            }
+        }
     }
 
     @Test

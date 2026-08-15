@@ -61,6 +61,9 @@ db.commit(); db.close()
 PY
 
 echo "--- sembrando ISBN $ISBN ---"
+# El trap y no un `start` por cada rama: entre este stop y el arranque de T0 hay cuatro salidas
+# posibles, y una sola que se olvide deja Django caido toda la noche sin nadie mirando.
+trap 'docker compose -f "$BASE/docker-compose.yml" start web >/dev/null 2>&1' EXIT
 docker compose -f "$BASE/docker-compose.yml" stop web >/dev/null 2>&1  # el flush DEBE fallar
 a shell am kill "$APP"; sleep 2
 a push "$TMP/cola.db" /sdcard/Download/cola.db >/dev/null
@@ -80,12 +83,18 @@ PEND=$(a exec-out "run-as $APP cat databases/cola.db" > "$TMP/q.db" 2>/dev/null;
 # DespertadorReceiver specifically, not the package: WorkManager keeps its own alarms under this
 # same package, so counting the package would report "armed" with our alarm absent. Measured
 # 2026-08-15: two pending alarms for the package with none of them ours.
-ARMADA=$(a shell dumpsys alarm | awk '/pending alarms:/,0' | grep -c "DespertadorReceiver")
+#
+# Y acotado a la lista, no hasta el final del volcado: despues de las alarmas pendientes viene
+# `Alarm Stats:`, que nombra al receptor por cada vez que disparo en su historia. Medido
+# 2026-08-16 con la cola vacia y ninguna alarma armada: hasta EOF cuenta 1, acotado cuenta 0.
+# Es la misma trampa que el 2026-08-15 se cazo a mano y que aqui seguia viva.
+ARMADA=$(a shell dumpsys alarm \
+         | awk '/pending alarms:/{f=1} /^  (Top Alarms|Alarm Stats):/{f=0} f' \
+         | grep -c "DespertadorReceiver")
 echo "tras el intento fallido: cola=$PEND  alarmas_pendientes=$ARMADA"
 if [ "${PEND:-0}" != "1" ] || [ "${ARMADA:-0}" = "0" ]; then
   echo "ABORTA: la cola debia quedar en 1 y la alarma armada. Sin eso no hay nada que medir."
-  docker compose -f "$BASE/docker-compose.yml" start web >/dev/null 2>&1
-  exit 1
+  exit 1  # el trap levanta `web`
 fi
 
 # --- T0. Server back, process dead, logcat clean, nobody touching anything.
@@ -122,11 +131,17 @@ echo "bucket:         $(a shell am get-standby-bucket $APP 2>/dev/null)"
 echo "cola:           $(a exec-out "run-as $APP cat databases/cola.db" > "$TMP/f.db" 2>/dev/null; \
                         sqlite3 "$TMP/f.db" 'SELECT count(*) FROM despachos;' 2>/dev/null)"
 echo "--- por que arranco el proceso (lo unico que prueba algo) ---"
-grep -E "Start proc.*$APP" "$TMP/logcat.txt" 2>/dev/null | head -3 || echo "(sin logcat: el Wi-Fi cayo)"
+# En una variable y no `| head -3 || echo`: el estado de salida de una tuberia es el de `head`,
+# que es 0 aunque `grep` no encuentre nada, asi que ese respaldo no podia dispararse nunca —
+# justo en el caso en que hace falta, que es el logcat vacio.
+ARRANQUE=$(grep -E "Start proc.*$APP" "$TMP/logcat.txt" 2>/dev/null | head -3)
+echo "${ARRANQUE:-(sin logcat: el Wi-Fi cayo)}"
+# Sin `|| echo "0"`: `grep -c` ya imprime 0 cuando no encuentra, y ademas sale con codigo 1, asi
+# que el respaldo se sumaba y escribia el cero dos veces — en el caso normal, que es el que se lee.
 echo "--- Displayed (debe ser 0) ---"
-grep -c "Displayed $APP" "$TMP/logcat.txt" 2>/dev/null || echo "0"
+grep -c "Displayed $APP" "$TMP/logcat.txt" 2>/dev/null
 echo "--- toques humanos desde T0 (debe ser 0) ---"
-grep -cE "MiuiInputKeyEventLog|MTKPOWER_HINT_APP_TOUCH" "$TMP/logcat.txt" 2>/dev/null || echo "0"
+grep -cE "MiuiInputKeyEventLog|MTKPOWER_HINT_APP_TOUCH" "$TMP/logcat.txt" 2>/dev/null
 
 # --- Clean up the row this script created, asserting identity first.
 docker compose -f "$BASE/docker-compose.yml" exec -T web python -c "

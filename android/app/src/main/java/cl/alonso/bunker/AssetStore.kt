@@ -6,6 +6,7 @@ import androidx.webkit.WebViewAssetLoader
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Calendar
@@ -116,11 +117,17 @@ class AssetStore(
         require(version.isNotEmpty() && version.all { it.isLetterOrDigit() }) {
             "la version del manifiesto no es un hash: $version"
         }
-        require(archivos.keys.all { it in REQUERIDOS }) {
-            "el manifiesto nombra un archivo inesperado: ${archivos.keys - REQUERIDOS.toSet()}"
+        // Shape and membership are two different failures, and collapsing them into one `require`
+        // froze updates for ever: a name that is merely UNKNOWN — the day the server ships a
+        // fourth asset — threw into the blanket catch above, so every installed phone stopped
+        // updating, silently and permanently, because of a file it did not even need. A name that
+        // is not a plain filename is the trust boundary and stays fatal.
+        require(archivos.keys.all { it.isNotEmpty() && !it.contains('/') && !it.contains("..") }) {
+            "el manifiesto nombra una ruta, no un archivo: ${archivos.keys}"
         }
         val dir = File(generaciones, version).apply { mkdirs() }
-        archivos.forEach { (nombre, contenido) -> File(dir, nombre).writeText(contenido) }
+        archivos.filterKeys { it in REQUERIDOS }
+            .forEach { (nombre, contenido) -> File(dir, nombre).writeText(contenido) }
     }
 
     fun hayGeneracionValida(version: String): Boolean {
@@ -178,11 +185,12 @@ class AssetStore(
         // it, from the Activity and the worker respectively, on the same event.
         private val CANDADO = Any()
 
-        // ponytail: still no response-code check, unlike Transmisor.postReal — a non-2xx already
-        // throws on `inputStream`. Ceiling: a 200 carrying the wrong content is indistinguishable
-        // from a good one here, and `hayGeneracionValida` only asks whether the files are
-        // non-empty. Upgrade path is postReal's explicit code check, the day an asset arrives
-        // corrupted on the phone.
+        // ponytail: the code check is explicit now, like Transmisor.postReal's. The claim that
+        // used to stand here — "a non-2xx already throws on `inputStream`" — was false from the
+        // moment redirects were turned off: `inputStream` throws only from 400 up. Ceiling that
+        // remains: a 2xx carrying the wrong content is still indistinguishable from a good one,
+        // and `hayGeneracionValida` only asks whether the files are non-empty. Upgrade path is a
+        // hash or a content-type check, the day an asset arrives corrupted with a 200.
         fun leerReal(url: String): String {
             val con = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000
@@ -193,6 +201,12 @@ class AssetStore(
                 instanceFollowRedirects = false
             }
             return try {
+                // Before reading, and not after: with redirects off the 3xx body is returned
+                // verbatim — a captive portal's login page, or the tailnet's own 502 — and
+                // everything downstream of here treats a non-empty string as an asset.
+                if (con.responseCode !in 200..299) {
+                    throw IOException("HTTP ${con.responseCode} pidiendo $url")
+                }
                 con.inputStream.bufferedReader().readText()
             } finally {
                 // In a `finally` because being offline is the NORMAL condition here, and the

@@ -5,7 +5,9 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 
 /**
  * What wakes the process. This exists because the thing it replaces does not work on this phone.
@@ -71,6 +73,28 @@ object Despertador {
     fun cancelar(context: Context) {
         context.getSystemService(AlarmManager::class.java).cancel(intento(context))
     }
+
+    /**
+     * The Settings screen that grants what [armar] needs, or `null` when there is nothing to ask.
+     *
+     * From API 31 `SCHEDULE_EXACT_ALARM` is denied by default, and MIUI files it under *Permisos
+     * especiales → Alarmas y recordatorios* rather than in the app's own permission list — where
+     * it was looked for on 2026-08-15 and not found. Nothing fails loudly without the grant:
+     * [armar] degrades to the inexact variant, so the only symptom is a queue that seems slow.
+     *
+     * Returned rather than launched, so the decision is testable without an Activity and the
+     * caller owns the policy of how often a user may be thrown into Settings.
+     */
+    fun intentoDePermiso(context: Context): Intent? {
+        if (Build.VERSION.SDK_INT < 31) return null
+        if (context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) return null
+        // The package URI opens this app's own toggle; without it the screen is the list of every
+        // app on the phone, which is where a grant gets abandoned.
+        return Intent(
+            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+            Uri.fromParts("package", context.packageName, null),
+        )
+    }
 }
 
 class DespertadorReceiver : BroadcastReceiver() {
@@ -80,9 +104,34 @@ class DespertadorReceiver : BroadcastReceiver() {
         // The alarm's job was to get this process running at all; the work goes to WorkManager as
         // an expedited request, which is a class the OS does dispatch promptly.
         //
-        // Re-arming is deliberately not done here either. `SyncWorker` re-arms from what the queue
-        // looks like AFTER the flush, which is the only place that knows whether another wake-up
-        // is owed.
-        SyncWorker.ahora(context)
+        // Re-armed BEFORE delegating, and the ordering is the whole point: an exact alarm is
+        // one-shot, so firing consumes it. `ahora` only enqueues, and its work carries a network
+        // constraint — at 03:00 with no link, which is the normal state of a phone whose queue
+        // exists *because* there was no link, `doWork` never runs, the re-arm inside it never runs
+        // either, and the chain ends on its first miss. Arming first costs one PendingIntent
+        // update and makes a miss cost fifteen minutes instead of everything.
+        //
+        // `doWork` still owns the cancel: it re-reads the queue after the flush and is the only
+        // place that knows the wake-up is no longer owed.
+        Despertador.armar(context)
+        SyncWorker.ahora(context, expedito = true)
+    }
+}
+
+/**
+ * A reboot clears every alarm the platform holds, and the queue does not care that the phone was
+ * restarted. Without this the only thing left to re-arm is WorkManager's periodic — the mechanism
+ * measured on this phone as sitting `Ready: true` and overdue without ever being dispatched — so a
+ * capture made before a restart would wait for a human to open the app, which is the exact failure
+ * v2 exists to remove.
+ *
+ * Exported, unlike [DespertadorReceiver], because BOOT_COMPLETED arrives from outside the app.
+ * That is safe here where it would not be there: this arms an alarm from our own queue and touches
+ * nothing else, so the worst that a forged broadcast could buy — and BOOT_COMPLETED is a protected
+ * broadcast only the system may send — is a wake-up we already owed.
+ */
+class ArranqueReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        Despertador.sincronizar(context, ColaStore(context).pendientes())
     }
 }

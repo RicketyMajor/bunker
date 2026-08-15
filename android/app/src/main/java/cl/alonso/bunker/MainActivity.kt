@@ -40,6 +40,31 @@ class MainActivity : AppCompatActivity() {
     // background wake, which is the whole point of hanging it off focus instead of `onCreate`.
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) SyncWorker.ahora(this)
+        if (!hasFocus) return
+        SyncWorker.ahora(this)
+        pedirAlarmaExacta()
+    }
+
+    // Here and not in `onCreate` beside the notifications request, for the same property focus is
+    // already being used for: window focus is gained only when no system dialog is on top of us,
+    // so this cannot open Settings over the POST_NOTIFICATIONS dialog and spend the single ask
+    // the system allows.
+    //
+    // Sent once and remembered, because nothing rate-limits reopening a Settings screen the way
+    // the platform rate-limits a permission dialog: unconditional, this would throw the user out
+    // of the app on every launch after a deliberate "no".
+    //
+    // ponytail: one shot and no way back — whoever declines keeps the inexact alarm for ever. The
+    // upgrade is a banner in the WebView (Task 10), which is the first screen able to say why the
+    // queue is slow and offer the intent again.
+    private fun pedirAlarmaExacta() {
+        val prefs = getSharedPreferences("transmisor", MODE_PRIVATE)
+        if (prefs.getBoolean("alarma_pedida", false)) return
+        val intento = Despertador.intentoDePermiso(this) ?: return
+        // A phone whose OEM ships no such screen throws ActivityNotFoundException. Crashing on
+        // launch would be a worse failure than the imprecision this exists to remove.
+        if (runCatching { startActivity(intento) }.isSuccess) {
+            prefs.edit().putBoolean("alarma_pedida", true).apply()
+        }
     }
 }

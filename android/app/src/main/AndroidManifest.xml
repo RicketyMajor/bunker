@@ -14,6 +14,10 @@
          throwing where nobody is watching. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- A reboot clears every pending alarm, so without this the queue's only wake-up after a
+         restart is the periodic that this phone does not dispatch. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- No android:icon on purpose: `@mipmap/ic_launcher` does not exist in a project created
          by hand rather than by Android Studio, and referencing a missing resource fails the
          build. The system default icon is correct until there is a real one to ship. -->
@@ -36,5 +40,16 @@
         <receiver
             android:name=".DespertadorReceiver"
             android:exported="false" />
+
+        <!-- Exported, unlike the one above, because BOOT_COMPLETED is delivered from outside the
+             app — and it is a protected broadcast, so only the system may send it. It arms an
+             alarm from our own queue and does nothing else. -->
+        <receiver
+            android:name=".ArranqueReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
