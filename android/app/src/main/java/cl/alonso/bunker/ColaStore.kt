@@ -38,6 +38,10 @@ class ColaStore(private val context: Context) {
                    )"""
             )
         }
+        // A no-op is correct at version 1 and a trap at version 2: `items()` reads columns with
+        // getColumnIndexOrThrow, so shipping a schema change without a migration here makes the
+        // WHOLE queue unreadable, not just the new column. Policy: any bump to the version above
+        // must add its ALTER TABLE here. Room is still not worth it; this comment is.
         override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) = Unit
     }
 
@@ -51,6 +55,16 @@ class ColaStore(private val context: Context) {
      * does not exist.
      */
     fun encolar(verbo: String, payload: String): Int {
+        // The pair `queue.js` guards and this port had dropped: `Transmisor.vaciar` DELETES a
+        // dispatch whose verb has no route, on the reasoning that it can never be accepted. That
+        // reasoning only holds if an unknown verb could never be enqueued in the first place —
+        // otherwise a typo at a call site is a capture the UI accepts, shows as pending, and
+        // then deletes on the next flush with nothing reported anywhere. Refused here, loudly,
+        // for the same reason `insertOrThrow` throws: the sheet must stay open.
+        //
+        // The direction of this dependency is backwards on paper — storage naming transport —
+        // but the guard has to sit where every caller routes through, and that is here.
+        require(verbo in Transmisor.RUTAS) { "verbo desconocido: $verbo" }
         val valores = ContentValues().apply {
             put("id", UUID.randomUUID().toString())
             put("verbo", verbo)
@@ -65,7 +79,11 @@ class ColaStore(private val context: Context) {
     fun items(): List<Despacho> {
         val salida = mutableListOf<Despacho>()
         helper.readableDatabase.query(
-            "despachos", null, null, null, null, null, "creado ASC"
+            // rowid breaks the tie: `creado` is currentTimeMillis(), two taps land in the same
+            // millisecond, and SQLite's order for equal keys is unspecified. Flush order is not
+            // cosmetic — two `paginas` captures sent out of order leave the stored position at
+            // the LOWER page, and the next capture counts the gap twice.
+            "despachos", null, null, null, null, null, "creado ASC, rowid ASC"
         ).use { c ->
             while (c.moveToNext()) {
                 salida.add(
