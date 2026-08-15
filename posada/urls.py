@@ -5,6 +5,8 @@ urlpatterns = [
     path('api/status/', views.guild_status, name='guild_status'),
     path('api/session/start/', views.start_session, name='start_session'),
     path('api/session/complete/', views.complete_session, name='complete_session'),
+    # Both halves of a session at once, for a client that ran the timer with no server in reach.
+    path('api/session/record/', views.record_session, name='record_session'),
     path('api/adventurer/create/', views.create_adventurer,
          name='create_adventurer'),
     path('api/guild/consolidate/', views.consolidate_guild_wealth,

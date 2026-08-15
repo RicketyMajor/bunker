@@ -29,6 +29,7 @@ CHECKS_IN_CONTAINER = (
     "test_inbox_idempotente.py",
     "test_insights.py",
     "test_guild_contract.py",
+    "test_session_record.py",
 )
 
 

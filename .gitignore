@@ -12,3 +12,4 @@ logs/
 scraper_logs/
 library_cli.egg-info/
 CLAUDE.md
+.claude/

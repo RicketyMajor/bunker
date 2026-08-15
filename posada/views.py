@@ -8,7 +8,8 @@ from bunker_core.insights import feedback_habito, feedback_sesion
 import random
 from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills, calculate_sell_value, add_wealth_from_dict, pay_with_change
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+import uuid
 from .skills import SkillRegistry
 
 
@@ -269,6 +270,131 @@ def complete_session(request):
         "log": result.get("log", []),
         "engine_details": result
     })
+
+
+@api_view(['POST'])
+def record_session(request):
+    """Files a Deep Work session that already ran, somewhere with no server to talk to.
+
+    The phone runs its own timer offline, so neither `start_session` — which issues the id and
+    the script — nor `complete_session`, which needs that id, can be reached while it runs.
+    Both halves happen here, in one transaction, whenever the dispatch finally arrives.
+
+    The engine needs no script from the client: `process_session_completion` regenerates it
+    deterministically from the session id, the duration and the adventurers.
+    """
+    data = request.data
+
+    raw_uuid = data.get('client_uuid')
+    if not raw_uuid:
+        return Response({"status": "error", "message": "Falta client_uuid."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        client_uuid = uuid.UUID(str(raw_uuid))
+    except (AttributeError, TypeError, ValueError):
+        return Response({"status": "error", "message": "client_uuid no es un UUID válido."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Idempotency is checked BEFORE validation, on purpose. A dispatch that was already filed is
+    # a fact in the database; re-judging its payload against today's rules could answer 400 for a
+    # session that is sitting there, completed, having already paid. The row wins.
+    ya = DeepWorkSession.objects.filter(client_uuid=client_uuid).first()
+    if ya:
+        return Response({
+            "status": "success",
+            "message": "Esta expedición ya estaba archivada.",
+            "feedback": feedback_sesion(ya, ya.survived_minutes),
+            "log": ya.event_log,
+            "engine_details": {"status": "success", "repetido": True},
+        }, status=status.HTTP_200_OK)
+
+    try:
+        duracion = int(data.get('duration_minutes'))
+        sobrevividos = int(data.get('survived_seconds'))
+    except (TypeError, ValueError):
+        return Response({"status": "error", "message": "Valor numérico inválido."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    if not 1 <= duracion <= 480:
+        return Response({"status": "error",
+                         "message": "La duración debe estar entre 1 y 480 minutos."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Not clamped: a phone reporting more time than the session could hold is a broken clock or a
+    # broken client, and silently trimming it would file a number nobody produced.
+    if not 0 <= sobrevividos <= duracion * 60:
+        return Response({"status": "error",
+                         "message": f"El tiempo sobrevivido debe estar entre 0 y {duracion * 60} s."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    categoria = (data.get('category') or '').strip()
+    if not categoria:
+        return Response({"status": "error", "message": "Falta la categoría."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        occurred_on = parse_occurred_on(data.get('occurred_on'))
+    except InvalidOccurredOn as exc:
+        return Response({"status": "error", "message": str(exc)},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # A stale roster must not cost a session that was actually worked: the phone's snapshot can
+    # name an adventurer deleted since. What resolves, goes; what does not, is dropped and the
+    # count is reported back so the difference is visible rather than guessed at.
+    #
+    # The ids are validated rather than passed through: this is a trust boundary, and a
+    # non-numeric id reaches the ORM as a ValueError, i.e. a 500 — which the phone's queue
+    # cannot retry out of, because an item only leaves it on a 2xx.
+    ids = data.get('adventurer_ids') or []
+    if not isinstance(ids, list):
+        return Response({"status": "error", "message": "adventurer_ids debe ser una lista."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        ids = {int(i) for i in ids}
+    except (TypeError, ValueError):
+        return Response({"status": "error", "message": "adventurer_ids trae un id no numérico."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    aventureros = list(Adventurer.objects.filter(id__in=ids)) if ids else []
+
+    # start_time carries the date because the field is `default=timezone.now`, not auto_now_add.
+    # Noon rather than midnight: `timezone.localdate()` on a midnight timestamp is one DST shift
+    # away from landing on the previous day.
+    inicio = timezone.make_aware(datetime.combine(occurred_on, time(12, 0)))
+
+    with transaction.atomic():
+        sesion = DeepWorkSession.objects.create(
+            client_uuid=client_uuid,
+            start_time=inicio,
+            duration_minutes=duracion,
+            category=categoria,
+            completed=False,
+            survived_minutes=round(sobrevividos / 60),
+        )
+        if aventureros:
+            sesion.adventurers_involved.set(aventureros)
+
+        resultado = process_session_completion(
+            sesion.id, sobrevividos, data.get('surrendered', False), False)
+
+        if resultado.get("status") == "error":
+            # Rolls back the session too: half an expedition — created, never resolved, paying
+            # nothing — is worse than no expedition, and it would hold the uuid for ever.
+            transaction.set_rollback(True)
+            return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
+
+    sesion.refresh_from_db()
+    faltantes = len(ids) - len(aventureros)
+    mensaje = "Expedición archivada."
+    if faltantes > 0:
+        mensaje += f" {faltantes} aventurero(s) del despacho ya no existen."
+
+    return Response({
+        "status": "success",
+        "message": mensaje,
+        "feedback": feedback_sesion(sesion, sesion.survived_minutes),
+        "log": resultado.get("log", []),
+        "engine_details": resultado,
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
