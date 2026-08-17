@@ -52,12 +52,14 @@ The condition each comment names as the moment to revisit has happened.
   *Ceiling:* a 2xx carrying the wrong body is indistinguishable from a good one, and
   `hayGeneracionValida` only asks whether the files are non-empty. *Upgrade:* a hash or a
   content-type check, the day an asset arrives corrupted with a 200.
-- **`ColaStore.kt:144`** — the MediaStore round trip is verified by hand on the phone, not by a
-  check. *Ceiling:* Robolectric cannot query back what it accepted. *Upgrade:* an instrumented test,
-  which this plan's constraints rule out — so verify it by hand once Task 10 makes a capture
-  reachable. **This is the load-bearing one:** `decisions/log.md` (2026-08-14) rejected a relay
-  *because* the backup file buys the same durability, and that trade rests on a restore path nobody
-  has exercised.
+- **`ColaStore.kt`** — ~~the MediaStore round trip is verified by hand on the phone, not by a
+  check.~~ **The hand verification happened on 2026-08-17 and the round trip FAILED.** The marker
+  said "verify it by hand once Task 10 makes a capture reachable"; Task 10 did, and the answer was
+  no. `respaldar()` writes a new `bunker-cola (N).json` per capture and `leerRespaldo()` cannot read
+  any of them — measured, with the MediaStore rows, in `state-of-the-project.md` §1, now 🔴.
+  This marker is **not** discharged: it is promoted to a defect. What it was protecting — the claim
+  in `decisions/log.md` (2026-08-14) that the backup buys a relay's durability — **is false**, and
+  the deferral is exactly what let it stay unexamined from Task 6 until a capture existed.
 - **`MainActivity.kt`** — moved up to "Triggers that have already fired": Task 10 built the WebView
   on 2026-08-16 without building the banner.
 - **`android/app/build.gradle.kts`** *(new 2026-08-16, Task 10)* — `copiarAssets` reproduces

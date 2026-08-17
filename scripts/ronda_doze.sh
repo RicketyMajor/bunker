@@ -113,12 +113,19 @@ PEND=$(a exec-out "run-as $APP cat databases/cola.db" > "$TMP/q.db" 2>/dev/null;
 # same package, so counting the package would report "armed" with our alarm absent. Measured
 # 2026-08-15: two pending alarms for the package with none of them ours.
 #
-# Y acotado a la lista, no hasta el final del volcado: despues de las alarmas pendientes viene
-# `Alarm Stats:`, que nombra al receptor por cada vez que disparo en su historia. Medido
-# 2026-08-16 con la cola vacia y ninguna alarma armada: hasta EOF cuenta 1, acotado cuenta 0.
-# Es la misma trampa que el 2026-08-15 se cazo a mano y que aqui seguia viva.
+# Y acotado a la lista. Esta es la TERCERA version de este corte y las dos anteriores contaban
+# alarmas que no existen:
+#   1. hasta EOF          -> cuenta `Alarm Stats:`, que nombra al receptor una vez por disparo
+#                            historico. Cazada a mano el 2026-08-15.
+#   2. hasta Top Alarms/Alarm Stats -> entre la lista y esas dos hay NUEVE secciones mas, y una es
+#                            `Removal history:`, que guarda `Reason=alarm_cancelled` con un
+#                            Snapshot que repite el tag. Medido 2026-08-17: con la cola en 0 y la
+#                            alarma recien cancelada, contaba 1.
+# El corte correcto no nombra la seccion siguiente — nombra que empieza UNA: la lista va indentada
+# a cuatro espacios o mas, y toda seccion de nivel superior empieza con dos y una letra.
+# Contraste para verificar a mano: `Pending alarms per uid:` no lista nuestro uid cuando es 0.
 ARMADA=$(a shell dumpsys alarm \
-         | awk '/pending alarms:/{f=1} /^  (Top Alarms|Alarm Stats):/{f=0} f' \
+         | awk '/^  [0-9]+ pending alarms:/{f=1; next} f && /^  [A-Za-z]/{exit} f' \
          | grep -c "DespertadorReceiver")
 echo "tras el intento fallido: cola=$PEND  alarmas_pendientes=$ARMADA"
 if [ "${PEND:-0}" != "1" ] || [ "${ARMADA:-0}" = "0" ]; then
