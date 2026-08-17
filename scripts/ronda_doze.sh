@@ -8,6 +8,11 @@
 #
 # Reads only. It seeds a throwaway ISBN into the queue and deletes nothing; the row it creates in
 # ScanInbox is removed at the end, after asserting it is the right one.
+#
+# Scheduled by ~/.config/systemd/user/ronda-doze.{service,timer} — outside the repository, so a
+# clone does not bring it. `systemctl --user list-timers ronda-doze\*` is how you check it is
+# still there. The first attempt at this was a TRANSIENT unit and it evaporated on the next
+# reboot with nobody noticing (2026-08-16).
 set -uo pipefail
 
 ADB="$HOME/Android/sdk/platform-tools/adb"
@@ -26,6 +31,19 @@ a() { timeout 30 "$ADB" -s "$TELEFONO" "$@"; }
 alarga() { "$ADB" -s "$TELEFONO" "$@"; }
 
 # --- Preconditions. Each one is a reason to abort rather than produce a result nobody can read.
+
+# La ventana primero, porque es gratis y porque es la que fallaba en silencio. Un timer que pierde
+# las 03:00 por suspension dispara en cuanto la maquina despierta: el 2026-08-16 corrio a las
+# 14:37 y dejo un log que parece evidencia y no lo es. Doze necesita el telefono quieto,
+# desenchufado y sin tocar, y eso es de madrugada. `Persistent=false` no basta — systemd reevalua
+# el OnCalendar al reanudar aunque no sea persistente, asi que el cerrojo tiene que estar aqui.
+HORA=$(date +%-H)  # %-H y no %H: "09" no es un entero valido para `test -gt`, es octal invalido
+if [ "${RONDA_FORZAR:-0}" != "1" ] && [ "$HORA" -gt 5 ]; then
+  echo "ABORTA: son las $(date '+%H:%M') y la ronda solo mide algo entre las 00:00 y las 05:59."
+  echo "        Para una ronda a mano, con el telefono ya desenchufado: RONDA_FORZAR=1 $0"
+  exit 1
+fi
+
 timeout 20 "$ADB" connect "$TELEFONO" >/dev/null 2>&1
 if ! a shell true >/dev/null 2>&1; then
   echo "ABORTA: el telefono no responde por Wi-Fi. Sin adb no hay evidencia de por que arranco."
@@ -43,6 +61,19 @@ fi
 
 curl -s -o /dev/null --max-time 10 localhost:8009/api/movil/assets/ || {
   echo "ABORTA: Django no responde en localhost:8009"; exit 1; }
+
+# El job se descubre AQUI y no donde se usa. Estaba despues de sembrar, asi que un aborto por
+# "no encontre el job" — que es el normal cuando el proceso lleva rato muerto — dejaba la cola del
+# telefono con un ISBN de prueba que se vaciaria solo en el siguiente flush, metiendo una fila
+# falsa en el catalogo real. Medido el 2026-08-16. El id cambia entre dias, no entre segundos, asi
+# que descubrirlo unos segundos antes de usarlo es seguro; sembrar antes de saberlo no lo era.
+JOB=$(a shell dumpsys jobscheduler | grep -oE "JOB #u0a[0-9]+/[0-9]+: [a-f0-9]+ $APP" \
+      | head -1 | grep -oE "/[0-9]+" | tr -d /)
+if [ -z "${JOB:-}" ]; then
+  echo "ABORTA: no encontre el job de $APP. Hasta la Tarea 10 solo el scheduler vacia la cola,"
+  echo "        y sin job no hay forma headless de armar la alarma. Abre la app una vez."
+  exit 1
+fi
 
 # --- Seed. A verb with a route, and an ISBN that cannot already exist.
 ISBN="9793$(date +%d%H%M%S)"
@@ -72,9 +103,7 @@ a shell "cat /sdcard/Download/cola.db | run-as $APP sh -c 'cat > databases/cola.
 
 # --- Arm the alarm WITHOUT opening the app. Until Task 10 gives `Puente.encolar` a caller, the
 #     only thing that runs `doWork` — and therefore `Despertador.sincronizar` — is the scheduler.
-JOB=$(a shell dumpsys jobscheduler | grep -oE "JOB #u0a[0-9]+/[0-9]+: [a-f0-9]+ $APP" \
-      | head -1 | grep -oE "/[0-9]+" | tr -d /)
-if [ -z "${JOB:-}" ]; then echo "ABORTA: no encontre el job de $APP"; exit 1; fi
+#     `$JOB` was discovered in the preconditions; see the note there for why.
 a shell cmd jobscheduler run -f "$APP" "$JOB" >/dev/null 2>&1
 sleep 12
 

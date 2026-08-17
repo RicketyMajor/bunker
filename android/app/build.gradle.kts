@@ -32,6 +32,37 @@ android {
     testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
+// One source of truth: the assets belong to the repository and the APK carries a copy, never a
+// fork. A second, separately edited copy of the frontend is the failure mode this whole task is
+// shaped around.
+//
+// Correction to the plan, found before writing any of it: `app.html` is a Django TEMPLATE, not a
+// static file. A plain Copy ships `{% load static %}` and `{% static 'movil/queue.js' %}`
+// verbatim, and the WebView then loads a page whose two script tags point at a literal `{% … %}`.
+// The page renders, nothing runs, and nothing reports an error. The three substitutions below are
+// exactly what Django's renderer emits — minus the CSRF value, which the APK never uses, because
+// `Cola.vaciar` is dead code there and `Transmisor` owns the flush.
+//
+// ponytail: the render is reproduced here rather than invoked, because invoking it would make the
+// Android build depend on a running Django. Ceiling: a fourth template tag added to `app.html`
+// ships raw and breaks the BUNDLED copy. It is self-healing — the first successful contact with
+// the server replaces the bundle with Django's own render — so the upgrade is worth it only if a
+// phone ever has to live on bundled assets for long.
+val copiarAssets by tasks.registering(Copy::class) {
+    val repo = rootDir.parentFile
+    from(repo.resolve("bunker_core/static/movil")) { include("app.js", "queue.js") }
+    from(repo.resolve("bunker_core/templates/movil")) {
+        include("app.html")
+        filter { linea: String ->
+            linea.replace("{% load static %}", "")
+                .replace(Regex("\\{% static '([^']+)' %}"), "/static/$1")
+                .replace("{{ csrf_token }}", "")
+        }
+    }
+    into(layout.projectDirectory.dir("src/main/assets/movil"))
+}
+tasks.named("preBuild") { dependsOn(copiarAssets) }
+
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")

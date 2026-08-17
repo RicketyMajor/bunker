@@ -215,7 +215,11 @@
 <script src="{% static 'movil/queue.js' %}"></script>
 <script src="{% static 'movil/app.js' %}"></script>
 <script>
-  if ('serviceWorker' in navigator) {
+  // Not inside the APK. There the assets are already on the device and the WebView makes no
+  // network request at all, so a service worker has nothing to intercept — and /movil/sw.js is
+  // not one of the three files the APK carries, so registering would only throw into an
+  // unhandled rejection on every launch.
+  if (!window.Bunker && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('/movil/sw.js', { scope: '/movil/' });
   }
 </script>

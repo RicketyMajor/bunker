@@ -12,6 +12,11 @@ const App = (() => {
   const LLAVE_ESTADO = 'transmisor_estado';
   const VACIO = { leyendo: null, habitos_pendientes: [], libros: [], peliculas: [], albums: [] };
 
+  // Same bridge queue.js binds, bound the same way and for the same reason. Inside the APK the
+  // snapshot lives in native storage next to the queue, because a WebView serving local assets
+  // has origin appassets.androidplatform.net and every call to the tailnet would be cross-origin.
+  const PUENTE = typeof window !== 'undefined' && window.Bunker ? window.Bunker : null;
+
   function leerCache() {
     try {
       const crudo = JSON.parse(localStorage.getItem(LLAVE_ESTADO) || 'null');
@@ -79,6 +84,23 @@ const App = (() => {
   }
 
   async function cargarEstado() {
+    if (PUENTE) {
+      // The bridge answering is NOT evidence of a link: it hands back the cached snapshot, which
+      // may be three days old. Freshness is a separate fact and the native side is the only thing
+      // that knows it, so it is reported alongside rather than inferred here.
+      const sobre = JSON.parse(PUENTE.estado());
+      estado = sobre.estado && Object.keys(sobre.estado).length ? sobre.estado : { ...VACIO };
+      sincronizado = sobre.sincronizado || null;
+      enLinea = !!sobre.en_linea;
+      // The native side already empties habitos_pendientes when the snapshot is not from today
+      // (AssetStore.estadoCacheado). Mirroring the rule here is what keeps the empty list from
+      // reading as "Nada pendiente hoy." when the truth is that we do not know.
+      habitosCaducados = !!sincronizado && diaLocal(new Date(sincronizado)) !== diaLocal();
+      pintarHome();
+      refrescarChip();
+      pintarInstantanea();
+      return;
+    }
     try {
       const r = await fetch('/api/movil/estado/', { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
@@ -96,6 +118,18 @@ const App = (() => {
 
   async function transmitir() {
     if (Cola.pendientes() === 0) { await cargarEstado(); return; }
+    if (PUENTE) {
+      // `Cola.vaciar` is the localStorage flush and the APK's queue is not there. Asking the
+      // worker is the only correct move, and its answer does not come back here: it arrives as a
+      // notification and as the next snapshot. So the wording promises a request, not a result —
+      // claiming "transmitido" for something that has not left the phone is precisely the lie
+      // this whole project is built to avoid.
+      PUENTE.sincronizar();
+      toast('Transmisión pedida. El Búnker responde cuando haya enlace.');
+      await cargarEstado();
+      pintarDespachos();
+      return;
+    }
     const { enviados, pendientes, retirados, alcanzoElServidor, ocupado } = await Cola.vaciar();
     // A flush already running is not evidence about the link either way; leave the chip alone.
     if (ocupado) return;
@@ -448,6 +482,26 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', () => {
     $('#chip').addEventListener('click', () => { pintarDespachos(); abrirHoja('despachos'); });
+
+    // The escape hatch, and it only exists inside the APK. A bad deploy from the laptop installs
+    // itself on the phone by design; without a way back, the only cure is reinstalling the APK —
+    // the exact fragility the APK was built to remove. A long press, not a button: it must be
+    // hard to hit by accident and impossible to miss once you know it is there.
+    if (PUENTE) {
+      let reloj;
+      const chip = $('#chip');
+      const soltar = () => clearTimeout(reloj);
+      chip.addEventListener('touchstart', () => {
+        reloj = setTimeout(() => {
+          PUENTE.revertirAssets();
+          // "On the next launch" and not "done": the assets are resolved once at start, so
+          // saying anything else would be describing a screen the user is not looking at.
+          toast('Interfaz revertida a la del APK. Cierra y abre la app.', 'error');
+        }, 1500);
+      }, { passive: true });
+      ['touchend', 'touchmove', 'touchcancel'].forEach((ev) =>
+        chip.addEventListener(ev, soltar, { passive: true }));
+    }
     $('#cerrar-despachos').addEventListener('click', () => $('#despachos').close());
     // There used to be a `close` listener here re-rendering the list, so that a half-armed
     // DESCARTAR could not survive into the next opening. It never ran — `close` does not

@@ -57,6 +57,21 @@ class AssetStore(
             a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
     }
 
+    /**
+     * When the snapshot was last replaced, epoch ms, 0 when never. Read by the bridge because
+     * the WebView cannot tell a fresh snapshot from a three-day-old one — both arrive the same
+     * way — and "the inventory is stale" is the one thing the staleness warning exists to say.
+     */
+    fun sincronizadoEn(): Long = prefs.getLong("estado_en", 0)
+
+    /**
+     * Whether the last attempt to refresh actually reached the server. Deliberately NOT derived
+     * from `sincronizadoEn`: a snapshot that has not changed in a week is indistinguishable from
+     * one refreshed a second ago against an unchanged database, so freshness cannot answer
+     * "is there a link right now".
+     */
+    fun ultimoContactoOk(): Boolean = prefs.getBoolean("contacto_ok", false)
+
     fun refrescarEstado(): Boolean = try {
         val texto = fetch(BuildConfig.BUNKER_URL + "/api/movil/estado/")
         // Parsed before it is stored, against the plan. `leer` only throws on a 4xx/5xx, so an
@@ -65,9 +80,17 @@ class AssetStore(
         // laptop off is the exact failure this cache exists to prevent.
         JSONObject(texto)
         guardarEstado(texto)
+        anotarContacto(true)
         true
     } catch (e: Exception) {
+        // Written in this branch too, and that is the point: without it the chip would keep
+        // claiming EN LÍNEA from a contact that succeeded days ago.
+        anotarContacto(false)
         false  // No signal is the normal condition; the previous snapshot stands.
+    }
+
+    private fun anotarContacto(ok: Boolean) {
+        prefs.edit().putBoolean("contacto_ok", ok).apply()
     }
 
     // --- The assets ---------------------------------------------------------------------

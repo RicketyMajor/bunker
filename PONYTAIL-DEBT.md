@@ -5,26 +5,37 @@ and the trigger that should make someone revisit it. This file collects them so 
 quietly become permanent.
 
 > Harvested 2026-08-15 from `grep -rnE '(#|//) ?ponytail:'` plus the two markers that live in Python
-> docstrings. **Line numbers drift — the comment is the source of truth, this file is the index.**
+> docstrings. **Re-harvested 2026-08-16** after Task 10.
+> **Line numbers drift — the comment is the source of truth, this file is the index.**
 > Re-run the harvest rather than trusting the numbers below.
 
-**14 markers · 1 with no trigger · 2 whose trigger has already fired.**
+**14 markers · 1 with no trigger · 2 whose trigger has already fired · 1 discharged.**
+
+## Discharged
+
+- **`bunker_core/static/movil/queue.js:8`** — localStorage instead of IndexedDB, flushed from the
+  page rather than the service worker. *Upgrade named:* "when captures must sync without the app
+  being opened." **Done 2026-08-16, Task 10.** The store did not become better; it stopped being
+  the only one. `queue.js` is now a facade over two backends — native SQLite through `Puente` inside
+  the APK, localStorage in a plain browser at `/movil/` — and the marker was deleted rather than
+  reworded, which is what discharging one looks like.
 
 ## Triggers that have already fired
 
-These two are the ones to read first: the condition their own comment names as the moment to
-revisit has happened.
+The condition each comment names as the moment to revisit has happened.
 
-- **`bunker_core/static/movil/queue.js:8`** — localStorage instead of IndexedDB, flushed from the
-  page rather than the service worker. *Ceiling:* a service worker cannot read localStorage, so
-  moving the flush means moving the store. *Upgrade:* "when captures must sync without the app being
-  opened" — **which is the entire reason "Transmisor de Campo v2" exists**. Task 10 replaces this
-  file's storage with the native bridge and keeps the API as a facade.
-- **`android/…/Transmisor.kt:106`** — `postReal` deliberately untested; every check injects `poster`
+- **`android/…/Transmisor.kt`** — `postReal` deliberately untested; every check injects `poster`
   instead. *Ceiling:* the socket itself, `instanceFollowRedirects`, and `disconnect()` not being in
   a `finally` are all unproven. *Upgrade:* "Task 8's flush on the phone, which is the first time
-  this runs for real" — **that flush ran on 2026-08-15 and reached Django**. What is owed now is
-  either recording that it was verified, or admitting the `finally` still has not been.
+  this runs for real" — **that flush ran on 2026-08-15 and reached Django**. Still owed, and now
+  pointedly: the identical defect in `AssetStore.leerReal` — a leaked connection on the failure
+  path, which is the common one — was found and fixed on 2026-08-15. `postReal` has not been read
+  for it.
+- **`android/…/MainActivity.kt`** — the exact-alarm request is sent once and the answer remembered.
+  *Ceiling:* whoever declines keeps the inexact alarm for ever, with no way back. *Upgrade named:*
+  "a banner in the WebView (Task 10)". **Task 10 landed on 2026-08-16 and the banner was not
+  built.** The WebView now exists, so the stated upgrade is available and simply owed — the chip
+  already grew a long-press for the asset escape hatch and is the obvious place for it.
 
 ## No trigger — the one that rots silently
 
@@ -47,10 +58,14 @@ revisit has happened.
   reachable. **This is the load-bearing one:** `decisions/log.md` (2026-08-14) rejected a relay
   *because* the backup file buys the same durability, and that trade rests on a restore path nobody
   has exercised.
-- **`MainActivity.kt:57`** — the exact-alarm request is sent once and the answer remembered.
-  *Ceiling:* whoever declines keeps the inexact alarm for ever, with no way back. *Upgrade:* a
-  banner in the WebView (Task 10), the first screen able to say why the queue is slow and offer the
-  intent again.
+- **`MainActivity.kt`** — moved up to "Triggers that have already fired": Task 10 built the WebView
+  on 2026-08-16 without building the banner.
+- **`android/app/build.gradle.kts`** *(new 2026-08-16, Task 10)* — `copiarAssets` reproduces
+  Django's template render with three string substitutions instead of invoking it. *Ceiling:* a
+  fourth template tag in `app.html` ships raw and breaks the **bundled** copy. *Upgrade:* only if a
+  phone ever has to live on bundled assets for long — the first successful contact with the server
+  replaces them with Django's own render, so the drift is self-healing. Guarded meanwhile by
+  diffing the bundled file against `/movil/asset/app.html`; they are identical bar the CSRF value.
 
 ### Django / the web companion
 

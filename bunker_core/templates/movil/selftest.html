@@ -147,9 +147,16 @@ const restaurar = () => {
   // The exact set, not a loop over expected names: a route left behind after a verb is
   // deleted is invisible to a one-way check, and that is precisely what the minutes removal
   // could have left. Sorted so the comparison does not depend on declaration order.
-  await check('los verbos de las hojas y las rutas son el mismo conjunto', () => {
+  //
+  // This list is now load-bearing twice over. `Transmisor.RUTAS` in the APK is the map that
+  // actually posts, and TransmisorTest asserts the SAME twelve names against it. Hard-coded on
+  // both sides on purpose: two maps compared against each other agree perfectly while both are
+  // wrong, and a route added to one side only is the failure that reaches the phone as a capture
+  // POSTed to `/undefined`. `sesion` has no sheet until Task 11 and belongs here regardless —
+  // the queue must know a verb before anything can enqueue it.
+  await check('las rutas de la web son el conjunto exacto que el APK tambien declara', () => {
     const esperados = ['escaneo_disco', 'escaneo_libro', 'escaneo_peli', 'habito', 'paginas',
-                       'terminar_disco', 'terminar_libro', 'terminar_peli',
+                       'sesion', 'terminar_disco', 'terminar_libro', 'terminar_peli',
                        'wishlist_disco', 'wishlist_libro', 'wishlist_peli'];
     const reales = Object.keys(Cola.RUTAS).sort();
     assert(reales.join(',') === esperados.join(','),

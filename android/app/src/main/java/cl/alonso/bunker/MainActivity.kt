@@ -2,17 +2,19 @@ package cl.alonso.bunker
 
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.widget.TextView
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewClientCompat
 
-// Still empty of features. The WebView arrives in Task 10, once there is a queue worth showing.
-//
 // AppCompatActivity and not android.app.Activity: the manifest declares
 // `Theme.AppCompat.NoActionBar`, and an AppCompat theme belongs to an AppCompat activity.
 class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(TextView(this).apply { text = "Transmisor" })
+        setContentView(montarWebView())
 
         // Asked only when it is not already granted, against the plan's unconditional call: on
         // API 33+ a second request after a denial does nothing at all, and an unconditional one
@@ -26,6 +28,51 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         SyncWorker.programar(this)
+    }
+
+    /**
+     * The interface. Every byte it shows comes from the device; it makes no network request of
+     * its own, which is what lets the whole thing work with the laptop off and is why there is no
+     * CORS anywhere in this project.
+     */
+    private fun montarWebView(): WebView {
+        // `handler()` sweeps superseded generations, so it is called ONCE and shared. Twice would
+        // resolve the directory twice, and the second resolution could disagree with the first.
+        val servidor = AssetStore(this).handler()
+        val loader = WebViewAssetLoader.Builder()
+            // Both prefixes, and the second is not optional. `app.html` is a Django template and
+            // its rendered script tags read `/static/movil/queue.js` — that is what Django emits
+            // and what the APK downloads. Registering only `/movil/` leaves those two requests
+            // unintercepted: the page renders, no script loads, and nothing reports an error.
+            .addPathHandler("/movil/", servidor)
+            .addPathHandler("/static/movil/", servidor)
+            .build()
+
+        return WebView(this).apply {
+            settings.javaScriptEnabled = true
+            // app.js still writes the snapshot to localStorage on the optimistic-update paths.
+            // Native storage is the source of truth here, but turning this off would throw on
+            // every one of those writes.
+            settings.domStorageEnabled = true
+            // Nothing here is a browser. No file access, no content providers, no zoom controls.
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+
+            webViewClient = object : WebViewClientCompat() {
+                override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest) =
+                    loader.shouldInterceptRequest(req.url)
+
+                // The bridge is exposed to whatever document this WebView holds, so what it is
+                // allowed to hold is a security boundary, not a nicety. A link to anywhere else
+                // would hand `Bunker` to that page. Refused outright rather than opened in a
+                // browser: nothing in this app has any business navigating.
+                override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest) =
+                    req.url.host != "appassets.androidplatform.net"
+            }
+
+            addJavascriptInterface(Puente(this@MainActivity, ColaStore(this@MainActivity)), "Bunker")
+            loadUrl("https://appassets.androidplatform.net/movil/app.html")
+        }
     }
 
     // `onWindowFocusChanged` and not `onResume`: an invisible restore by MIUI runs the early
