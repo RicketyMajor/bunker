@@ -106,9 +106,22 @@ def run():
         # de terminarse". Ordena por paginas restantes, no por recencia, que es justo el
         # criterio que hoy no se podia calcular porque ReadingSession no sabia de que libro
         # hablaba. Con dos libros en curso el orden tiene que ser el correcto, no el ultimo.
+        #
+        # Acotado a los dos libros que esta prueba siembra, y no es cosmetico: hasta el
+        # 2026-08-17 preguntaba por TODA la tabla y afirmaba que habia exactamente dos libros
+        # con posicion. Eso solo era cierto mientras nadie hubiera capturado paginas de verdad.
+        # La primera captura real desde el telefono — ReadingSession 1202, Jujutsu Kaisen,
+        # la fila que el handoff 017 registro como prueba de que Task 10 funcionaba — metio un
+        # tercer libro y dejo `bunker doctor` en rojo permanente. La prueba quedo falsificada
+        # por el sistema funcionando bien, que es la peor clase de check.
+        #
+        # Regla que deja: una prueba que lee la base viva no puede afirmar un CONTEO. O acota a
+        # lo que ella misma sembro, o afirma una relacion (este antes que aquel) que el ruido
+        # no pueda romper. Aqui se acota, porque asi el resultado no depende del dia.
+        mios = [libro.id, otro.id]
         posiciones = {}
         for s in (ReadingSession.objects
-                  .filter(book__isnull=False, current_page__isnull=False)
+                  .filter(book_id__in=mios, current_page__isnull=False)
                   .order_by("date", "id")):
             posiciones[s.book_id] = s.current_page  # la ultima posicion de cada libro gana
 

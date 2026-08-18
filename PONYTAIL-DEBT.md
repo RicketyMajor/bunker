@@ -5,13 +5,23 @@ and the trigger that should make someone revisit it. This file collects them so 
 quietly become permanent.
 
 > Harvested 2026-08-15 from `grep -rnE '(#|//) ?ponytail:'` plus the two markers that live in Python
-> docstrings. **Re-harvested 2026-08-16** after Task 10.
+> docstrings. **Re-harvested 2026-08-16** after Task 10, and **2026-08-17** after the backup fix.
 > **Line numbers drift — the comment is the source of truth, this file is the index.**
-> Re-run the harvest rather than trusting the numbers below.
+> Re-run the harvest rather than trusting the numbers below. Use a bare `grep -rn 'ponytail:'`:
+> the `(#|//)`-anchored version **misses every marker written in a docstring or a KDoc**, which is
+> three of the fourteen — including the one on `ColaStore.respaldar` added the day this was written.
 
-**14 markers · 1 with no trigger · 2 whose trigger has already fired · 1 discharged.**
+**14 markers in the code · 1 with no trigger · 2 whose trigger has already fired · 2 discharged.**
 
 ## Discharged
+
+- **`ColaStore.kt` — the MediaStore round trip.** *Upgrade named:* "verify it by hand once Task 10
+  makes a capture reachable." Task 10 did, on 2026-08-17, and **the answer was no** — the marker
+  was promoted to a 🔴 defect rather than ticked. **Fixed the same day:** the row is created once
+  and its `Uri` remembered in prefs, and the growth is over. Discharged as a *deferral*, and it
+  earned the rule it leaves behind: **a deferral hides a defect until something forces it open.**
+  It was the stated justification for a decision for three days. A narrower marker replaces it, on
+  the stale-`Uri` case, with a trigger that can actually fire.
 
 - **`bunker_core/static/movil/queue.js:8`** — localStorage instead of IndexedDB, flushed from the
   page rather than the service worker. *Upgrade named:* "when captures must sync without the app
@@ -52,14 +62,12 @@ The condition each comment names as the moment to revisit has happened.
   *Ceiling:* a 2xx carrying the wrong body is indistinguishable from a good one, and
   `hayGeneracionValida` only asks whether the files are non-empty. *Upgrade:* a hash or a
   content-type check, the day an asset arrives corrupted with a 200.
-- **`ColaStore.kt`** — ~~the MediaStore round trip is verified by hand on the phone, not by a
-  check.~~ **The hand verification happened on 2026-08-17 and the round trip FAILED.** The marker
-  said "verify it by hand once Task 10 makes a capture reachable"; Task 10 did, and the answer was
-  no. `respaldar()` writes a new `bunker-cola (N).json` per capture and `leerRespaldo()` cannot read
-  any of them — measured, with the MediaStore rows, in `state-of-the-project.md` §1, now 🔴.
-  This marker is **not** discharged: it is promoted to a defect. What it was protecting — the claim
-  in `decisions/log.md` (2026-08-14) that the backup buys a relay's durability — **is false**, and
-  the deferral is exactly what let it stay unexamined from Task 6 until a capture existed.
+- **`ColaStore.respaldar()`** *(new 2026-08-17, replaces the discharged one above)* — a `Uri` that
+  goes stale, because the user deleted the file from `Documents/`, silently stops backing up for
+  ever. *Ceiling:* no retry, **deliberately** — a retry that re-inserts turns a full disk into the
+  exact unbounded growth this fix removed. *Upgrade:* the day something actually reads the backup,
+  because **nothing calls `leerRespaldo()` today** — grep the whole tree and it has no callers at
+  all. That fact, not the MediaStore ownership rule, is the real reason the backup restores nothing.
 - **`MainActivity.kt`** — moved up to "Triggers that have already fired": Task 10 built the WebView
   on 2026-08-16 without building the banner.
 - **`android/app/build.gradle.kts`** *(new 2026-08-16, Task 10)* — `copiarAssets` reproduces

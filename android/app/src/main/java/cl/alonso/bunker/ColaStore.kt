@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import org.json.JSONArray
@@ -28,6 +29,10 @@ data class Despacho(
  * relations, and a migration framework for it would be more code than the table.
  */
 class ColaStore(private val context: Context) {
+
+    // The same file AssetStore writes to, and for the same reason: it is what survives the
+    // process being killed between a capture and the flush.
+    private val prefs = context.getSharedPreferences("transmisor", Context.MODE_PRIVATE)
 
     private val helper = object : SQLiteOpenHelper(context, "cola.db", null, 1) {
         override fun onCreate(db: SQLiteDatabase) {
@@ -115,14 +120,6 @@ class ColaStore(private val context: Context) {
     }
 
     /**
-     * Mirrors the queue into Documents/ through MediaStore, which needs no permission on API 29+
-     * and outlives an uninstall — unlike Android/data/<pkg>/files/, which is deleted with the app
-     * and would therefore fail in the one case this exists for.
-     *
-     * Returns false rather than throwing: a backup that cannot be written must never cost a
-     * capture. The queue is the source of truth; this is a copy.
-     */
-    /**
      * The queue as the JSON the backup file holds. Split out from `respaldar` because it is the
      * half that can be wrong by logic — a dropped field, a payload double-encoded — while the
      * other half is one platform call. Robolectric's ContentResolver accepts a MediaStore write
@@ -138,37 +135,67 @@ class ColaStore(private val context: Context) {
         }
     }.toString()
 
-    // Block body, not `= try {...}`: this function returns early twice (from inside the
-    // `use` lambda, and on a null `insert`), and Kotlin forbids `return` in an expression body.
-    //
-    // ponytail: the MediaStore round trip is verified by hand on the phone, not by a check —
-    // Robolectric cannot query back what it accepted. Upgrade path is an instrumented test,
-    // which this plan's constraints rule out. Verify it once Task 10 makes a capture reachable.
-    fun respaldar(): Boolean {
-      return try {
-        val json = serializar()
-
-        val resolver = context.contentResolver
-        val uri = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val donde = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
-        resolver.query(uri, arrayOf(MediaStore.MediaColumns._ID), donde,
-            arrayOf(NOMBRE_RESPALDO), null).use { c ->
-            if (c != null && c.moveToFirst()) {
-                val existente = ContentUris.withAppendedId(uri, c.getLong(0))
-                resolver.openOutputStream(existente, "wt")!!.use { it.write(json.toByteArray()) }
-                return true
-            }
+    /**
+     * Mirrors the queue into Documents/ through MediaStore, which needs no permission on API 29+.
+     *
+     * The KDoc here used to add "and outlives an uninstall", which was the whole reason this
+     * exists. **The file does; the app's access to it does not** — measured on the phone
+     * 2026-08-17. See `crearRespaldo`. What this buys today is a copy readable by the user and by
+     * other apps, and one that survives clearing the app's data. It does not buy a restore, and
+     * nothing calls `leerRespaldo()`.
+     *
+     * Returns false rather than throwing: a backup that cannot be written must never cost a
+     * capture. The queue is the source of truth; this is a copy.
+     */
+    fun respaldar(): Boolean = try {
+        val guardado = prefs.getString(URI_RESPALDO, null)
+        val destino = guardado?.let { Uri.parse(it) } ?: crearRespaldo()
+        // "wt" truncates and "w" does not, and the queue SHRINKS on every successful flush:
+        // writing a shorter JSON over a longer one without truncating leaves the tail of the
+        // previous one behind — valid bytes, invalid JSON. A file just created is empty, so the
+        // create path keeps "w", which is also the only mode this phone has ever exercised: the
+        // name probe never matched, so the "wt" branch that lived here never ran on the device.
+        val modo = if (guardado != null) "wt" else "w"
+        if (destino == null) false
+        else {
+            context.contentResolver.openOutputStream(destino, modo)!!
+                .use { it.write(serializar().toByteArray()) }
+            true
         }
-        val nuevo = resolver.insert(uri, ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, NOMBRE_RESPALDO)
-            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS)
-        }) ?: return false
-        resolver.openOutputStream(nuevo)!!.use { it.write(json.toByteArray()) }
-        true
-      } catch (e: Exception) {
+    } catch (e: Exception) {
         false
-      }
+    }
+
+    /**
+     * Creates the backup row and remembers its `Uri`, which is what makes the write above
+     * repeatable.
+     *
+     * It was found by `DISPLAY_NAME` until 2026-08-17, and that was the defect. An uninstall
+     * clears `owner_package_name`, so the query stops matching a file that is still on disk;
+     * `insert` then runs, MediaStore de-duplicates the name to `bunker-cola (1).json` **and
+     * stores the suffixed name as the row's `DISPLAY_NAME`** — so the next probe misses again,
+     * and every capture inserts one more file, for ever. Measured on the phone: `(1)` … `(5)`.
+     *
+     * This bounds that at one file per install. It does **not** make the backup readable after a
+     * reinstall — the prefs are cleared with the app, so the remembered `Uri` goes with them.
+     * That half is SAF (`ACTION_OPEN_DOCUMENT`) and a design decision; see `state-of-the-project`.
+     *
+     * ponytail: a `Uri` that goes stale — the user deletes the file from Documents/ — silently
+     * stops backing up for ever. Deliberately not retried: a retry that re-inserts turns a full
+     * disk into the very unbounded growth this replaced. Upgrade the day something actually reads
+     * the backup, because today nothing calls `leerRespaldo()`.
+     */
+    private fun crearRespaldo(): Uri? {
+        val nuevo = context.contentResolver.insert(
+            MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, NOMBRE_RESPALDO)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS)
+            }
+        ) ?: return null
+        prefs.edit().putString(URI_RESPALDO, nuevo.toString()).apply()
+        return nuevo
     }
 
     fun leerRespaldo(): String = try {
@@ -188,5 +215,11 @@ class ColaStore(private val context: Context) {
 
     companion object {
         const val NOMBRE_RESPALDO = "bunker-cola.json"
+
+        /**
+         * Where the backup's `Uri` is remembered. The name is NOT enough to find the row again —
+         * that is the 2026-08-17 defect, and it is the one thing about this file worth knowing.
+         */
+        const val URI_RESPALDO = "uri_respaldo"
     }
 }

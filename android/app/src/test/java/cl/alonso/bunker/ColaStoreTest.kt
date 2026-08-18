@@ -1,7 +1,9 @@
 package cl.alonso.bunker
 
+import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,15 +50,37 @@ class ColaStoreTest {
     }
 
     @Test
+    fun `el respaldo escribe siempre en el mismo archivo`() {
+        // The 2026-08-17 defect, and the only part of it a check off the device can reach:
+        // respaldar() found its file by DISPLAY_NAME, the probe stopped matching after an
+        // uninstall, and every capture inserted one more `bunker-cola (N).json`. Robolectric
+        // hands back a DIFFERENT Uri per insert (measured: file/1, then file/2), so a second
+        // insert is visible right here — the remembered Uri would change.
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = ctx.getSharedPreferences("transmisor", Context.MODE_PRIVATE)
+        val s = ColaStore(ctx)
+
+        s.encolar("paginas", """{"pages":1}""")
+        val primero = prefs.getString(ColaStore.URI_RESPALDO, null)
+        assertNotNull("el respaldo no recordo su Uri", primero)
+
+        s.encolar("paginas", """{"pages":2}""")
+        s.descartar(s.items()[0].id)
+        assertEquals("el respaldo creo un archivo nuevo", primero,
+            prefs.getString(ColaStore.URI_RESPALDO, null))
+    }
+
+    @Test
     fun `el respaldo contiene la captura`() {
         // The assertion the plan asks for, against the half that can be wrong by logic.
-        // `leerRespaldo()` is NOT asserted here: Robolectric's ContentResolver accepts the
-        // MediaStore write (respaldar() returns true) and then returns an empty read, so a
-        // round-trip assertion would be testing the shadow, not ColaStore. Measured:
-        // `respaldar=true leido.length=0`.
+        // Neither `respaldar()`'s return value nor `leerRespaldo()` is asserted here, and both
+        // exclusions are measured, not assumed: Robolectric's ContentResolver refuses the
+        // truncating mode the rewrite path needs (`openOutputStream(uri, "wt")` →
+        // `FileNotFoundException: No content provider`) and refuses to read back what it accepted
+        // (`UnsupportedOperationException: You must use ShadowContentResolver.registerInputStream`).
+        // Asserting either would be asserting the shadow. What the file must CONTAIN is right here.
         val s = store()
         s.encolar("paginas", """{"pages":7}""")
-        assertTrue(s.respaldar())
         val json = s.serializar()
         assertTrue("el respaldo no contiene la captura", json.contains("\"pages\":7"))
         assertTrue("el respaldo pierde el verbo", json.contains("\"verbo\":\"paginas\""))
