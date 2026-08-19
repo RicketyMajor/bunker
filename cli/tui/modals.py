@@ -278,6 +278,66 @@ class ConfirmModal(ModalScreen[bool]):
             self.dismiss(False)
 
 
+class BriefingScreen(ModalScreen[None]):
+    """Lo primero que ves al entrar: ayer, hoy, y lo que está en riesgo."""
+
+    BINDINGS = [("escape", "dismiss_briefing", "Cerrar"), ("enter", "dismiss_briefing", "Cerrar")]
+
+    def __init__(self, datos: dict) -> None:
+        super().__init__()
+        self.datos = datos
+
+    def compose(self) -> ComposeResult:
+        d = self.datos
+        ayer = d.get("ayer", {})
+        with Vertical(id="briefing_dialog"):
+            yield Label("◈ PARTE DIARIO ◈", classes="modal_title")
+
+            lineas = []
+            if ayer.get("paginas"):
+                lineas.append(f"Ayer leíste {ayer['paginas']} páginas.")
+            if ayer.get("minutos_deep_work"):
+                lineas.append(f"{ayer['minutos_deep_work']} min de Deep Work.")
+            if ayer.get("minutos_cine"):
+                lineas.append(f"{ayer['minutos_cine']} min de cine.")
+            if ayer.get("habitos"):
+                lineas.append(f"{ayer['habitos']} hábitos marcados.")
+            if not lineas:
+                lineas.append("Ayer no quedó registrado nada.")
+            yield Label("\n".join(lineas), id="briefing_ayer")
+
+            pendientes = d.get("hoy", {}).get("habitos_pendientes", [])
+            yield Label(
+                f"Hoy: {len(pendientes)} hábitos pendientes." if pendientes
+                else "Hoy: nada pendiente.",
+                id="briefing_hoy")
+
+            riesgo = d.get("habito_en_riesgo")
+            if riesgo:
+                yield Label(
+                    f"⚠ «{riesgo['name']}» lleva {riesgo['current_streak']} días. No la rompas.",
+                    id="briefing_riesgo")
+
+            libro = d.get("libro_mas_cerca")
+            if libro:
+                yield Label(f"📖 A {libro['restantes']} páginas de terminar «{libro['title']}».",
+                            id="briefing_libro")
+
+            for logro in d.get("logros_nuevos", []):
+                yield Label(f"{logro['icon']} Desbloqueado: {logro['name']}")
+
+            for frase in d.get("conclusiones", []):
+                yield Label(f"› {frase}", classes="briefing_conclusion")
+
+            yield Button("Entrar al Búnker", variant="success", id="btn_cerrar_briefing")
+
+    def action_dismiss_briefing(self) -> None:
+        self.dismiss(None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(None)
+
+
 class AddMenuModal(ModalScreen[str]):
     """Menú principal de adquisición (Escáner, ISBN, Manual)."""
 

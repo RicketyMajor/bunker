@@ -13,7 +13,7 @@ from textual import work
 from .constants import API_LIBRARY, API_TRACKER, API_MOVIES
 from .movie_screens import MovieMainScreen
 from textual.widgets import ProgressBar
-from .modals import ConfirmModal, EvacuationModal
+from .modals import ConfirmModal, EvacuationModal, BriefingScreen
 from .constants import API_BACKUP, API_RESTORE
 
 
@@ -545,6 +545,8 @@ class BunkerLauncherScreen(Screen):
         self.set_interval(1.0, self.tick_clock)
         self.fetch_dashboard()
         self.set_interval(15.0, self.fetch_dashboard)
+        # Una sola vez, sin `set_interval`: el parte es de entrada, no un refresco.
+        self.fetch_briefing()
 
     def tick_clock(self) -> None:
         from datetime import datetime
@@ -628,6 +630,32 @@ class BunkerLauncherScreen(Screen):
                 self.app.call_from_thread(self.update_status_bar, "red")
         except Exception:
             self.app.call_from_thread(self.update_status_bar, "offline")
+
+    @work(thread=True)
+    def fetch_briefing(self) -> None:
+        """El parte diario. Si no contesta, el Launcher aparece igual: eso es el requisito."""
+        try:
+            from .constants import API_BRIEFING, API_BRIEFING_SEEN
+            import httpx
+            resp = httpx.get(API_BRIEFING, timeout=3.0)
+            if resp.status_code != 200:
+                return
+            datos = resp.json()
+            self.app.call_from_thread(self.mostrar_briefing, datos)
+            # El POST va DESPUÉS de mostrarlo, y ese orden es el requisito: marca como visto
+            # sólo lo que se llegó a pintar. Al revés, un GET que expira dejaría los logros
+            # marcados sin que nadie los haya leído nunca, y no hay vuelta atrás.
+            try:
+                httpx.post(API_BRIEFING_SEEN, json={"con_revision": False}, timeout=3.0)
+            except Exception:
+                pass
+        # El `except` desnudo es el requisito, no descuido: si el endpoint falla o tarda, el
+        # Launcher tiene que aparecer igual. No lo conviertas en un crash.
+        except Exception:
+            pass
+
+    def mostrar_briefing(self, datos: dict) -> None:
+        self.app.push_screen(BriefingScreen(datos))
 
     def update_reactive_data(self, data: dict) -> None:
         self.dashboard_data = data

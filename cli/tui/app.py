@@ -43,6 +43,9 @@ class BunkerApp(App):
     #add_menu_dialog Button { width: 100%; margin-bottom: 1; }
     #scanner_dialog { width: 50; height: 35; padding: 1 2; border: heavy $success; background: $surface; }
     #scanner_qr { height: 1fr; background: #000000; color: #ffffff; text-align: center; } 
+    #briefing_dialog { width: 64; height: auto; padding: 1 2; border: heavy $success; background: $surface; }
+    #briefing_dialog Label { margin-bottom: 1; }
+    .briefing_conclusion { color: $warning; }
     #watchers_list_dialog { width: 80; height: 25; padding: 1 2; border: heavy $accent; background: $surface; }
     #watchers_scroll { height: 1fr; border: solid $primary; padding: 1; margin-bottom: 1; }
     """
