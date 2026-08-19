@@ -21,7 +21,12 @@ django.setup()
 from django.db import IntegrityError, transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
-from bunker_core.briefing import construir_briefing, marcar_visto  # noqa: E402
+from bunker_core.briefing import (  # noqa: E402
+    _semana_actual, _semana_anterior, construir_briefing, marcar_visto,
+)
+from django.db import connection  # noqa: E402
+from django.test.utils import CaptureQueriesContext  # noqa: E402
+from movies.models import MovieAnnualRecord  # noqa: E402
 from bunker_core.models import BunkerState  # noqa: E402
 from catalog.models import Author, Book, ReadingSession  # noqa: E402
 from posada.models import Achievement, DailyHabit, GuildProfile  # noqa: E402
@@ -162,6 +167,100 @@ def run_tests():
         hecho.delete()
         check(construir_briefing()["habito_en_riesgo"] is None,
               "una racha de 0 no está 'en riesgo'")
+
+        # --- Revisión semanal: aparece una vez por semana ISO y se calla el resto. --------
+        estado, _ = BunkerState.objects.get_or_create(id=1)
+        estado.last_review_week = ""
+        estado.save()
+        check(construir_briefing()["show_review"] is True,
+              "sin revisión esta semana, show_review es True")
+        marcar_visto(con_revision=True)
+        check(construir_briefing()["show_review"] is False,
+              "tras marcarla vista, no vuelve a aparecer esta semana")
+
+        # Diez días sin abrir: la revisión sigue esperando, no caduca.
+        estado.refresh_from_db()
+        estado.last_review_week = "2020-W01"
+        estado.save()
+        check(construir_briefing()["show_review"] is True,
+              "una revisión de otra semana sigue pendiente por muchos días que pasen")
+
+        # La clave de la semana anterior NO se calcula restando 1 al número. Preguntado HOY
+        # —semana 34— restar 1 acierta, y acertará los próximos cuatro meses: la aserción
+        # solo podría ponerse roja un día del año. Se pregunta por enero, donde la semana
+        # anterior a la 1 es la 52 o la 53 del año PASADO, y cuál de las dos depende del año.
+        check(_semana_anterior(date(2027, 1, 4)) == "2026-W53",
+              f"antes de la semana 1 de 2027 va la 53 de 2026: {_semana_anterior(date(2027, 1, 4))!r}")
+        check(_semana_anterior(date(2026, 1, 1)) == "2025-W52",
+              f"y antes de la de 2026, la 52 de 2025: {_semana_anterior(date(2026, 1, 1))!r}")
+        check(_semana_anterior() != _semana_actual(),
+              "la semana anterior no es la actual")
+        check(len(_semana_anterior()) == 8 and "-W" in _semana_anterior(),
+              f"la clave anterior es ISO de 8 caracteres: {_semana_anterior()!r}")
+
+        # Cada métrica se compara contra la semana previa, y ninguna llega vacía.
+        estado.last_review_week = ""
+        estado.save()
+        briefing = construir_briefing()
+        review = briefing["review"]
+        check(review is not None, "con show_review, review no es None")
+        # La semana REVISADA es la última COMPLETA, no la que está en curso: la revisión se
+        # dispara la primera entrada de la semana nueva —un lunes— y comparar 0 días contra 7
+        # pintaba las siete métricas en rojo por construcción.
+        check(review["semana"] == _semana_anterior(),
+              f"revisa la última semana COMPLETA, no la que está en curso: {review['semana']!r}")
+        check(review["semana"] != _semana_actual(),
+              "la semana en curso no es la que se revisa")
+        check(review["anterior"] == _semana_anterior(timezone.localdate() - timedelta(days=7)),
+              f"y la compara contra la anterior a esa: {review['anterior']!r}")
+
+        # Lo que la revisión reporta tiene que ser lo de la semana revisada, no lo de hoy.
+        # Una sesión de HOY —semana en curso— no puede aparecer en ella.
+        from posada.models import DeepWorkSession
+        antes_dw = next(m for m in review["metricas"] if m["etiqueta"] == "Deep Work (min)")
+        DeepWorkSession.objects.create(start_time=timezone.now(), duration_minutes=999,
+                                       category="Prueba", completed=True)
+        estado.last_review_week = ""
+        estado.save()
+        despues_dw = next(m for m in construir_briefing()["review"]["metricas"]
+                          if m["etiqueta"] == "Deep Work (min)")
+        check(despues_dw["actual"] == antes_dw["actual"],
+              f"999 minutos de HOY no entran en la revisión de la semana pasada: {despues_dw}")
+        check(len(review["metricas"]) == 7, f"siete métricas, no {len(review['metricas'])}")
+        check(any(m["etiqueta"] == "Logros" for m in review["metricas"]),
+              "la revisión incluye los logros desbloqueados, que la spec pide")
+        for m in review["metricas"]:
+            check("actual" in m and "previa" in m,
+                  f"la métrica '{m['etiqueta']}' se compara contra la semana previa")
+            check(isinstance(m["actual"], int) and isinstance(m["previa"], int),
+                  f"la métrica '{m['etiqueta']}' trae enteros, nunca None")
+
+        # Cinco módulos distintos, no seis llamadas: books sale dos veces en la lista y se
+        # consulta UNA. books cuesta 2 consultas (registros + páginas), los otros 1.
+        estado.last_review_week = ""
+        estado.save()
+        with CaptureQueriesContext(connection) as con_rev:
+            construir_briefing()
+        estado.last_review_week = _semana_actual()
+        estado.save()
+        with CaptureQueriesContext(connection) as sin_rev:
+            construir_briefing()
+        coste = len(con_rev) - len(sin_rev)
+        check(coste == 7,
+              f"la revisión cuesta 7 consultas (5 módulos + logros, books doble), no {coste}")
+
+        # Y el día que no toca no se paga: el payload es None, no un dict vacío.
+        check(construir_briefing()["review"] is None,
+              "sin revisión pendiente, review es None y no se construye")
+
+        # --- "Ayer" cuenta películas, no minutos de un libro mayor muerto. ---------------
+        #     `MovieViewingSession` tiene 0 filas y nada la escribe desde 2026-08-14, así que
+        #     `minutos_cine` era un cero permanente que ver una película no podía mover.
+        ayer = timezone.localdate() - timedelta(days=1)
+        antes_pelis = construir_briefing()["ayer"]["peliculas"]
+        MovieAnnualRecord.objects.create(title="Prueba", date_watched=ayer)
+        check(construir_briefing()["ayer"]["peliculas"] == antes_pelis + 1,
+              "una película vista ayer aparece en el briefing de hoy")
 
         transaction.set_rollback(True)
 

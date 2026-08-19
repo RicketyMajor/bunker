@@ -11,7 +11,7 @@ from textual import work
 from .constants import (
     API_MUSIC, API_MUSIC_DIRS, API_MUSIC_INBOX, API_MUSIC_PROCESS, API_MUSIC_SCAN,
     API_MUSIC_TRACKER, API_MUSIC_TRACKER_ANNUAL, API_MUSIC_TRACKER_FINISH,
-    API_MUSIC_WATCHERS, API_MUSIC_WISHLIST
+    API_MUSIC_WATCHERS, API_MUSIC_WISHLIST, API_TIMELINE
 )
 from .modals import (
     AddMusicMenuModal, ScannerModal, MusicTitleModal, MusicFullEditModal,
@@ -19,7 +19,8 @@ from .modals import (
     DeleteDirModal, SyncConsoleModal, WatcherModal, WatchersListModal
 )
 from .tabs import (
-    MusicInventoryTab, MusicInboxTab, MusicLoansTab, MusicTrackerTab, MusicWishlistTab
+    MusicInventoryTab, MusicInboxTab, MusicLoansTab, MusicTrackerTab, MusicWishlistTab,
+    cargar_serie
 )
 
 
@@ -224,6 +225,9 @@ class MusicMainScreen(Screen):
             self.app.call_from_thread(
                 self.app.notify, f"Error en métricas: {e}", severity="error")
             pass
+
+        # En el worker que ya existe, no en uno nuevo.
+        cargar_serie(self, "#music_tracker_plot", "music", "Álbumes escuchados por mes")
 
         try:
             wishlist = httpx.get(API_MUSIC_WISHLIST, timeout=5.0).json()

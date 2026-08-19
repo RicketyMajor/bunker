@@ -40,6 +40,7 @@ CHECKS_IN_CONTAINER = (
     "tests.test_session_record",
     "tests.test_briefing",
     "tests.test_timeline",
+    "tests.test_backup_apps",
 )
 
 

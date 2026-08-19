@@ -6,10 +6,11 @@ from textual.screen import Screen
 from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedContent, TabPane, Tree, Input
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
+from textual_plotext import PlotextPlot
 from textual import work
-from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST
+from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST, API_TIMELINE
 from .modals import AddMovieMenuModal, ScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
-from .tabs import MovieWishlistTab
+from .tabs import MovieWishlistTab, cargar_serie
 
 
 class MovieInventoryTab(TabPane):
@@ -126,6 +127,7 @@ class MovieTrackerTab(TabPane):
         with Vertical():
             yield Markdown("Cargando métricas cinematográficas...", id="movie_tracker_content")
             yield Label("Cargando heatmap...", id="movie_heatmap_content", classes="heatmap_panel")
+            yield PlotextPlot(id="movie_tracker_plot")
             yield DataTable(id="movie_annual_table")
 
 
@@ -295,6 +297,9 @@ class MovieMainScreen(Screen):
                     self.populate_tracker, tracker, annual, heatmap.get("counts", []))
         except Exception:
             pass
+
+        # En el worker que ya existe, no en uno nuevo.
+        cargar_serie(self, "#movie_tracker_plot", "movies", "Cintas vistas por mes")
 
         # Cargar Wishlist
         try:

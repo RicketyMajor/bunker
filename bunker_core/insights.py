@@ -13,6 +13,8 @@ package that owns `settings.py`, so importing app models at its top level makes 
 unimportable before the app registry is ready. These run once per capture, never in a loop,
 so the deferred import costs nothing worth measuring.
 """
+from itertools import chain, zip_longest
+
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -134,3 +136,185 @@ def feedback_sesion(session, minutos_reales=None):
     minutos = session.duration_minutes if minutos_reales is None else minutos_reales
     return (f"{minutos} min de {session.category}. "
             f"{_horas_min(total_mes)} {_periodo(dia, 'mes')}.")
+
+
+# --- Conclusiones: reglas puras sobre una serie. Cada una afirma algo o se calla. -------------
+#
+# The rule that governs them all: with fewer than three periods carrying data, `None`. Two
+# points are not a trend, and an invented claim is worse than silence — the same constraint
+# that makes the `feedback_*` functions above return the plain confirmation.
+#
+# EACH MODULE BRINGS ITS OWN NOUN. The plan wrote one rule per phrase ("Este mes llevas N
+# páginas") and then ran every rule over books, posada and movies alike — which asserts
+# "0 páginas" about a film. The rule is the same for all of them; the sentence is not, so the
+# noun travels with the module and a module with no amount is simply skipped by the amount
+# rules. Since 2026-08-19 movies and music carry `amount` = 0 by design, so this is not a
+# hypothetical.
+#
+# Every rule is a pure function of (series, labels): no database, no clock, testable with a
+# hand-built list.
+
+_MINIMO_PERIODOS = 3
+
+# ponytail: the sentences say "mes" because `conclusiones()` only ever asks for a monthly
+# series. If a weekly briefing is ever built, the period noun comes from the caller — the
+# rules themselves already work on any series shape.
+
+# `monto` is None for a module that has no amount — the amount rules skip it rather than
+# asserting zero.
+# `actividad` is NOT a synonym of `obra`. A period counts as active when it has a count OR an
+# amount, so July 2026 — 0 books finished, 60 pages read — is active while its count is zero.
+# Reporting that streak as "6 meses seguidos con libros terminados" asserts six finished books
+# in a month that had none. The streak rules speak of activity; the count rules speak of works.
+# `_1` is the singular form, used whenever the quantity is exactly one: the live database
+# produced "1 minutos de Deep Work" on the first run. `actividad` needs no singular — no rule
+# puts a number in front of it.
+_ETIQUETAS = {
+    'books': {'monto': 'páginas', 'monto_1': 'página',
+              'obra': 'libros terminados', 'obra_1': 'libro terminado',
+              'actividad': 'lectura'},
+    'posada': {'monto': 'minutos de Deep Work', 'monto_1': 'minuto de Deep Work',
+               'obra': 'sesiones completadas', 'obra_1': 'sesión completada',
+               'actividad': 'Deep Work'},
+    'movies': {'monto': None, 'monto_1': None,
+               'obra': 'películas vistas', 'obra_1': 'película vista',
+               'actividad': 'películas'},
+}
+
+
+def _n(cantidad, etiquetas, clave):
+    """"1 libro terminado" contra "3 libros terminados"."""
+    return etiquetas[f"{clave}_1"] if cantidad == 1 else etiquetas[clave]
+
+
+def _con_datos(series):
+    return [p for p in series if p['count'] or p['amount']]
+
+
+def _legible(periodo):
+    """"2026-08" → "agosto"; "2026-W31" → "la semana 31"."""
+    if '-W' in periodo:
+        return f"la semana {periodo.split('-W')[1].lstrip('0')}"
+    meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+             "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+    return meses[int(periodo.split('-')[1]) - 1]
+
+
+# The current period is INCOMPLETE and the ones it is measured against are not. Compared
+# raw, on 2 September "12 pages against an average of 300" is arithmetically true and
+# systematically misleading — it would fire every month by construction, for roughly the first
+# third of it. `avance` is the fraction of the period already elapsed, and the comparison is
+# against the pro-rated expectation. Below a quarter of the period the rule says nothing: two
+# days are not a pace, which is the same principle as _MINIMO_PERIODOS one axis over.
+_AVANCE_MINIMO = 0.25
+
+
+def regla_tendencia_monto(series, etiquetas, avance=1.0):
+    """El ritmo del periodo en curso contra lo que tocaría a su media."""
+    if len(_con_datos(series)) < _MINIMO_PERIODOS or not etiquetas['monto']:
+        return None
+    if avance < _AVANCE_MINIMO:
+        return None
+    previos = [p['amount'] for p in series[:-1] if p['amount']]
+    if not previos:
+        return None
+    actual = series[-1]['amount']
+    esperado = (sum(previos) / len(previos)) * avance
+    if actual > esperado * 1.5:
+        return (f"Este mes llevas {actual} {_n(actual, etiquetas, 'monto')}: bastante más "
+                f"que las {int(esperado)} que llevarías a tu ritmo habitual.")
+    if actual < esperado * 0.5:
+        return (f"Este mes llevas {actual} {_n(actual, etiquetas, 'monto')}, por debajo "
+                f"de las {int(esperado)} que llevarías a tu ritmo habitual.")
+    return None
+
+
+def regla_tendencia_conteo(series, etiquetas, avance=1.0):
+    """Lo mismo sobre el conteo, que es lo único que tienen movies y music.
+
+    Sólo dispara al alza, así que el periodo incompleto no puede producir una falsa alarma:
+    superar la media entera con el mes a medias es un hecho, no un artefacto. Aun así se
+    calla al principio del periodo, para no llamar racha a dos días.
+    """
+    if len(_con_datos(series)) < _MINIMO_PERIODOS or avance < _AVANCE_MINIMO:
+        return None
+    previos = [p['count'] for p in series[:-1] if p['count']]
+    if not previos:
+        return None
+    actual, media = series[-1]['count'], sum(previos) / len(previos)
+    if actual > media * 1.5:
+        return f"Van {actual} {_n(actual, etiquetas, 'obra')} este mes, sobre una media de {media:.1f}."
+    return None
+
+
+def regla_racha(series, etiquetas, avance=1.0):
+    """Periodos consecutivos con actividad, contando hacia atrás desde el último."""
+    if len(_con_datos(series)) < _MINIMO_PERIODOS:
+        return None
+    racha = 0
+    for p in reversed(series):
+        if not (p['count'] or p['amount']):
+            break
+        racha += 1
+    if racha < _MINIMO_PERIODOS:
+        return None
+    return f"Llevas {racha} meses seguidos con {etiquetas['actividad']}."
+
+
+def regla_record(series, etiquetas, avance=1.0):
+    """El periodo en curso es el mejor de la ventana. Empate NO es récord."""
+    if len(_con_datos(series)) < _MINIMO_PERIODOS:
+        return None
+    conteos = [p['count'] for p in series]
+    if conteos[-1] and conteos[-1] > max(conteos[:-1]):
+        return (f"{conteos[-1]} {_n(conteos[-1], etiquetas, 'obra')} este mes: "
+                f"tu mejor marca de la ventana.")
+    return None
+
+
+def regla_mejor_periodo(series, etiquetas, avance=1.0):
+    """El pico está DETRÁS. Complementaria de regla_record: nunca disparan juntas."""
+    if len(_con_datos(series)) < _MINIMO_PERIODOS:
+        return None
+    previos = series[:-1]
+    pico = max(previos, key=lambda p: p['count'])
+    if not pico['count'] or pico['count'] <= series[-1]['count']:
+        return None
+    return (f"Tu mejor mes fue {_legible(pico['period'])} con {pico['count']} "
+            f"{_n(pico['count'], etiquetas, 'obra')}.")
+
+
+def regla_silencio(series, etiquetas, avance=1.0):
+    """Dos periodos sin nada, después de haber tenido actividad. Rompe el silencio."""
+    if len(_con_datos(series)) < _MINIMO_PERIODOS or len(series) < _MINIMO_PERIODOS:
+        return None
+    ultimos = series[-2:]
+    if any(p['count'] or p['amount'] for p in ultimos):
+        return None
+    return (f"Dos meses sin {etiquetas['actividad']}. El último fue "
+            f"{_legible(_con_datos(series)[-1]['period'])}.")
+
+
+REGLAS = (regla_tendencia_monto, regla_tendencia_conteo, regla_racha,
+          regla_record, regla_mejor_periodo, regla_silencio)
+
+
+def conclusiones():
+    """Entre 0 y 3 frases. El silencio es una respuesta válida, y al principio la habitual.
+
+    ONE SENTENCE PER MODULE BEFORE A SECOND FROM ANY. Taken in dict order, books fired all
+    three rules and posada — 35 completed sessions — never got a word in. Which module speaks
+    first was an accident of insertion order; a round trip makes the cap of three cover three
+    parts of the Bunker instead of one.
+    """
+    import calendar
+    from bunker_core.timeline import serie
+    hoy = timezone.localdate()
+    # Fracción del mes ya transcurrida. Lo lee `conclusiones()`, no las reglas: siguen siendo
+    # funciones puras de sus argumentos y se comprueban con listas escritas a mano.
+    avance = hoy.day / calendar.monthrange(hoy.year, hoy.month)[1]
+    por_modulo = []
+    for modulo, etiquetas in _ETIQUETAS.items():
+        s = serie(modulo, 'monthly', 6)
+        por_modulo.append([f for f in (regla(s, etiquetas, avance) for regla in REGLAS) if f])
+    return [f for f in chain(*zip_longest(*por_modulo)) if f][:3]

@@ -31,6 +31,8 @@ from django.utils import timezone  # noqa: E402
 from bunker_core.timeline import WINDOW_MAX, serie  # noqa: E402
 from catalog.models import Author, Book, ReadingSession  # noqa: E402
 from chess_study.models import SolvedPuzzle  # noqa: E402
+from disquera.models import ListeningEntry  # noqa: E402
+from movies.models import MovieViewingSession  # noqa: E402
 from posada.models import DeepWorkSession  # noqa: E402
 
 _checks = 0
@@ -118,6 +120,39 @@ def run_tests():
         check(despues[mes] - antes[mes] == 0,
               "y no se cuela en el mes siguiente, que es donde la pondría UTC")
 
+        # --- 3b. `count` y `amount` son papeles distintos, y un módulo puede tener los dos.
+        #     Esto es lo que faltaba: hasta 2026-08-19 la serie de posada devolvía `count: 0`
+        #     con 35 sesiones completadas en la base viva, porque el acumulador trataba
+        #     "tiene campo de monto" como "no es la fuente que cuenta". El bloque 3 de arriba
+        #     no podía verlo: lee `amount` y nunca `count`. El bloque 6 sí mira `count`, pero
+        #     sobre chess — el único módulo sin monto, justo donde la rama mala acertaba.
+        antes_c = {p['period']: p['count'] for p in serie('posada', 'monthly', 3)}
+        antes_a = {p['period']: p['amount'] for p in serie('posada', 'monthly', 3)}
+        DeepWorkSession.objects.create(start_time=timezone.now(), duration_minutes=90,
+                                       category="Prueba", completed=True)
+        despues_c = {p['period']: p['count'] for p in serie('posada', 'monthly', 3)}
+        despues_a = {p['period']: p['amount'] for p in serie('posada', 'monthly', 3)}
+        check(despues_c[mes] - antes_c[mes] == 1,
+              "posada CUENTA sus sesiones completadas, no solo suma minutos")
+        check(despues_a[mes] - antes_a[mes] == 90,
+              "y la misma sesión suma sus minutos en amount")
+
+        # Una sesión sin completar no entra en ninguno de los dos: el filtro sigue vivo.
+        DeepWorkSession.objects.create(start_time=timezone.now(), duration_minutes=77,
+                                       category="Prueba", completed=False)
+        sin_completar = {p['period']: p['count'] for p in serie('posada', 'monthly', 3)}
+        check(sin_completar[mes] == despues_c[mes],
+              "una sesión sin completar no suma al count de posada")
+
+        #     Movies y music son count-only por spec (corrección 2026-08-14): sus libros
+        #     mayores de minutos se vaciaron y no deben leerse. Una fila en cada uno tiene
+        #     que ser invisible — antes reaparecía como `amount: 45` en la serie de música.
+        ListeningEntry.objects.create(date=hoy, minutes_listened=45)
+        MovieViewingSession.objects.create(date=hoy, minutes_watched=120)
+        for modulo in ('music', 'movies'):
+            check(all(p['amount'] == 0 for p in serie(modulo, 'monthly', 3)),
+                  f"{modulo} es count-only: su libro mayor de minutos no se lee")
+
         # --- 4. Entradas inválidas: ValueError, no 500 y no una serie vacía. ---
         for modulo_malo in ("nope", "", "BOOKS"):
             try:
@@ -153,6 +188,11 @@ def run_tests():
         with CaptureQueriesContext(connection) as ctx:
             serie('chess', 'monthly', 12)
         check(len(ctx) == 1, f"chess = 1 consulta agrupada, no {len(ctx)}")
+        for modulo in ('movies', 'music'):
+            with CaptureQueriesContext(connection) as ctx:
+                serie(modulo, 'monthly', 12)
+            check(len(ctx) == 1,
+                  f"{modulo} = 1 consulta agrupada desde que no lee su libro mayor, no {len(ctx)}")
         with CaptureQueriesContext(connection) as ctx:
             serie('posada', 'monthly', 60)
         check(len(ctx) == 1,

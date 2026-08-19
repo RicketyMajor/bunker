@@ -22,7 +22,6 @@ urlpatterns = [
     path('api/habits/', views.list_habits, name='list_habits'),
     path('api/habits/create/', views.create_habit, name='create_habit'),
     path('api/habits/complete/', views.complete_habit, name='complete_habit'),
-    path('api/stats/graph/', views.get_stats_data, name='get_stats_data'),
     path('api/inventory/<str:target_type>/<int:target_id>/',
          views.get_inventory, name='get_inventory'),
     path('api/inventory/action/', views.inventory_action, name='inventory_action'),

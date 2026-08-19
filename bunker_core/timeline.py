@@ -31,17 +31,24 @@ def _fuentes(module):
     inside the project package that owns settings.py."""
     from catalog.models import AnnualRecord, ReadingSession
     from chess_study.models import SolvedPuzzle
-    from disquera.models import ListeningEntry, MusicAnnualRecord
-    from movies.models import MovieAnnualRecord, MovieViewingSession
+    from disquera.models import MusicAnnualRecord
+    from movies.models import MovieAnnualRecord
     from posada.models import DeepWorkSession
 
+    # THE FIRST SOURCE IS THE ONE THE MODULE COUNTS. Any source carrying an amount field
+    # adds to the total, including the first. Having an amount is NOT the same as not being
+    # the counting source — that conflation is what made posada report `count: 0` on 35
+    # completed sessions, because its single source has both roles.
+    #
+    # Movies and music read ONE table each: `MovieViewingSession` and `ListeningEntry` were
+    # emptied on 2026-08-14 (0 and 1 rows) and the spec makes both modules count-only with
+    # `amount` = 0. Reading them here contradicted the spec AND the `ponytail:` markers on
+    # both models that say nothing reads them; the stray row surfaced as `amount: 45`.
     return {
         'books': [(AnnualRecord, 'date_finished', None, {}),
                   (ReadingSession, 'date', 'pages_read', {})],
-        'movies': [(MovieAnnualRecord, 'date_watched', None, {}),
-                   (MovieViewingSession, 'date', 'minutes_watched', {})],
-        'music': [(MusicAnnualRecord, 'date_listened', None, {}),
-                  (ListeningEntry, 'date', 'minutes_listened', {})],
+        'movies': [(MovieAnnualRecord, 'date_watched', None, {})],
+        'music': [(MusicAnnualRecord, 'date_listened', None, {})],
         'posada': [(DeepWorkSession, 'start_time', 'duration_minutes', {'completed': True})],
         'chess': [(SolvedPuzzle, 'solved_at', None, {})],
     }[module]
@@ -106,7 +113,7 @@ def serie(module, period='monthly', window=WINDOW_DEFECTO):
     desde = periodos[0]
 
     conteos, montos = {}, {}
-    for modelo, campo_fecha, campo_monto, filtro in _fuentes(module):
+    for indice, (modelo, campo_fecha, campo_monto, filtro) in enumerate(_fuentes(module)):
         # `__date__gte` on a DateTimeField, plain `__gte` on a DateField: comparing a
         # DateTimeField against a `date` hands the ORM a naive datetime under USE_TZ, which
         # warns and pins the boundary to UTC midnight — four hours off the local one.
@@ -122,10 +129,11 @@ def serie(module, period='monthly', window=WINDOW_DEFECTO):
                    .order_by('periodo'))
         for fila in filas:
             clave = _clave(_normalizar(fila['periodo']), period)
+            # Not `if/else`: posada's single source is both the count and the total.
+            if indice == 0:
+                conteos[clave] = conteos.get(clave, 0) + fila['n']
             if campo_monto:
                 montos[clave] = montos.get(clave, 0) + (fila.get('total') or 0)
-            else:
-                conteos[clave] = conteos.get(clave, 0) + fila['n']
 
     return [{"period": _clave(p, period),
              "count": conteos.get(_clave(p, period), 0),

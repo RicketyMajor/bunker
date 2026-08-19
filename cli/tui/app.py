@@ -44,6 +44,10 @@ class BunkerApp(App):
     #scanner_dialog { width: 50; height: 35; padding: 1 2; border: heavy $success; background: $surface; }
     #scanner_qr { height: 1fr; background: #000000; color: #ffffff; text-align: center; } 
     #briefing_dialog { width: 64; height: auto; padding: 1 2; border: heavy $success; background: $surface; }
+    #review_box { width: 72; height: auto; padding: 1 2; border: heavy $warning; background: $surface; margin: 2 4; }
+    #review_box Label { margin-bottom: 1; }
+    .review_sub { color: $text-muted; text-align: center; width: 100%; }
+    #btn_cerrar_review { width: 100%; margin-top: 1; }
     #briefing_dialog Label { margin-bottom: 1; }
     .briefing_conclusion { color: $warning; }
     #watchers_list_dialog { width: 80; height: 25; padding: 1 2; border: heavy $accent; background: $surface; }

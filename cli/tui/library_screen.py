@@ -6,7 +6,7 @@ from textual.screen import Screen
 from textual.widgets import Header, Footer, DataTable, Markdown, TabbedContent, Tree, Input
 from textual.binding import Binding
 from textual.events import ScreenResume
-from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab
+from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab, cargar_serie
 from textual import work
 from .constants import *
 from .screens import BookDetailsScreen
@@ -207,6 +207,10 @@ class LibraryMainScreen(Screen):
                     self.populate_tracker, tracker, annual)
         except Exception:
             pass
+
+        # La serie histórica va en ESTE worker, no en otro: dos workers pintando la misma
+        # pestaña es como un panel termina parpadeando.
+        cargar_serie(self, "#tracker_plot", "books", "Obras terminadas por mes")
 
     def update_ui_books(self, dirs: list) -> None:
         self.populate_tree(dirs)

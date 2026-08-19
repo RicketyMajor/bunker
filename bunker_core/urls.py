@@ -3,7 +3,7 @@ from django.urls import path, include
 from bunker_core.views import (global_dashboard_view, backup_database, list_backups,
                                restore_database, health_check, movil_estado, movil_assets,
                                movil_app, movil_sw, movil_manifest, movil_selftest,
-                               briefing, briefing_seen)
+                               briefing, briefing_seen, stats_timeline)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/health/', health_check, name='health_check'),
     path('api/briefing/', briefing, name='briefing'),
     path('api/briefing/seen/', briefing_seen, name='briefing_seen'),
+    path('api/stats/timeline/', stats_timeline, name='stats_timeline'),
     path('api/movil/estado/', movil_estado, name='movil_estado'),
     path('api/movil/assets/', movil_assets, name='movil_assets'),
 

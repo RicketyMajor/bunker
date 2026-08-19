@@ -27,7 +27,8 @@ from django.db import transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.insights import (  # noqa: E402
-    _horas_min, feedback_habito, feedback_paginas, feedback_sesion, feedback_terminado,
+    _ETIQUETAS, REGLAS, _horas_min, conclusiones, feedback_habito, feedback_paginas,
+    feedback_sesion, feedback_terminado, regla_tendencia_monto,
 )
 from catalog.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
 from disquera.models import MusicAnnualRecord  # noqa: E402
@@ -196,6 +197,69 @@ def run_tests():
             start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(14, 0))))
         t_null = feedback_sesion(abandonada, 5)
         check("1 h 25" in t_null, f"una fila sin survived_minutes cuenta como 0: {t_null!r}")
+
+        # --- Conclusiones: las dos propiedades que definen la función. -------------------
+        #     El resto es redacción. Cada regla se llama con etiquetas reales porque una
+        #     regla que no puede nombrar su módulo no es la que corre en producción.
+        etiquetas = _ETIQUETAS['books']
+        un_punto = [{"period": "2026-08", "count": 1, "amount": 10}]
+        for regla in REGLAS:
+            check(regla([], etiquetas) is None,
+                  f"{regla.__name__} con serie vacía devuelve None")
+            check(regla(un_punto, etiquetas) is None,
+                  f"{regla.__name__} con un solo punto devuelve None")
+
+        # Dos puntos tampoco: el mínimo es tres periodos CON datos, no tres periodos.
+        dos_puntos = [{"period": "2026-07", "count": 2, "amount": 20},
+                      {"period": "2026-08", "count": 9, "amount": 90}]
+        for regla in REGLAS:
+            check(regla(dos_puntos, etiquetas) is None,
+                  f"{regla.__name__} con dos puntos sigue callada")
+
+        # Y con tres periodos con datos sí hablan: si nunca hablaran, las 12 aserciones de
+        # arriba las cumpliría `return None`.
+        tres = [{"period": "2026-06", "count": 1, "amount": 10},
+                {"period": "2026-07", "count": 2, "amount": 20},
+                {"period": "2026-08", "count": 9, "amount": 300}]
+        hablan = [r.__name__ for r in REGLAS if r(tres, etiquetas)]
+        check(len(hablan) >= 2, f"con tres periodos con datos alguna regla afirma algo: {hablan}")
+
+        # `movies` no tiene monto desde 2026-08-14, y una regla de monto sobre él afirmaría
+        # "0 páginas" de una película. Se calla.
+        check(regla_tendencia_monto(tres, _ETIQUETAS['movies']) is None,
+              "una regla de monto sobre un módulo sin monto se calla")
+
+        # Singular: la base viva produjo "1 minutos de Deep Work" en la primera corrida.
+        uno = [{"period": "2026-06", "count": 1, "amount": 10},
+               {"period": "2026-07", "count": 1, "amount": 10},
+               {"period": "2026-08", "count": 1, "amount": 1}]
+        frase = regla_tendencia_monto(uno, _ETIQUETAS['posada'])
+        check(frase and "1 minuto de" in frase, f"una unidad va en singular: {frase!r}")
+
+        # El periodo en curso está INCOMPLETO y aquellos contra los que se mide, no. Crudo,
+        # "12 páginas contra una media de 300" el 2 de septiembre es cierto y sistemáticamente
+        # engañoso: dispararía todos los meses, por construcción, durante el primer tercio.
+        gastador = [{"period": "2026-06", "count": 1, "amount": 300},
+                    {"period": "2026-07", "count": 1, "amount": 300},
+                    {"period": "2026-09", "count": 1, "amount": 12}]
+        libros = _ETIQUETAS['books']
+        check(regla_tendencia_monto(gastador, libros, 2 / 30) is None,
+              "el día 2 del mes la regla de tendencia se calla, no acusa")
+        media_mes = regla_tendencia_monto(gastador, libros, 0.5)
+        check(media_mes and "150" in media_mes,
+              f"a mitad de mes compara contra la mitad de la media, no contra la media: {media_mes!r}")
+        check(media_mes and "300" not in media_mes,
+              f"y no nombra la media entera, que no es lo que tocaría hoy: {media_mes!r}")
+
+        # Toda regla acepta `avance`, o `conclusiones()` no puede recorrerlas uniformemente.
+        for regla in REGLAS:
+            check(regla(un_punto, libros, 0.5) is None,
+                  f"{regla.__name__} acepta avance y sigue callada sin datos")
+
+        # El tope, y el reparto: tres frases del mismo módulo dejaban muda a la Posada.
+        cs = conclusiones()
+        check(len(cs) <= 3, f"el briefing nunca trae más de 3 conclusiones: {len(cs)}")
+        check(all(isinstance(c, str) and c for c in cs), "ninguna conclusión es vacía o None")
 
         transaction.set_rollback(True)
 

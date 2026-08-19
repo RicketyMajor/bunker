@@ -298,8 +298,9 @@ class BriefingScreen(ModalScreen[None]):
                 lineas.append(f"Ayer leíste {ayer['paginas']} páginas.")
             if ayer.get("minutos_deep_work"):
                 lineas.append(f"{ayer['minutos_deep_work']} min de Deep Work.")
-            if ayer.get("minutos_cine"):
-                lineas.append(f"{ayer['minutos_cine']} min de cine.")
+            if ayer.get("peliculas"):
+                n = ayer["peliculas"]
+                lineas.append(f"{n} película{'s' if n != 1 else ''} vista{'s' if n != 1 else ''}.")
             if ayer.get("habitos"):
                 lineas.append(f"{ayer['habitos']} hábitos marcados.")
             if not lineas:

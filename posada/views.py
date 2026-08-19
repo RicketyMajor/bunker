@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
-from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, DailyStatistic, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
+from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_habito, feedback_sesion
 import random
@@ -743,21 +743,6 @@ def complete_habit(request):
 
     except DailyHabit.DoesNotExist:
         return Response({"status": "error", "message": "Hábito no encontrado."})
-
-
-@api_view(['GET'])
-def get_stats_data(request):
-    """Extrae los últimos 30 días de actividad para el gráfico."""
-    thirty_days_ago = timezone.localdate() - timedelta(days=30)
-    stats = DailyStatistic.objects.filter(
-        date__gte=thirty_days_ago).order_order_by('date')
-
-    data = {
-        "dates": [s.date.strftime("%d/%m") for s in stats],
-        "deep_work": [s.deep_work_minutes for s in stats],
-        "screen_time": [s.screen_time_minutes for s in stats]
-    }
-    return Response(data)
 
 
 @api_view(['GET'])

@@ -17,6 +17,41 @@ from .modals import ConfirmModal, EvacuationModal, BriefingScreen
 from .constants import API_BACKUP, API_RESTORE
 
 
+class WeeklyReviewScreen(Screen):
+    """La revisión semanal. Se muestra una vez por semana ISO y espera si no abres Bunker.
+
+    Full-screen, not a modal, because the spec says full-screen — and because it is the one
+    thing the Bunker says that is worth stopping for.
+    """
+
+    BINDINGS = [("escape", "cerrar", "Cerrar"), ("enter", "cerrar", "Cerrar")]
+
+    def __init__(self, review: dict) -> None:
+        super().__init__()
+        self.review = review
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="review_box"):
+            yield Label(f"◈ REVISIÓN DE LA SEMANA {self.review['semana']} ◈",
+                        classes="modal_title")
+            yield Label(f"contra la semana {self.review['anterior']}", classes="review_sub")
+            for m in self.review["metricas"]:
+                delta = m["actual"] - m["previa"]
+                # Rich markup, not Textual CSS variables: `[$success]` inside a Label is not
+                # a colour, it is four literal characters on screen.
+                color = "green" if delta > 0 else ("red" if delta < 0 else "dim")
+                signo = f"+{delta}" if delta > 0 else str(delta)
+                yield Label(f"[bold]{m['etiqueta']:<18}[/] {m['actual']:>6}   "
+                            f"[dim](semana previa {m['previa']})[/]  [{color}]{signo}[/]")
+            yield Button("Continuar", variant="success", id="btn_cerrar_review")
+
+    def action_cerrar(self) -> None:
+        self.app.pop_screen()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.app.pop_screen()
+
+
 class BookDetailsScreen(Screen):
     BINDINGS = [
         ("escape, b, left", "go_back", "Volver a la Tabla"),
@@ -641,12 +676,28 @@ class BunkerLauncherScreen(Screen):
             if resp.status_code != 200:
                 return
             datos = resp.json()
+            # LAS DOS, no una u otra. El briefing es el ÚNICO que pinta `logros_nuevos`, y
+            # el POST de abajo adelanta `last_entry_at` pase lo que pase: mostrar sólo la
+            # revisión quemaba en silencio cualquier logro desbloqueado desde la última
+            # entrada, sin vuelta atrás y sin que nadie lo hubiera leído. Reproducido contra
+            # la base viva antes de arreglarlo.
+            #
+            # El briefing va primero y la revisión encima, así que la revisión sigue siendo
+            # lo que se ve al entrar —que es lo que pide la spec— y al cerrarla aparece el
+            # briefing debajo en vez de perderse.
+            con_revision = bool(datos.get("show_review") and datos.get("review"))
             self.app.call_from_thread(self.mostrar_briefing, datos)
+            if con_revision:
+                self.app.call_from_thread(self.mostrar_review, datos["review"])
             # El POST va DESPUÉS de mostrarlo, y ese orden es el requisito: marca como visto
             # sólo lo que se llegó a pintar. Al revés, un GET que expira dejaría los logros
             # marcados sin que nadie los haya leído nunca, y no hay vuelta atrás.
+            #
+            # `con_revision` es lo que se PINTÓ, no lo que el payload pidió: si `show_review`
+            # viniera true con `review` en None, marcar la semana como vista quemaría la
+            # revisión de esa semana sin que nadie la haya visto, y no hay vuelta atrás.
             try:
-                httpx.post(API_BRIEFING_SEEN, json={"con_revision": False}, timeout=3.0)
+                httpx.post(API_BRIEFING_SEEN, json={"con_revision": con_revision}, timeout=3.0)
             except Exception:
                 pass
         # El `except` desnudo es el requisito, no descuido: si el endpoint falla o tarda, el
@@ -656,6 +707,9 @@ class BunkerLauncherScreen(Screen):
 
     def mostrar_briefing(self, datos: dict) -> None:
         self.app.push_screen(BriefingScreen(datos))
+
+    def mostrar_review(self, review: dict) -> None:
+        self.app.push_screen(WeeklyReviewScreen(review))
 
     def update_reactive_data(self, data: dict) -> None:
         self.dashboard_data = data

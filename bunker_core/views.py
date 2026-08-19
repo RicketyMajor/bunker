@@ -512,6 +512,26 @@ def briefing(_request):
     return Response(construir_briefing())
 
 
+@api_view(['GET'])
+def stats_timeline(request):
+    """Serie histórica por módulo. Solo lee.
+
+    The response echoes the resolved query back because `serie()` clamps `window` to
+    [1, 60] instead of rejecting it: without the echo, a client that sent 99999 has no
+    way to tell it got 60, and a clamp nobody can see is a clamp nobody debugs.
+    """
+    from bunker_core.timeline import serie, WINDOW_DEFECTO
+    modulo = request.GET.get('module', 'books')
+    periodo = request.GET.get('period', 'monthly')
+    ventana = request.GET.get('window', WINDOW_DEFECTO)
+    try:
+        datos = serie(modulo, periodo, ventana)
+    except ValueError as exc:
+        return Response({"error": str(exc)}, status=400)
+    return Response({"module": modulo, "period": periodo,
+                     "window": len(datos), "series": datos})
+
+
 @api_view(['POST'])
 def briefing_seen(request):
     """Marca la entrada como vista. Es POST porque escribe."""
