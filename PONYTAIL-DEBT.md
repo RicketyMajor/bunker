@@ -5,20 +5,27 @@ and the trigger that should make someone revisit it. This file collects them so 
 quietly become permanent.
 
 > Harvested 2026-08-15 from `grep -rnE '(#|//) ?ponytail:'` plus the two markers that live in Python
-> docstrings. **Re-harvested 2026-08-16** after Task 10, and **2026-08-17** after the backup fix.
+> docstrings. **Re-harvested 2026-08-16** after Task 10, **2026-08-17** after the backup fix, and
+> **2026-08-18**, the session that cleared both fired triggers.
 > **Line numbers drift — the comment is the source of truth, this file is the index.**
 > Re-run the harvest rather than trusting the numbers below. Use a bare `grep -rn 'ponytail:'`:
 > the `(#|//)`-anchored version **misses every marker written in a docstring or a KDoc**, which is
-> three of the fourteen — including the one on `ColaStore.respaldar` added the day this was written.
+> **three of the thirteen** (bare grep 13, anchored 10 — counted 2026-08-18), including the one
+> on `ColaStore.respaldar` added the day that line was written.
 
-**14 markers in the code · 1 with no trigger · 2 whose trigger has already fired · 2 discharged.**
+**13 markers in the code · 1 with no trigger · 0 whose trigger has already fired · 4 discharged.**
+
+> **2026-08-18:** the two fired triggers are gone — one discharged, one narrowed to what is still
+> actually unproven. Line numbers below drifted again (`AssetStore` 188 → 211); re-run the harvest.
 
 ## Discharged
 
 - **`ColaStore.kt` — the MediaStore round trip.** *Upgrade named:* "verify it by hand once Task 10
   makes a capture reachable." Task 10 did, on 2026-08-17, and **the answer was no** — the marker
   was promoted to a 🔴 defect rather than ticked. **Fixed the same day:** the row is created once
-  and its `Uri` remembered in prefs, and the growth is over. Discharged as a *deferral*, and it
+  and its `Uri` remembered in prefs, and the growth is over — **verified on the device 2026-08-18**:
+  two real captures, one new MediaStore row, written through the remembered `Uri`. Discharged as a
+  *deferral*, and it
   earned the rule it leaves behind: **a deferral hides a defect until something forces it open.**
   It was the stated justification for a decision for three days. A narrower marker replaces it, on
   the stale-`Uri` case, with a trigger that can actually fire.
@@ -30,22 +37,30 @@ quietly become permanent.
   the APK, localStorage in a plain browser at `/movil/` — and the marker was deleted rather than
   reworded, which is what discharging one looks like.
 
+- **`android/…/MainActivity.kt` — the exact-alarm ask that had no way back.** *Upgrade named:*
+  "a banner in the WebView (Task 10)". Task 10 landed on 2026-08-16 without it; **built 2026-08-18**
+  as a fourth key on the `estado()` envelope plus `Puente.pedirAlarmaExacta`, and the banner is
+  verified in a real browser across all five shapes the key can take — missing, granted, revoked,
+  absent, missing again. The automatic ask stays one-shot and pref-guarded on purpose: the two
+  paths must not be able to un-spend each other.
+
+- **`android/…/Transmisor.kt` — `postReal` "deliberately untested".** *Upgrade named:* "Task 8's
+  flush on the phone", which ran on 2026-08-15 and left the marker owed. **Paid 2026-08-18:** the
+  leaked connection its twin `AssetStore.leerReal` was fixed for on 2026-08-15 was indeed there —
+  `disconnect()` sat after three throwing calls, and `vaciar` swallows the exception and moves on,
+  so a queue of N captures leaked N connections per flush **with no link, which is this app's
+  normal condition**. Now in a `finally`, with the first check in the class that opens a real
+  socket. Not fully discharged: a NARROWER marker replaces it, on the timeouts, which no unit test
+  can reach. **Two things that check does not buy, against what the first draft of this entry
+  claimed:** the leak itself is not observable from a unit test, and the check runs on the JVM's
+  `HttpURLConnection` while the phone runs OkHttp's — with `usesCleartextTraffic="false"` making
+  its `http://127.0.0.1` a URL production never sees. Both are read, not measured, and both
+  comments now say so.
+
 ## Triggers that have already fired
 
-The condition each comment names as the moment to revisit has happened.
-
-- **`android/…/Transmisor.kt`** — `postReal` deliberately untested; every check injects `poster`
-  instead. *Ceiling:* the socket itself, `instanceFollowRedirects`, and `disconnect()` not being in
-  a `finally` are all unproven. *Upgrade:* "Task 8's flush on the phone, which is the first time
-  this runs for real" — **that flush ran on 2026-08-15 and reached Django**. Still owed, and now
-  pointedly: the identical defect in `AssetStore.leerReal` — a leaked connection on the failure
-  path, which is the common one — was found and fixed on 2026-08-15. `postReal` has not been read
-  for it.
-- **`android/…/MainActivity.kt`** — the exact-alarm request is sent once and the answer remembered.
-  *Ceiling:* whoever declines keeps the inexact alarm for ever, with no way back. *Upgrade named:*
-  "a banner in the WebView (Task 10)". **Task 10 landed on 2026-08-16 and the banner was not
-  built.** The WebView now exists, so the stated upgrade is available and simply owed — the chip
-  already grew a long-press for the asset escape hatch and is the obvious place for it.
+**None, as of 2026-08-18.** Both entries that stood here were closed in one pass; keep the heading,
+because an empty section is the only way to see that it went empty.
 
 ## No trigger — the one that rots silently
 
@@ -58,7 +73,7 @@ The condition each comment names as the moment to revisit has happened.
 
 ### Android (the APK)
 
-- **`AssetStore.kt:188`** — the fetch checks the response code now, but nothing checks *content*.
+- **`AssetStore.kt:211`** — the fetch checks the response code now, but nothing checks *content*.
   *Ceiling:* a 2xx carrying the wrong body is indistinguishable from a good one, and
   `hayGeneracionValida` only asks whether the files are non-empty. *Upgrade:* a hash or a
   content-type check, the day an asset arrives corrupted with a 200.
@@ -68,8 +83,11 @@ The condition each comment names as the moment to revisit has happened.
   exact unbounded growth this fix removed. *Upgrade:* the day something actually reads the backup,
   because **nothing calls `leerRespaldo()` today** — grep the whole tree and it has no callers at
   all. That fact, not the MediaStore ownership rule, is the real reason the backup restores nothing.
-- **`MainActivity.kt`** — moved up to "Triggers that have already fired": Task 10 built the WebView
-  on 2026-08-16 without building the banner.
+- **`Transmisor.kt`** *(new 2026-08-18, narrower than the one it replaces)* — the connect and read
+  timeouts, 10 s and 15 s, are numbers nobody has watched expire. *Ceiling:* a link that is up but
+  unusable — a captive portal, the laptop suspended mid-request — is exactly what they exist for
+  and exactly what no check reaches, because a mock cannot make time pass. *Upgrade:* measure them
+  the day a flush is seen hanging rather than failing.
 - **`android/app/build.gradle.kts`** *(new 2026-08-16, Task 10)* — `copiarAssets` reproduces
   Django's template render with three string substitutions instead of invoking it. *Ceiling:* a
   fourth template tag in `app.html` ships raw and breaks the **bundled** copy. *Upgrade:* only if a

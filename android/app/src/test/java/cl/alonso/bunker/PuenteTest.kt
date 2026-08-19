@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowAlarmManager
 
 /**
  * The bridge is the only door between the interface and everything that can lose data, so the
@@ -133,5 +134,28 @@ class PuenteTest {
         assertEquals(0, sobre.getJSONObject("estado").length())
         assertEquals(0L, sobre.getLong("sincronizado"))
         assertFalse(sobre.getBoolean("en_linea"))
+    }
+
+    @Test
+    fun `el sobre dice cuando falta el permiso de alarma exacta`() {
+        // `app.js` paints the banner on `alarma_exacta === false` and on nothing else, so the two
+        // values this key can take ARE the contract.
+        //
+        // Driven through the REAL grant check. An earlier draft injected a lambda instead, on the
+        // stated grounds that "Robolectric runs at minSdk 29 and the branch is unreachable" —
+        // false, and `DespertadorTest` in this same module already disproved it by shadowing this
+        // very call. That draft cost a constructor parameter, three rewritten call sites, and a
+        // check that only proved a hand-written Boolean survives a trip through JSON.
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        assertFalse(
+            "no aviso que faltaba el permiso",
+            JSONObject(puente(store()).estado()).getBoolean("alarma_exacta"),
+        )
+
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        assertTrue(
+            "aviso de un permiso que ya estaba dado",
+            JSONObject(puente(store()).estado()).getBoolean("alarma_exacta"),
+        )
     }
 }

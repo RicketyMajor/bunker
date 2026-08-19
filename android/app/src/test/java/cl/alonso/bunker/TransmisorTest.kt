@@ -6,6 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.net.InetAddress
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 @RunWith(RobolectricTestRunner::class)
 class TransmisorTest {
@@ -179,5 +182,74 @@ class TransmisorTest {
             "toda ruta empieza en / y termina en /",
             Transmisor.RUTAS.values.all { it.startsWith("/") && it.endsWith("/") },
         )
+    }
+
+    // A fake server that READS the request before it answers. Closing a socket while the request
+    // body is still unread makes the kernel answer with an RST, and the client sees
+    // `IOException: Error writing to server` — a defect in this helper, not in `postReal`.
+    // Measured 2026-08-18: the first draft of the check below failed with that exception whether
+    // redirects were on or off, which is the signature of a check that proves nothing.
+    private fun contestar(server: ServerSocket, respuesta: String) {
+        server.accept().use { sock ->
+            val entrada = sock.getInputStream()
+            // Headers read a byte at a time rather than through a BufferedReader: a reader would
+            // pull the body into its buffer as CHARACTERS, and `Content-Length` counts BYTES. With
+            // an ASCII payload the two agree and the bug hides; with one accented character — and
+            // this app's payloads carry titles — the drain under-reads and the response is written
+            // with request bytes still unread, which is the RST this helper exists to avoid.
+            var largo = 0
+            while (true) {
+                val linea = StringBuilder()
+                var b = entrada.read()
+                while (b != -1 && b != '\n'.code) {
+                    if (b != '\r'.code) linea.append(b.toChar())
+                    b = entrada.read()
+                }
+                if (linea.isEmpty() || b == -1) break
+                if (linea.startsWith("Content-Length:", ignoreCase = true)) {
+                    largo = linea.substring(15).trim().toString().toInt()
+                }
+            }
+            repeat(largo) { entrada.read() }
+            sock.getOutputStream().apply { write(respuesta.toByteArray()); flush() }
+        }
+    }
+
+    @Test
+    fun `un 302 llega como 302 y no borra la captura`() {
+        // The one check in this class that opens a real socket, because the property under test
+        // belongs to HttpURLConnection and not to us: `postReal` turns `instanceFollowRedirects`
+        // off so that a redirect in front of Django cannot come back a 2xx — and a 2xx is what
+        // DELETES the capture. The fake server answers TWICE on purpose: with redirects left on,
+        // the second answer's 200 is what arrives, so this fails saying the capture was deleted
+        // rather than failing whichever way the runtime happens to break.
+        //
+        // Two things it does NOT prove, both worth saying out loud. That `disconnect()` reaches
+        // the failure path: a leaked connection is not observable from a unit test. And that any
+        // of this holds ON THE PHONE: Robolectric resolves `URL.openConnection()` through the
+        // JVM's stack, the device through OkHttp's, and the manifest forbids cleartext so this
+        // URL could never occur in production. Both repairs are read there, not measured.
+        val server = ServerSocket(0, 0, InetAddress.getLoopbackAddress())
+        thread {
+            runCatching {
+                contestar(server, "HTTP/1.1 302 Found\r\nLocation: /destino\r\nContent-Length: 0\r\n\r\n")
+                contestar(server, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            }
+        }
+        val s = store()
+        s.encolar("paginas", """{"pages":12}""")
+        server.use { srv ->
+            // `postReal` for real, only the URL substituted: BuildConfig.BUNKER_URL points at the
+            // tailnet and this check must not need one to exist.
+            val r = Transmisor(s) { _, cuerpo ->
+                Transmisor.postReal("http://127.0.0.1:${srv.localPort}/api/books/tracker/pages/", cuerpo)
+            }.vaciar()
+            assertEquals("un 302 se tomo por un envio bueno", 0, r.enviados)
+            assertTrue("no vio al servidor cuando si lo alcanzo", r.alcanzoElServidor)
+        }
+        assertEquals("la captura se borro con un 302", 1, s.pendientes())
+        // Reading a non-2xx body is the other half of what only a socket proves: `errorStream` is
+        // null for a 3xx, and the `?: ""` is what stops that from throwing here.
+        assertEquals("HTTP 302", s.items()[0].error)
     }
 }

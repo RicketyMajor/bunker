@@ -89,6 +89,22 @@ const App = (() => {
     }
   }
 
+  // Takes the envelope when the caller already has one. `cargarEstado` parses it two lines above,
+  // and re-reading would cost a second bridge crossing, a second serialisation of the WHOLE
+  // snapshot on the native side and a second AlarmManager call — on the UI thread, for one
+  // boolean already in hand. Only the return-from-Settings path has nothing to pass.
+  //
+  // `!== false` and not `!`: in a plain browser there is no bridge and the key does not exist,
+  // and an absent key must read as "nothing to warn about". Same for a phone running a NEWER
+  // app.js against an OLDER APK, which the over-the-air asset update makes a real shape and not
+  // a hypothetical. That is the missing-key trap `VACIO` hit twice — `{}` is truthy and
+  // `undefined` is not `false`.
+  function pintarAvisoAlarma(sobre) {
+    if (!PUENTE) return;
+    const s = sobre || JSON.parse(PUENTE.estado());
+    $('#aviso-alarma').hidden = s.alarma_exacta !== false;
+  }
+
   async function cargarEstado() {
     if (PUENTE) {
       // The bridge answering is NOT evidence of a link: it hands back the cached snapshot, which
@@ -105,6 +121,7 @@ const App = (() => {
       pintarHome();
       refrescarChip();
       pintarInstantanea();
+      pintarAvisoAlarma(sobre);
       return;
     }
     try {
@@ -627,6 +644,25 @@ const App = (() => {
       }, { passive: true });
       ['touchend', 'touchmove', 'touchcancel'].forEach((ev) =>
         chip.addEventListener(ev, soltar, { passive: true }));
+
+      $('#permitir-alarma').addEventListener('click', () => {
+        // `false` means no screen opened at all — an OEM that ships none. A button that looks
+        // alive and does nothing for ever is the failure this banner exists to remove, so it
+        // says so instead of repeating the trip.
+        if (!PUENTE.pedirAlarmaExacta()) {
+          toast('Este teléfono no trae la pantalla de alarmas exactas.', 'error');
+        }
+      });
+      // Coming back from Settings is the only moment the answer can change, and the page is not
+      // reloaded when it happens — without this the banner keeps nagging for a permission already
+      // granted, until the app is closed and opened again.
+      //
+      // No `document.hidden` guard, deliberately. Nothing in `MainActivity` calls
+      // `WebView.onPause()/onResume()`, so the document's visibility may never flip inside the
+      // APK at all — which is why the Activity ALSO dispatches this event on window focus, the
+      // signal this app already trusts for "the user is here". A repaint on a genuine hide costs
+      // one prefs read; a repaint that never happens costs the whole feature.
+      document.addEventListener('visibilitychange', () => pintarAvisoAlarma());
     }
     $('#cerrar-despachos').addEventListener('click', () => $('#despachos').close());
     // There used to be a `close` listener here re-rendering the list, so that a half-armed

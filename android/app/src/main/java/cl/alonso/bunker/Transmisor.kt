@@ -103,13 +103,19 @@ class Transmisor(
             "wishlist_disco" to "/api/music/wishlist/",
         )
 
-        // ponytail: the only untested code in this class, deliberately — every check injects
-        // `poster`, and exercising this one needs a socket. What was verified instead is its
-        // assumption: the three error shapes `motivo()` parses, read off the twelve endpoints on
-        // 2026-08-15. Ceiling: the socket itself, `instanceFollowRedirects` and `disconnect()`
-        // not being in a `finally` are all unproven. Upgrade path is Task 8's flush on the phone,
-        // which is the first time this runs for real — verify it there rather than mocking a
-        // server here.
+        // ponytail: the timeouts are the only thing left unproven here — 10 s to connect and
+        // 15 s to read are numbers nobody has ever watched expire. Ceiling: a link that is up
+        // but unusable (a captive portal, the laptop suspended mid-request) is the case they
+        // exist for and the case no check reaches, because a mock cannot make time pass.
+        // Upgrade: measure them the day a flush is seen hanging rather than failing.
+        //
+        // Also still unproven, and narrower than it looks: `TransmisorTest` drives this over a
+        // real socket, but over the JVM's `HttpURLConnection`. The device resolves the same call
+        // through OkHttp's, whose redirect handling for a POST is its own, and the manifest sets
+        // `usesCleartextTraffic="false"` — so `http://127.0.0.1` is a URL production can never
+        // see. What that check pins is that a non-2xx comes back as its own code and does not
+        // delete the capture. That redirects are not followed ON THE PHONE is still read, not
+        // measured. `disconnect()` is now in a `finally`.
         fun postReal(url: String, cuerpo: String): Respuesta {
             val con = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -123,12 +129,20 @@ class Transmisor(
                 // capture. A 3xx must reach `vaciar` as the non-2xx it is.
                 instanceFollowRedirects = false
             }
-            con.outputStream.use { it.write(cuerpo.toByteArray()) }
-            val codigo = con.responseCode
-            val texto = (if (codigo in 200..299) con.inputStream else con.errorStream)
-                ?.bufferedReader()?.readText() ?: ""
-            con.disconnect()
-            return Respuesta(codigo, texto)
+            return try {
+                con.outputStream.use { it.write(cuerpo.toByteArray()) }
+                val codigo = con.responseCode
+                val texto = (if (codigo in 200..299) con.inputStream else con.errorStream)
+                    ?.bufferedReader()?.readText() ?: ""
+                Respuesta(codigo, texto)
+            } finally {
+                // In a `finally`, the same repair `AssetStore.leerReal` took on 2026-08-15 — and
+                // it matters more here. All three calls above throw when there is no link, and
+                // `vaciar` catches that and moves to the next item: a queue of N captures leaked
+                // N connections on every flush attempt, and having no link is this app's normal
+                // condition, not its failure.
+                con.disconnect()
+            }
         }
     }
 }

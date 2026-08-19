@@ -41,6 +41,13 @@
           min-height: 48px; padding: 0 4px; cursor: pointer; }
   #chip.ok { color: var(--green); } #chip.pend { color: var(--yellow); }
   #chip.off { color: var(--red); }
+  /* Not a toast: a toast fades after 3.6 s and this condition lasts until someone acts on it.
+     Sits under the header rather than over the content, so it never covers a capture button. */
+  #aviso-alarma { margin: 0; padding: 12px 16px; background: var(--bg-alt);
+                  border-left: 3px solid var(--yellow); font-size: 15px; }
+  #aviso-alarma button { background: none; border: 0; color: var(--yellow); font: inherit;
+                         font-weight: bold; min-height: 48px; padding: 0 8px; cursor: pointer;
+                         text-decoration: underline; }
   main { padding: 16px; display: grid; gap: 16px; }
   .card { border: 1px solid var(--bg-alt); padding: 16px; }
   .card h2 { margin: 0 0 4px; font-size: 13px; letter-spacing: .1em; color: var(--dim);
@@ -91,6 +98,13 @@
   <button id="chip" class="off" aria-live="polite">○ SIN ENLACE</button>
   <h1 style="color:var(--dim);font-size:13px;letter-spacing:.1em">TRANSMISOR</h1>
 </header>
+
+<!-- Hidden unless the bridge says the grant is missing, so it never appears in a plain browser,
+     where there is no alarm to grant and nothing the button could do. -->
+<p id="aviso-alarma" role="status" hidden>
+  Las alarmas exactas están apagadas: la cola sale cuando el sistema quiera.
+  <button type="button" id="permitir-alarma">PERMITIR</button>
+</p>
 
 <main id="home">
   <section class="card" id="leyendo"></section>

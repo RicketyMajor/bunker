@@ -4,7 +4,8 @@
 # The one caveat left over from 2026-08-15. That round proved the alarm starts the process on
 # schedule in standby bucket RARE, but the phone was awake and on the charger at the time — and a
 # charging device NEVER enters Doze, so the case this script exists for was structurally
-# unobservable over USB. Hence adb over Wi-Fi and an unplugged phone.
+# unobservable over USB. Hence adb over the network — tailnet or LAN, see DIRECCIONES — and an
+# unplugged phone.
 #
 # Reads only. It seeds a throwaway ISBN into the queue and deletes nothing; the row it creates in
 # ScanInbox is removed at the end, after asserting it is the right one.
@@ -16,7 +17,16 @@
 set -uo pipefail
 
 ADB="$HOME/Android/sdk/platform-tools/adb"
-TELEFONO="192.168.0.4:5555"
+# Two addresses, tried in order, and the order is the hypothesis: the tailnet rides mobile data
+# and the LAN does not, so if MIUI sleeps Wi-Fi at night the tailnet is the one that survives.
+#
+# It is NOT that the LAN is dead. Handoff 018 recorded it as unreachable and that was a daytime
+# artefact: measured 2026-08-18 at 21:57 both answered `shell true`, the LAN in 9 ms. Swapping one
+# address for the other would have fixed nothing. What three aborted rounds never established is
+# which link is up at 03:00 — so the round now tries both and the log names the winner, which is
+# the evidence that was missing.
+DIRECCIONES=("100.81.4.38:5555" "192.168.0.4:5555")
+TELEFONO=""
 APP="cl.alonso.bunker"
 BASE="/home/alonso/dev/bunker"
 SALIDA="$BASE/scraper_logs/ronda_doze_$(date +%Y%m%d_%H%M).txt"
@@ -44,11 +54,18 @@ if [ "${RONDA_FORZAR:-0}" != "1" ] && [ "$HORA" -gt 5 ]; then
   exit 1
 fi
 
-timeout 20 "$ADB" connect "$TELEFONO" >/dev/null 2>&1
-if ! a shell true >/dev/null 2>&1; then
-  echo "ABORTA: el telefono no responde por Wi-Fi. Sin adb no hay evidencia de por que arranco."
+for d in "${DIRECCIONES[@]}"; do
+  timeout 20 "$ADB" connect "$d" >/dev/null 2>&1
+  # `shell true` and not the exit code of `connect`: adb reports "connected" for a socket that
+  # opens and then goes nowhere, which is exactly what a half-asleep phone offers.
+  if timeout 30 "$ADB" -s "$d" shell true >/dev/null 2>&1; then TELEFONO="$d"; break; fi
+done
+if [ -z "$TELEFONO" ]; then
+  echo "ABORTA: el telefono no responde en ninguna direccion (${DIRECCIONES[*]})."
+  echo "        Sin adb no hay evidencia de por que arranco."
   exit 1
 fi
+echo "enlace: $TELEFONO"
 
 ENCHUFADO=$(a shell dumpsys battery | grep -cE "^  (AC|USB|Wireless) powered: true")
 PANTALLA=$(a shell dumpsys power | grep -oE "mWakefulness=[A-Za-z]+" | head -1)
@@ -171,7 +188,7 @@ echo "--- por que arranco el proceso (lo unico que prueba algo) ---"
 # que es 0 aunque `grep` no encuentre nada, asi que ese respaldo no podia dispararse nunca —
 # justo en el caso en que hace falta, que es el logcat vacio.
 ARRANQUE=$(grep -E "Start proc.*$APP" "$TMP/logcat.txt" 2>/dev/null | head -3)
-echo "${ARRANQUE:-(sin logcat: el Wi-Fi cayo)}"
+echo "${ARRANQUE:-(sin logcat: se cayo el enlace con el telefono)}"
 # Sin `|| echo "0"`: `grep -c` ya imprime 0 cuando no encuentra, y ademas sale con codigo 1, asi
 # que el respaldo se sumaba y escribia el cero dos veces — en el caso normal, que es el que se lee.
 echo "--- Displayed (debe ser 0) ---"

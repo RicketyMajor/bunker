@@ -12,9 +12,12 @@ import androidx.webkit.WebViewClientCompat
 // `Theme.AppCompat.NoActionBar`, and an AppCompat theme belongs to an AppCompat activity.
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var vista: WebView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(montarWebView())
+        vista = montarWebView()
+        setContentView(vista)
 
         // Asked only when it is not already granted, against the plan's unconditional call: on
         // API 33+ a second request after a denial does nothing at all, and an unconditional one
@@ -90,6 +93,13 @@ class MainActivity : AppCompatActivity() {
         if (!hasFocus) return
         SyncWorker.ahora(this)
         pedirAlarmaExacta()
+        // The banner's own `visibilitychange` listener cannot be relied on: nothing here calls
+        // `WebView.onPause()/onResume()`, so the document's visibility may never flip when the
+        // user returns from the Settings screen that banner sent them to — leaving it nagging for
+        // a permission already granted. Window focus is the signal this app has already proven
+        // reliable for "the user is here", and it dispatches the event the page ALREADY listens
+        // for rather than calling a function of its own, so the page keeps one contract.
+        vista.evaluateJavascript("document.dispatchEvent(new Event('visibilitychange'))", null)
     }
 
     // Here and not in `onCreate` beside the notifications request, for the same property focus is
@@ -101,17 +111,14 @@ class MainActivity : AppCompatActivity() {
     // the platform rate-limits a permission dialog: unconditional, this would throw the user out
     // of the app on every launch after a deliberate "no".
     //
-    // ponytail: one shot and no way back — whoever declines keeps the inexact alarm for ever. The
-    // upgrade is a banner in the WebView (Task 10), which is the first screen able to say why the
-    // queue is slow and offer the intent again.
+    // One shot, and there IS a way back now: the WebView paints a banner when the grant is
+    // missing and `Puente.pedirAlarmaExacta` re-offers this same intent from a tap (2026-08-18,
+    // discharging the marker that stood here). This stays pref-guarded and stays automatic; the
+    // two paths are deliberately independent, so the banner cannot un-spend the single automatic
+    // ask and the automatic ask cannot silence the banner.
     private fun pedirAlarmaExacta() {
         val prefs = getSharedPreferences("transmisor", MODE_PRIVATE)
         if (prefs.getBoolean("alarma_pedida", false)) return
-        val intento = Despertador.intentoDePermiso(this) ?: return
-        // A phone whose OEM ships no such screen throws ActivityNotFoundException. Crashing on
-        // launch would be a worse failure than the imprecision this exists to remove.
-        if (runCatching { startActivity(intento) }.isSuccess) {
-            prefs.edit().putBoolean("alarma_pedida", true).apply()
-        }
+        if (Despertador.abrirAjustes(this)) prefs.edit().putBoolean("alarma_pedida", true).apply()
     }
 }

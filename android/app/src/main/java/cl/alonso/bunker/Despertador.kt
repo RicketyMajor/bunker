@@ -95,6 +95,23 @@ object Despertador {
             Uri.fromParts("package", context.packageName, null),
         )
     }
+
+    /**
+     * Opens that screen. `false` means there was nothing to ask, or no screen to open it on.
+     *
+     * The launch belongs here, beside the policy, because TWO callers need it — the Activity's
+     * one-shot ask on focus, and the WebView banner's button — and two copies of "start the intent,
+     * tolerate ActivityNotFoundException" drift. The first draft of the banner was exactly that
+     * copy, and it had already drifted: it added `FLAG_ACTIVITY_NEW_TASK` on one path only, which
+     * puts Settings in its own task and makes Back leave the app instead of returning to the
+     * banner that sent you there.
+     */
+    fun abrirAjustes(context: Context): Boolean {
+        val intento = intentoDePermiso(context) ?: return false
+        // A phone whose OEM ships no such screen throws ActivityNotFoundException. Crashing on
+        // launch would be a worse failure than the imprecision this exists to remove.
+        return runCatching { context.startActivity(intento) }.isSuccess
+    }
 }
 
 class DespertadorReceiver : BroadcastReceiver() {
