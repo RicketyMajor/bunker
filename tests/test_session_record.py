@@ -138,12 +138,22 @@ def test_fuera_de_rango_es_400_y_no_escribe():
                               ({"client_uuid": ""}, "sin uuid"),
                               ({"client_uuid": "no-soy-un-uuid"}, "uuid basura"),
                               ({"occurred_on": "ayer"}, "fecha basura"),
+                              # The spec asks that this verb reject the future and anything past
+                              # 30 days "exactly as every other verb". `record_session` reaches
+                              # that through the shared `parse_occurred_on`, but shared code is
+                              # not evidence the wiring is right: only garbage was ever driven
+                              # through this endpoint, and garbage fails at parsing rather than
+                              # at the window. These two drive the window itself.
+                              ({"occurred_on": (HOY + timedelta(days=1)).isoformat()},
+                               "fecha futura"),
+                              ({"occurred_on": (HOY - timedelta(days=31)).isoformat()},
+                               "fecha de hace 31 días"),
                               ({"survived_seconds": "mucho"}, "segundos no numéricos")):
         r = _post(_despacho(**payload))
         assert r.status_code == 400, f"{etiqueta} dio {r.status_code}"
 
     assert DeepWorkSession.objects.count() == antes, "alguna rama rechazada escribió igual"
-    print("OK · ocho entradas inválidas son 400 y ninguna deja rastro")
+    print("OK · diez entradas inválidas son 400 y ninguna deja rastro")
 
 
 def test_un_aventurero_que_ya_no_existe_no_bloquea_la_sesion():
