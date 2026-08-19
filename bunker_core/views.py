@@ -7,6 +7,8 @@ from django.conf import settings
 from django.core.management import call_command
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from django.http import JsonResponse
 from django.db.models import Sum
 from django.db.models.functions import Coalesce, TruncDate
@@ -21,8 +23,10 @@ from posada.achievements import evaluate_achievements
 
 logger = logging.getLogger(__name__)
 
-# Las 5 apps que entran en la capsula del tiempo.
-BACKUP_APPS = ('catalog', 'movies', 'disquera', 'posada', 'chess_study')
+# Las apps que entran en la capsula del tiempo. `bunker_core` entro el 2026-08-19, cuando
+# BunkerState le dio su primer modelo: sin el, un restore devuelve la fecha de ultima entrada
+# vacia y el briefing vuelve a anunciar todos los logros como nuevos.
+BACKUP_APPS = ('catalog', 'movies', 'disquera', 'posada', 'chess_study', 'bunker_core')
 # Donde escribe el cron nocturno (volumen bunker_backups_data).
 BACKUP_DIR = '/app/backups'
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -493,3 +497,24 @@ def movil_estado(request):
         "peliculas": list(Movie.objects.filter(is_watched=False).values("id", "title")[:500]),
         "albums": list(Album.objects.filter(is_listened=False).values("id", "title")[:500]),
     })
+
+
+@api_view(['GET'])
+def briefing(_request):
+    """Lo que el Búnker tiene que decirte al entrar. Solo lee.
+
+    Que sea un GET sin efectos no es un detalle de estilo: `/posada/api/habits/` y
+    `/api/dashboard/` liquidan eventos de calendario pasados en cada GET, y por eso
+    el prestigio del gremio se movió 75 → 102 en una sesión que no pagó nada a mano.
+    Este endpoint no llama a ninguno de los dos.
+    """
+    from bunker_core.briefing import construir_briefing
+    return Response(construir_briefing())
+
+
+@api_view(['POST'])
+def briefing_seen(request):
+    """Marca la entrada como vista. Es POST porque escribe."""
+    from bunker_core.briefing import marcar_visto
+    marcar_visto(bool(request.data.get('con_revision', False)))
+    return Response({"message": "Entrada registrada."})

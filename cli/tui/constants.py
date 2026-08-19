@@ -29,6 +29,8 @@ API_MOVIE_WATCHERS = f"{BASE_URL}/api/movies/watchers/"
 API_MOVIE_WISHLIST = f"{BASE_URL}/api/movies/wishlist/"
 
 API_DASHBOARD = f"{BASE_URL}/api/dashboard/"
+API_BRIEFING = f"{BASE_URL}/api/briefing/"
+API_BRIEFING_SEEN = f"{BASE_URL}/api/briefing/seen/"
 
 # --- RUTAS DE LA DISQUERA (MUSIC SHELL) ---
 API_MUSIC = f"{BASE_URL}/api/music/albums/"

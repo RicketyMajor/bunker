@@ -38,6 +38,7 @@ CHECKS_IN_CONTAINER = (
     "tests.test_insights",
     "tests.test_guild_contract",
     "tests.test_session_record",
+    "tests.test_briefing",
 )
 
 

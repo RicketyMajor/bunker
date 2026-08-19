@@ -22,7 +22,7 @@ cd /app
 echo "Iniciando backup automático: $FILENAME"
 # Volcar a un temporal: si el dump falla, el archivo truncado no llega al directorio de
 # backups, donde contaría entre los $MAX_BACKUPS y acabaría expulsando a uno bueno.
-if python manage.py dumpdata catalog movies disquera posada chess_study \
+if python manage.py dumpdata catalog movies disquera posada chess_study bunker_core \
         --format=json --indent=4 > "$BACKUP_DIR/$FILENAME.tmp"; then
     mv "$BACKUP_DIR/$FILENAME.tmp" "$BACKUP_DIR/$FILENAME"
     echo "Backup completado con éxito."
