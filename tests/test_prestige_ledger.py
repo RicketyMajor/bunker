@@ -419,7 +419,7 @@ def test_confirmar_paga_fijo_y_una_vez():
           f"un evento normal paga exactamente 1, pagó {asiento and asiento.amount}")
 
 
-def _planta_en_semana_cerrada(monto, detalle):
+def _planta_en_semana_cerrada(monto, detalle, fuente='diario'):
     """One entry inside the LAST COMPLETE week, written straight to the table.
 
     Not through `registrar_prestigio`: that stamps `occurred_at` with now, and every one of
@@ -436,7 +436,7 @@ def _planta_en_semana_cerrada(monto, detalle):
     momento = timezone.make_aware(
         timezone.datetime.combine(lunes_actual - timedelta(days=4),
                                   timezone.datetime.min.time()))
-    return PrestigeEntry.objects.create(amount=monto, source='diario', detail=detalle,
+    return PrestigeEntry.objects.create(amount=monto, source=fuente, detail=detalle,
                                         occurred_at=momento)
 
 
@@ -563,6 +563,58 @@ def test_semana_en_curso_no_se_guarda():
           f"una semana futura {futura} tampoco puede cachearse")
 
 
+def test_semana_vacia_reporta_cero():
+    """A week with no movement reports explicit zeros, not a missing key.
+
+    The review renders whatever the payload holds; a week that vanishes instead of saying
+    zero is a week the reader cannot tell apart from a bug.
+    """
+    _exige_rollback()
+    from posada.models import PrestigeWeek
+    from bunker_core.briefing import _prestigio_por_semana
+
+    PrestigeEntry.objects.all().delete()
+    PrestigeWeek.objects.all().delete()
+    actual, previa, desglose = _prestigio_por_semana()
+    check(actual == {"earned": 0, "lost": 0, "net": 0},
+          f"una semana sin movimiento reporta ceros explícitos, dio {actual}")
+    check(previa == {"earned": 0, "lost": 0, "net": 0},
+          f"y la semana comparada también, dio {previa}")
+    check(desglose == [], f"y un desglose vacío, dio {desglose}")
+
+
+def test_desglose_separa_ganado_de_perdido():
+    """The breakdown names each source, and a source that nets to zero is dropped.
+
+    This is the payload behind the whole plan: `+40` says nothing, `+50 habito_evitado /
+    -30 habito_incumplido` says whether the week was good or bad.
+    """
+    _exige_rollback()
+    from posada.models import PrestigeWeek
+    from bunker_core.briefing import _desglose
+    from bunker_core.briefing import _clave_semana
+    from django.utils import timezone
+    from datetime import timedelta
+
+    PrestigeEntry.objects.all().delete()
+    PrestigeWeek.objects.all().delete()
+    _planta_en_semana_cerrada(50, 'Vicio evitado', 'habito_evitado')
+    _planta_en_semana_cerrada(-30, 'Hábito incumplido', 'habito_incumplido')
+    # Una fuente que se anula sola: completada y deshecha en la misma semana.
+    _planta_en_semana_cerrada(4, 'Ida', 'tarea_kanban')
+    _planta_en_semana_cerrada(-4, 'Vuelta', 'tarea_kanban')
+
+    clave = _clave_semana(timezone.localdate() - timedelta(days=7))
+    filas = _desglose(clave)
+    montos = [f['monto'] for f in filas]
+    check(50 in montos and -30 in montos,
+          f"el desglose muestra la ganancia y la pérdida por separado, dio {montos}")
+    check(0 not in montos,
+          f"una fuente que se anula sola no aparece, dio {montos}")
+    check(all(f['etiqueta'] != f['fuente'] for f in filas),
+          f"cada fuente se muestra con su etiqueta legible, dio {filas}")
+
+
 def run_tests():
     with transaction.atomic():
         test_invariante()
@@ -583,6 +635,8 @@ def run_tests():
         test_snapshot_cuadra_con_ledger()
         test_snapshot_es_cache_y_es_derivable()
         test_semana_en_curso_no_se_guarda()
+        test_desglose_separa_ganado_de_perdido()
+        test_semana_vacia_reporta_cero()
         transaction.set_rollback(True)
 
     print(f"\ntest_prestige_ledger: {_checks}/{_checks}")

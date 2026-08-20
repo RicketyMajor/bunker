@@ -1,8 +1,14 @@
 """Cross-cutting state that belongs to no single module.
 
 One row, id=1, same singleton pattern as `GuildProfile` — but enforced here rather than
-merely documented. There is no snapshot table on purpose: the weekly review is computed
-from the series each time, so there is no second copy of the truth to keep in sync.
+merely documented.
+
+The weekly review's METRICS are still computed from the series each time, and `bunker_core`
+owns no snapshot table. `posada.PrestigeWeek` (2026-08-20) is the project's one exception,
+and it lives beside the balance it has to reconcile against rather than here. That reversed
+the decision this docstring used to state flatly; `context/decisions/log.md` records the
+reversal instead of overwriting the original, because the reasoning that produced it is
+still the reasoning that keeps every other derived number out of a table.
 """
 from django.db import models
 from django.utils import timezone

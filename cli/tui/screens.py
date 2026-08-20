@@ -43,6 +43,27 @@ class WeeklyReviewScreen(Screen):
                 signo = f"+{delta}" if delta > 0 else str(delta)
                 yield Label(f"[bold]{m['etiqueta']:<18}[/] {m['actual']:>6}   "
                             f"[dim](semana previa {m['previa']})[/]  [{color}]{signo}[/]")
+
+            # Dos números, nunca el neto. Un +40 que esconde "evité tres vicios, incumplí
+            # dos hábitos" es la pregunta que la revisión existe para responder, no la
+            # respuesta — y es la razón por la que la barrida nocturna dejó de netear.
+            prestigio = self.review.get("prestigio")
+            if prestigio:
+                actual, previa = prestigio["actual"], prestigio["previa"]
+                delta = actual["net"] - previa["net"]
+                color = "green" if delta > 0 else ("red" if delta < 0 else "dim")
+                signo = f"+{delta}" if delta > 0 else str(delta)
+                yield Label(f"[bold]{'Prestigio':<18}[/] "
+                            f"[green]+{actual['earned']}[/] [red]−{actual['lost']}[/]   "
+                            f"[dim](semana previa +{previa['earned']} −{previa['lost']})[/]"
+                            f"  [{color}]{signo}[/]")
+                for fuente in prestigio["por_fuente"]:
+                    monto = fuente["monto"]
+                    color_f = "green" if monto > 0 else "red"
+                    signo_f = f"+{monto}" if monto > 0 else str(monto)
+                    yield Label(f"  [dim]{fuente['etiqueta']:<22}[/] "
+                                f"[{color_f}]{signo_f:>6}[/]")
+
             yield Button("Continuar", variant="success", id="btn_cerrar_review")
 
     def action_cerrar(self) -> None:

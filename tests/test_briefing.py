@@ -237,6 +237,17 @@ def run_tests():
 
         # Cinco módulos distintos, no seis llamadas: books sale dos veces en la lista y se
         # consulta UNA. books cuesta 2 consultas (registros + páginas), los otros 1.
+        #
+        # Desde 2026-08-20 la revisión también reporta prestigio: +3 en régimen — los dos
+        # snapshots de `PrestigeWeek` y el desglose por fuente, que el snapshot no puede
+        # responder porque no guarda nada por fuente. La PRIMERA revisión de una semana nueva
+        # cuesta 17: construye los dos snapshots, y `update_or_create` gasta 8 statements en
+        # savepoints. Se calienta aquí a propósito, porque medir sin calentar ataba este
+        # número al orden en que corrieran los checks de más arriba.
+        estado.last_review_week = ""
+        estado.save()
+        construir_briefing()
+
         estado.last_review_week = ""
         estado.save()
         with CaptureQueriesContext(connection) as con_rev:
@@ -246,8 +257,9 @@ def run_tests():
         with CaptureQueriesContext(connection) as sin_rev:
             construir_briefing()
         coste = len(con_rev) - len(sin_rev)
-        check(coste == 7,
-              f"la revisión cuesta 7 consultas (5 módulos + logros, books doble), no {coste}")
+        check(coste == 10,
+              f"la revisión cuesta 10 consultas (5 módulos + logros, books doble, "
+              f"+3 de prestigio), no {coste}")
 
         # Y el día que no toca no se paga: el payload es None, no un dict vacío.
         check(construir_briefing()["review"] is None,

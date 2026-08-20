@@ -166,6 +166,46 @@ def _logros_por_semana():
     return por_semana.get(revisada, 0), por_semana.get(comparada, 0)
 
 
+def _desglose(week_key):
+    """That week's entries grouped by source, largest first, zeros omitted.
+
+    One grouped query. A source whose entries net to exactly zero in the week — a habit
+    completed and then undone — carries no information and is dropped rather than rendered
+    as a `0` line the reader has to interpret.
+    """
+    from django.db.models import Sum
+
+    from posada.models import PrestigeEntry
+    from posada.prestige import _rango_semana
+
+    lunes, siguiente = _rango_semana(week_key)
+    etiquetas = dict(PrestigeEntry.FUENTES)
+    filas = (PrestigeEntry.objects
+             .filter(occurred_at__date__gte=lunes, occurred_at__date__lt=siguiente)
+             .values('source').annotate(monto=Sum('amount')).order_by('-monto'))
+    return [{"fuente": f['source'],
+             "etiqueta": etiquetas.get(f['source'], f['source']),
+             "monto": f['monto']}
+            for f in filas if f['monto']]
+
+
+def _prestigio_por_semana():
+    """Prestige for the two LAST COMPLETE weeks, plus the reviewed week's breakdown by source.
+
+    Same window as `_logros_por_semana()` directly above — that function already gets the
+    Monday boundary and the timezone right, and inventing a second way to ask the same
+    question is how two numbers start disagreeing. The keys come from `_clave_semana`, the
+    one producer of the format, and the summing lives in `posada.prestige.resumen_semana`,
+    the one producer of the number.
+    """
+    from posada.prestige import resumen_semana
+
+    hoy = timezone.localdate()
+    revisada = _clave_semana(hoy - timedelta(days=7))
+    comparada = _clave_semana(hoy - timedelta(days=14))
+    return resumen_semana(revisada), resumen_semana(comparada), _desglose(revisada)
+
+
 def _revision():
     """The LAST COMPLETE ISO week against the one before it, built from the series and nothing
     else.
@@ -189,6 +229,7 @@ def _revision():
               for modulo in {m[1] for m in _METRICAS_REVISION}}
     hoy = timezone.localdate()
     logros_actual, logros_previa = _logros_por_semana()
+    prest_actual, prest_previa, desglose = _prestigio_por_semana()
     return {
         "semana": _clave_semana(hoy - timedelta(days=7)),
         "anterior": _clave_semana(hoy - timedelta(days=14)),
@@ -199,12 +240,12 @@ def _revision():
                       "actual": series[modulo][-2][campo],
                       "previa": series[modulo][-3][campo]}
                      for etiqueta, modulo, campo in _METRICAS_REVISION]
-                    # The spec asks for achievements unlocked and prestige earned as well.
-                    # Achievements are derivable — `unlocked_at` is a timestamp. PRESTIGE IS
-                    # NOT: `GuildProfile.prestige` is a running total with no ledger behind
-                    # it, so "earned this week" cannot be reconstructed from what is stored.
-                    # It would need a new model, which this plan does not build. Recorded in
-                    # the spec rather than silently dropped.
                     + [{"etiqueta": "Logros", "actual": logros_actual,
                         "previa": logros_previa}],
+        # Prestige is NOT a metric row: a row is one number against last week's, and the
+        # whole point of the ledger is that a week has two — what was earned and what was
+        # lost. A net of +40 that hides "avoided three vices, missed two habits" is the
+        # question the review is supposed to answer, not the answer.
+        "prestigio": {"actual": prest_actual, "previa": prest_previa,
+                      "por_fuente": desglose},
     }
