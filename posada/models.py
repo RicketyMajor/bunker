@@ -870,6 +870,42 @@ class CalendarEvent(models.Model):
         return f"{self.date} - {self.title}"
 
 
+class PrestigeWeek(models.Model):
+    """Resumen materializado de una semana ISO CERRADA.
+
+    A cache, not a truth: it is REBUILT from `PrestigeEntry`, never incremented in place. A
+    derived table that is only ever recomputed can be stale; one that is incremented can be
+    wrong, and wrong is the failure mode this project keeps paying for.
+
+    The week in progress is never stored — the review reports complete periods only.
+    """
+    # Ocho caracteres exactos, como `BunkerState.last_review_week`: una clave más ancha
+    # levanta DataError en Postgres en vez de truncar en silencio. Producida SIEMPRE por
+    # `bunker_core.briefing._clave_semana`, que es el único sitio que arma el formato.
+    week_key = models.CharField(max_length=8, unique=True)
+    earned = models.PositiveIntegerField(default=0)
+    # Magnitud positiva, no un negativo: `PositiveIntegerField` deja un CHECK >= 0 que dice
+    # en el esquema lo que la columna significa.
+    lost = models.PositiveIntegerField(default=0)
+    # Calculada por la base, no escrita por la aplicación. El punto entero de esta tabla es
+    # que pueda estar desactualizada y jamás equivocada; un `net` que alguien puede escribir
+    # es un `net` que puede discrepar de las dos columnas de las que sale.
+    net = models.GeneratedField(
+        expression=models.F('earned') - models.F('lost'),
+        output_field=models.IntegerField(),
+        db_persist=True,
+    )
+    rebuilt_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Lexicográfico sobre '2026-W34' ordena bien por el año de 4 dígitos y el %02d, y
+        # reusa el índice único: la tabla crece 52 filas al año y no necesita otro.
+        ordering = ['-week_key']
+
+    def __str__(self):
+        return f"{self.week_key}: +{self.earned} −{self.lost} = {self.net}"
+
+
 class Achievement(models.Model):
     """Un logro: un hito que cruza módulos y paga UNA sola vez al gremio.
 

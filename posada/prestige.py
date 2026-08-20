@@ -9,9 +9,12 @@ A guard in the shared function is a smaller diff than a guard in every caller, a
 no route by which a payment reaches the balance without reaching the ledger. That property is
 what `tests/test_prestige_ledger.py::test_invariante` exists to defend.
 """
-from django.db import transaction
+from datetime import date, timedelta
 
-from .models import PrestigeEntry
+from django.db import transaction
+from django.utils import timezone
+
+from .models import PrestigeEntry, PrestigeWeek
 
 
 def registrar_prestigio(guild, amount, source, detail="", ref_id=None):
@@ -58,3 +61,52 @@ def registrar_prestigio(guild, amount, source, detail="", ref_id=None):
 
         guild.save()
         return leveled_up
+
+
+def _rango_semana(week_key):
+    """Monday 00:00 and the following Monday 00:00, local, for an ISO key like '2026-W34'.
+
+    The inverse of `bunker_core.briefing._clave_semana`, which is the ONE producer of the
+    format. `tests/test_prestige_ledger.py::test_clave_semana_ida_y_vuelta` pins the round
+    trip, because two functions that agree on a format until one of them changes is exactly
+    how a week silently starts reporting the wrong seven days.
+    """
+    anio, semana = int(week_key[:4]), int(week_key[6:])
+    lunes = date.fromisocalendar(anio, semana, 1)
+    return lunes, lunes + timedelta(days=7)
+
+
+def resumen_semana(week_key):
+    """Summary for one ISO week: `{"earned", "lost", "net"}`.
+
+    Reads the snapshot for a CLOSED week and rebuilds it when it is missing; computes the
+    current week on the fly and never stores it. A week that has not finished yet cannot be
+    cached without caching a number that is still moving, and the review reports complete
+    periods only.
+    """
+    lunes, siguiente = _rango_semana(week_key)
+    # Estrictamente pasada. `not en_curso` metería también las semanas FUTURAS, que se
+    # cachearían en cero y devolverían ese cero cuando por fin tuvieran asientos.
+    cerrada = siguiente <= timezone.localdate()
+
+    if cerrada:
+        fila = PrestigeWeek.objects.filter(week_key=week_key).first()
+        if fila:
+            return {"earned": fila.earned, "lost": fila.lost, "net": fila.net}
+
+    # ponytail: suma en Python sobre las filas, una sola consulta. Techo: una semana con
+    # miles de asientos — la historia entera son ~150 filas y una semana son unidades.
+    # Mejora: dos `Sum` condicionales, que también es una consulta y se lee peor por nada.
+    montos = PrestigeEntry.objects.filter(
+        occurred_at__date__gte=lunes, occurred_at__date__lt=siguiente
+    ).values_list('amount', flat=True)
+    ganado = sum(m for m in montos if m > 0)
+    perdido = -sum(m for m in montos if m < 0)
+
+    if cerrada:
+        # `update_or_create` y no `create`: reconstruir una semana que ya tiene fila debe dar
+        # la misma fila, no un error de clave duplicada. `net` NO va aquí — lo calcula la
+        # base, y escribirlo desde la aplicación es justo lo que esta tabla no permite.
+        PrestigeWeek.objects.update_or_create(
+            week_key=week_key, defaults={"earned": ganado, "lost": perdido})
+    return {"earned": ganado, "lost": perdido, "net": ganado - perdido}

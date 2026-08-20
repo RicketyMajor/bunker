@@ -419,6 +419,150 @@ def test_confirmar_paga_fijo_y_una_vez():
           f"un evento normal paga exactamente 1, pagó {asiento and asiento.amount}")
 
 
+def _planta_en_semana_cerrada(monto, detalle):
+    """One entry inside the LAST COMPLETE week, written straight to the table.
+
+    Not through `registrar_prestigio`: that stamps `occurred_at` with now, and every one of
+    these checks is about a week that has already closed. It puts `SUM(ledger)` out of step
+    with the balance, which is why the Task 5 checks run LAST — `test_invariante` and every
+    check that calls it have already passed by then, and the whole run rolls back.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    hoy = timezone.localdate()
+    lunes_actual = hoy - timedelta(days=hoy.weekday())
+    momento = timezone.make_aware(
+        timezone.datetime.combine(lunes_actual - timedelta(days=4),
+                                  timezone.datetime.min.time()))
+    return PrestigeEntry.objects.create(amount=monto, source='diario', detail=detalle,
+                                        occurred_at=momento)
+
+
+def test_clave_semana_ida_y_vuelta():
+    """`_rango_semana` is the inverse of `_clave_semana`, and nothing else may parse the key.
+
+    Two functions that agree on a format until one of them changes is how a week silently
+    starts reporting the wrong seven days. Checked across a year boundary too: week 1 of a
+    year can start in December, and `date.fromisocalendar` is the only thing that gets that
+    right on its own.
+    """
+    from bunker_core.briefing import _clave_semana
+    from posada.prestige import _rango_semana
+
+    for clave in ('2026-W34', '2026-W01', '2026-W53', '2027-W01', '2025-W52'):
+        try:
+            lunes, siguiente = _rango_semana(clave)
+        except ValueError:
+            # 2026 no tiene semana 53; que reviente es correcto, no hay nada que afirmar.
+            continue
+        check(_clave_semana(lunes) == clave,
+              f"la clave {clave} vuelve de su lunes como {_clave_semana(lunes)}")
+        check((siguiente - lunes).days == 7,
+              f"la semana {clave} dura 7 días, duró {(siguiente - lunes).days}")
+
+
+def test_net_no_se_puede_escribir():
+    """`net` is a stored generated column: the database computes it from `earned - lost`.
+
+    Writing it from the application is the one way a snapshot could be WRONG rather than
+    merely stale, which is the distinction the model exists to make. This pins that it stays
+    a generated column and does not quietly become a plain integer field in a later
+    migration.
+    """
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT is_generated FROM information_schema.columns
+            WHERE table_name = 'posada_prestigeweek' AND column_name = 'net'""")
+        generada = cursor.fetchone()[0]
+    check(generada == 'ALWAYS',
+          f"la columna net debe ser generada por la base, is_generated={generada!r}")
+
+
+def test_snapshot_cuadra_con_ledger():
+    """Every stored snapshot must equal what the ledger says for its week. Same shape as
+    `SUM(ledger) == prestige` is for Task 1: the assertion that goes red when the derived
+    number and its source drift apart."""
+    _exige_rollback()
+    from bunker_core.briefing import _semana_anterior
+    from posada.models import PrestigeWeek
+    from posada.prestige import _rango_semana, resumen_semana
+
+    _planta_en_semana_cerrada(7, 'Semilla del snapshot')
+    resumen_semana(_semana_anterior())
+
+    filas = list(PrestigeWeek.objects.all())
+    check(bool(filas), f"debe existir al menos un snapshot para comprobar, hay {len(filas)}")
+    for fila in filas:
+        lunes, siguiente = _rango_semana(fila.week_key)
+        real = sum(PrestigeEntry.objects.filter(
+            occurred_at__date__gte=lunes,
+            occurred_at__date__lt=siguiente).values_list('amount', flat=True))
+        check(fila.net == real,
+              f"el snapshot {fila.week_key} dice net={fila.net}, el ledger dice {real}")
+
+
+def test_snapshot_es_cache_y_es_derivable():
+    """Two properties in one run, because either alone passes against a broken cache.
+
+    Building the snapshot and immediately recomputing it proves nothing: both calls take the
+    same path. Adding an entry BETWEEN them is what makes the two paths tell different
+    stories — the cached read must return the OLD number (it really is a cache) and the read
+    after deleting the snapshots must return the NEW one (it really is derivable from the
+    ledger, and stale is the worst it can ever be).
+    """
+    _exige_rollback()
+    from bunker_core.briefing import _semana_anterior
+    from posada.models import PrestigeWeek
+    from posada.prestige import resumen_semana
+
+    clave = _semana_anterior()
+    # Deltas, nunca absolutos: `test_snapshot_cuadra_con_ledger` ya plantó en esta misma
+    # semana y dejó su fila. Un check que afirma un número fijo afirma en realidad el orden
+    # en que corrieron los checks anteriores.
+    PrestigeWeek.objects.all().delete()
+    _planta_en_semana_cerrada(10, 'Primer asiento de la semana cerrada')
+    primero = resumen_semana(clave)
+    check(PrestigeWeek.objects.filter(week_key=clave).exists(),
+          f"una semana cerrada deja su fila de snapshot, {clave} no la dejó")
+
+    _planta_en_semana_cerrada(5, 'Asiento posterior al snapshot')
+    cacheado = resumen_semana(clave)
+    check(cacheado == primero,
+          f"el snapshot es una caché y debe devolver lo viejo: {cacheado} vs {primero}")
+
+    PrestigeWeek.objects.all().delete()
+    reconstruido = resumen_semana(clave)
+    check(reconstruido['earned'] == primero['earned'] + 5,
+          f"sin caché se reconstruye desde el ledger y suma los +5 posteriores: "
+          f"{primero['earned']} -> {reconstruido['earned']}")
+    check(reconstruido['net'] == reconstruido['earned'] - reconstruido['lost'],
+          f"el net reconstruido sale de sus dos columnas: {reconstruido}")
+
+
+def test_semana_en_curso_no_se_guarda():
+    """The week in progress is never cached — its number is still moving, and the review
+    reports complete periods only. A future week is not cached either: it would be stored as
+    a zero and hand that zero back the day it finally has entries."""
+    _exige_rollback()
+    from bunker_core.briefing import _semana_actual
+    from posada.models import PrestigeWeek
+    from posada.prestige import resumen_semana
+
+    actual = _semana_actual()
+    resumen_semana(actual)
+    check(not PrestigeWeek.objects.filter(week_key=actual).exists(),
+          f"la semana en curso {actual} no puede tener fila de snapshot")
+
+    futura = '2099-W10'
+    resumen_semana(futura)
+    check(not PrestigeWeek.objects.filter(week_key=futura).exists(),
+          f"una semana futura {futura} tampoco puede cachearse")
+
+
 def run_tests():
     with transaction.atomic():
         test_invariante()
@@ -432,6 +576,13 @@ def run_tests():
         test_barrida_no_netea()
         test_evento_pasado_no_paga()
         test_confirmar_paga_fijo_y_una_vez()
+        # Las de la Tarea 5 van AL FINAL: plantan asientos con fecha pasada sin pasar por
+        # `registrar_prestigio`, así que dejan `SUM(ledger)` fuera de paso con el saldo.
+        test_clave_semana_ida_y_vuelta()
+        test_net_no_se_puede_escribir()
+        test_snapshot_cuadra_con_ledger()
+        test_snapshot_es_cache_y_es_derivable()
+        test_semana_en_curso_no_se_guarda()
         transaction.set_rollback(True)
 
     print(f"\ntest_prestige_ledger: {_checks}/{_checks}")
