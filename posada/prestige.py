@@ -26,6 +26,13 @@ def registrar_prestigio(guild, amount, source, detail="", ref_id=None):
     that coin the day an achievement pays 0 prestige. There are none today; there was no
     reason to leave the trap armed.
     """
+    if source not in dict(PrestigeEntry.FUENTES):
+        # Django validates `choices` only on full_clean(), which .create() never calls, so a
+        # typo would land in the ledger and render as a raw slug in the weekly review. The
+        # payers that would carry one — the bestiary, a chart goal — fire once in months, so
+        # a wrong label has to fail at the call, not whenever the path next happens to run.
+        raise ValueError(f"fuente de prestigio no declarada en PrestigeEntry.FUENTES: {source!r}")
+
     if amount == 0:
         guild.save()
         return False

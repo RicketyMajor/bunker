@@ -189,9 +189,13 @@ def reset_guild(request):
     # Borrar las mejoras desbloqueadas
     GuildUnlockedUpgrade.objects.filter(guild=guild).delete()
     
-    # Reiniciar el perfil del Gremio
+    # Reiniciar el perfil del Gremio. The balance moves through the choke point like any
+    # other movement: zeroing it by hand left SUM(ledger) pointing at a balance that no
+    # longer existed, and the ledger is append-only, so the correction is an entry.
+    if guild.prestige:
+        registrar_prestigio(guild, -guild.prestige, 'reinicio_gremio',
+                            detail="Reinicio del Gremio")
     guild.prestige_level = 1
-    guild.prestige = 0
     
     # Resetear todas las monedas a 0
     for coin in ['marco', 'real', 'talento', 'sueldo', 'iota', 'drabin',
@@ -688,7 +692,8 @@ def complete_habit(request):
             if r['coin2']:
                 setattr(guild, r['coin2'], getattr(guild, r['coin2']) + r['amt2'])
 
-            leveled_up = guild.add_prestige(r['prestige'])
+            leveled_up = guild.add_prestige(r['prestige'], 'habito_bueno',
+                                           detail=habit.name, ref_id=habit.id)
 
             habit.last_completed_date = today
             habit.save()
@@ -1022,10 +1027,12 @@ def undo_habit(request):
 
         if habit.is_bad_habit:
             # Devuelve el prestigio restado por error
-            guild.add_prestige(habit.last_prestige_reward)
+            guild.add_prestige(habit.last_prestige_reward, 'deshacer_habito',
+                               detail=habit.name, ref_id=habit.id)
         else:
             # Quita el prestigio y monedas ganadas por error
-            guild.add_prestige(-habit.last_prestige_reward)
+            guild.add_prestige(-habit.last_prestige_reward, 'deshacer_habito',
+                               detail=habit.name, ref_id=habit.id)
             if habit.last_coin_type:
                 curr_coin = getattr(guild, habit.last_coin_type)
                 setattr(guild, habit.last_coin_type, max(
@@ -1102,7 +1109,7 @@ def create_journal_entry(request):
 
     # --- Buff de Claridad Mental ---
     guild, _ = GuildProfile.objects.get_or_create(id=1)
-    leveled_up = guild.add_prestige(2)
+    leveled_up = guild.add_prestige(2, 'diario', detail="Entrada de diario")
     lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
 
     JournalEntry.objects.create(content=content)
@@ -1384,7 +1391,8 @@ def move_kanban_task(request):
                     "Una misión de proporciones míticas completada. La Posada celebra tu victoria épica."
                 ])
 
-            leveled_up = guild.add_prestige(task.prestige_reward)
+            leveled_up = guild.add_prestige(task.prestige_reward, 'tarea_kanban',
+                                           detail=task.title, ref_id=task.id)
             lvl_msg = f" ¡El Gremio ascendió al Nivel {guild.prestige_level}!" if leveled_up else ""
             msg = f"¡Misión '{task.title}' Completada!\n{reward_msg}.{lvl_msg}\n\n[italic cyan]\"{flavor_text}\"[/]"
 
@@ -1487,7 +1495,8 @@ def create_calendar_event(request):
         # Buff de prestigio por planificar
         guild, _ = GuildProfile.objects.get_or_create(id=1)
         prestige_gain = 3 if event.is_important else 1
-        guild.add_prestige(prestige_gain)
+        guild.add_prestige(prestige_gain, 'evento_creado',
+                           detail=event.title, ref_id=event.id)
 
         return Response({"status": "success", "message": f"Evento '{event.title}' creado (+{prestige_gain} Prestigio)."})
     except Exception as e:

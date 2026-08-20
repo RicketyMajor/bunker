@@ -70,7 +70,7 @@ class ChessRoomViewSet(viewsets.ModelViewSet):
             base_xp += int(base_xp * 0.3)  # Bono 30%
 
         # Otorgar Prestigio
-        guild.add_prestige(2)
+        guild.add_prestige(2, 'ajedrez_partida', detail=room.title, ref_id=room.id)
 
         # Otorgar Experiencia
         adv.experience += base_xp
@@ -338,7 +338,7 @@ def solve_daily_puzzle(request):
             session.save()
             
             # Add prestige at the end to prevent concurrent save issues
-            guild.add_prestige(3)
+            guild.add_prestige(3, 'ajedrez_puzzle', detail=f"Puzzle {puzzle_id}")
             
         SolvedPuzzle.objects.create(puzzle_id=puzzle_id, rating=int(rating))
         return Response({"status": "success", "message": f"Puzzle Resuelto! Ganaste {xp} XP."})

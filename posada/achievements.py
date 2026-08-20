@@ -37,7 +37,8 @@ def _unlock(logro):
         actual = getattr(guild, logro.reward_coin)
         setattr(guild, logro.reward_coin, actual + logro.reward_amount)
     # add_prestige() guarda la fila entera, así que persiste también la moneda de arriba.
-    guild.add_prestige(logro.reward_prestige)
+    guild.add_prestige(logro.reward_prestige, 'logro',
+                       detail=logro.name, ref_id=logro.id)
 
     logro.unlocked_at = ahora
     logger.info("Logro desbloqueado: %s (%s)", logro.key, logro.name)

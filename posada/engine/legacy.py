@@ -454,7 +454,9 @@ def evaluate_daily_penalties():
     habits = DailyHabit.objects.all()
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
-    total_prestige_change = 0
+    # Only for the closing log line: every movement below is paid at its own event, so a
+    # bad week can no longer hide inside a good net number. This never pays anything.
+    neto_para_log = 0
     penalty_log = []
 
     for habit in habits:
@@ -487,7 +489,9 @@ def evaluate_daily_penalties():
                 reward_map = {'S': 50, 'A': 25, 'B': 10, 'C': 5}
                 prestige_gain = reward_map.get(
                     habit.difficulty, 5) * survived_valid_days
-                total_prestige_change += prestige_gain
+                guild.add_prestige(prestige_gain, 'habito_evitado',
+                                   detail=habit.name, ref_id=habit.id)
+                neto_para_log += prestige_gain
                 penalty_log.append(
                     f"Evitaste '{habit.name}' por {survived_valid_days} día(s) (+{prestige_gain} Prestigio).")
 
@@ -513,7 +517,9 @@ def evaluate_daily_penalties():
 
                 if missed_valid_days > 0:
                     prestige_loss = missed_valid_days * 15
-                    total_prestige_change -= prestige_loss
+                    guild.add_prestige(-prestige_loss, 'habito_incumplido',
+                                       detail=habit.name, ref_id=habit.id)
+                    neto_para_log -= prestige_loss
                     habit.current_streak = 0
                     
                     coin_hierarchy = [
@@ -559,24 +565,21 @@ def evaluate_daily_penalties():
             reward_coin = random.choice(coins)
             reward_amt = random.randint(1, 10)
             
-            total_prestige_change += prestige_gain
+            guild.add_prestige(prestige_gain, 'evento_asistido',
+                               detail=event.title, ref_id=event.id)
+            neto_para_log += prestige_gain
             setattr(guild, reward_coin, getattr(guild, reward_coin) + reward_amt)
             penalty_log.append(
                 f"✅ Evento completado: '{event.title}' (+{prestige_gain} Prestigio, +{reward_amt} {reward_coin.replace('_', ' ').title()})."
             )
 
 
-    if total_prestige_change != 0:
-        guild.add_prestige(total_prestige_change)
+    if neto_para_log < 0:
+        penalty_log.append(
+            f"El Gremio pierde influencia. (Impacto Neto: {neto_para_log})")
 
-        if total_prestige_change < 0:
-            penalty_log.append(
-                f"El Gremio pierde influencia. (Impacto Neto: {total_prestige_change})")
-
-    # add_prestige() guarda la fila, pero solo se llama cuando el prestigio neto no es cero —
-    # y los movimientos de monedas de arriba (penalizaciones y recompensas de eventos) se
-    # hicieron solo en memoria. Una penalizacion de -15 mas un evento de +15 suman cero y
-    # descartaban ambos. Guardar siempre.
+    # Each movement above already saved the guild, but the coin changes between them are
+    # in memory only, and a sweep that moves no prestige at all saves nothing. Always save.
     guild.save()
 
     return penalty_log
@@ -676,7 +679,8 @@ def process_session_completion(session_id, survived_seconds=None, surrendered=Fa
             defaults={'times_killed': 0}
         )
         if created:
-            guild.add_prestige(10)
+            guild.add_prestige(10, 'bestiario',
+                               detail=entry.monster.name, ref_id=m_id)
             guild.save()
             event_log.append(f"📖 ¡Nuevo descubrimiento en el Bestiario! (+10 Prestigio)")
         entry.times_killed += count
@@ -1326,7 +1330,8 @@ def calculate_chart_reward(chart):
     else:
         coin_reward = {'S': ('talento', 1), 'A': ('real', 2), 'B': ('sueldo', 5), 'C': ('sueldo', 1)}[grade]
 
-    leveled_up = guild.add_prestige(prestige_reward)
+    leveled_up = guild.add_prestige(prestige_reward, 'meta_completada',
+                                    detail=chart.title, ref_id=chart.id)
     setattr(guild, coin_reward[0], getattr(guild, coin_reward[0]) + coin_reward[1])
     guild.save()
     universal_consolidate(guild)

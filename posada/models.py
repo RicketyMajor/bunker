@@ -460,18 +460,16 @@ class GuildProfile(WealthMixin):
     def prestige_meta(self):
         return int(500 * (self.prestige_level ** 1.5))
 
-    def add_prestige(self, amount, source='logro', detail="", ref_id=None):
+    def add_prestige(self, amount, source, detail="", ref_id=None):
         """Añade prestigio y calcula si el gremio sube de nivel. Retorna True si subió.
 
         The arithmetic moved to `posada.prestige.registrar_prestigio`, which writes the
         ledger entry in the same transaction. This method stays because twelve call sites
-        use it, and its signature is unchanged for them.
+        use it, and it is a choke point like any other: it delegates.
 
-        ponytail: `source` defaults to 'logro' only until Task 3 labels every caller.
-        Ceiling: an unlabelled payer lands in the ledger as `logro` and the weekly
-        breakdown lies about where the points came from. Upgrade: Task 3 of
-        `context/plans/2026-08-20-prestige-ledger.md`, which deletes this default and
-        makes `source` required, so a missed caller fails loudly at the call site.
+        `source` has no default on purpose. A payer that forgets it fails with `TypeError`
+        at the call site, which is a better failure than a row that lands in the ledger
+        labelled as something it is not.
         """
         from .prestige import registrar_prestigio
         return registrar_prestigio(self, amount, source, detail, ref_id)
@@ -509,6 +507,7 @@ class PrestigeEntry(models.Model):
         ('bestiario', 'Descubrimiento en el Bestiario'),
         ('meta_completada', 'Meta completada'),
         ('logro', 'Logro desbloqueado'),
+        ('reinicio_gremio', 'Reinicio del Gremio'),
         ('ajedrez_partida', 'Partida analizada'),
         ('ajedrez_puzzle', 'Puzzle resuelto'),
         (SUBIDA_NIVEL, 'Subida de nivel del gremio'),
