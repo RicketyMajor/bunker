@@ -479,6 +479,65 @@ class GuildProfile(WealthMixin):
         return f"Gremio Nivel {self.prestige_level} - Prestigio: {self.prestige}/{self.prestige_meta}"
 
 
+class PrestigeEntry(models.Model):
+    """Append-only ledger of prestige movements: one row per movement, never edited.
+
+    `GuildProfile.prestige` is a BALANCE, not a total — `add_prestige()` subtracts
+    `prestige_meta` on every level-up — so what was earned in a period is not recoverable
+    from it. This table is that history, and it is what lets the weekly review answer
+    "prestige earned", the last `bunker-responde` criterion the stored data could not support.
+
+    The invariant that makes it verifiable: SUM(amount) == GuildProfile.prestige, exactly,
+    at all times. It holds only because level-ups and the pre-existing balance are entries
+    too. Checked by `tests/test_prestige_ledger.py`, which is the thing that goes red when a
+    new payer is added without routing through `posada.prestige.registrar_prestigio`.
+    """
+    SALDO_INICIAL = 'saldo_inicial'
+    SUBIDA_NIVEL = 'subida_de_nivel'
+
+    FUENTES = [
+        ('habito_bueno', 'Hábito bueno completado'),
+        ('recaida', 'Recaída en hábito malo'),
+        ('deshacer_habito', 'Deshacer hábito'),
+        ('tarea_kanban', 'Tarea completada'),
+        ('diario', 'Entrada de diario'),
+        ('evento_creado', 'Evento de calendario creado'),
+        ('habito_evitado', 'Hábito malo evitado'),
+        ('habito_incumplido', 'Hábito bueno incumplido'),
+        ('evento_asistido', 'Asistencia confirmada'),
+        ('bestiario', 'Descubrimiento en el Bestiario'),
+        ('meta_completada', 'Meta completada'),
+        ('logro', 'Logro desbloqueado'),
+        ('ajedrez_partida', 'Partida analizada'),
+        ('ajedrez_puzzle', 'Puzzle resuelto'),
+        (SUBIDA_NIVEL, 'Subida de nivel del gremio'),
+        (SALDO_INICIAL, 'Saldo inicial'),
+    ]
+
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    amount = models.IntegerField()
+    source = models.CharField(max_length=32, choices=FUENTES)
+    detail = models.CharField(max_length=120, blank=True, default="")
+    # Deliberately NOT a ForeignKey: the payers span `posada` and `chess_study`, and the rows
+    # that cause them get deleted in normal use. CASCADE would delete history when a task is
+    # deleted; PROTECT would make the ledger refuse the deletion. A ledger must outlive its
+    # cause, so this reference is loose and may dangle by design.
+    ref_id = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-occurred_at']
+        constraints = [
+            # A zero entry carries no information and hides a confused caller.
+            models.CheckConstraint(condition=~models.Q(amount=0),
+                                   name='prestige_entry_amount_no_cero'),
+        ]
+
+    def __str__(self):
+        signo = '+' if self.amount > 0 else ''
+        fecha = timezone.localtime(self.occurred_at)
+        return f"{signo}{self.amount} · {self.get_source_display()} · {fecha:%Y-%m-%d}"
+
+
 class DeepWorkSession(models.Model):
     """
     Registra cada sesión del temporizador. Mantiene el historial para dar
