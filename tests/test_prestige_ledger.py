@@ -266,8 +266,15 @@ def test_barrida_no_netea():
     It used to accumulate three different things — a vice avoided, a habit missed, a calendar
     event — into `total_prestige_change` and pay them with a single `add_prestige()`. A `+35`
     row cannot say whether the week was good or bad, which is the entire question the weekly
-    review asks. Plants its own habits and event: the live database has 0 habits defined, so
-    an assertion resting on it would pass without being able to fail.
+    review asks. The calendar left the sweep entirely in Task 4 (it expires unpaid now, see
+    `test_evento_pasado_no_paga`), so two contributors remain. Plants its own habits: the live
+    database has 0 habits defined, so an assertion resting on it would pass without being able
+    to fail.
+
+    It also pins the ORDER of the payments. `add_prestige` crosses `prestige_meta` against the
+    balance it sees, `prestige_level` only ever goes up, and `DailyHabit.objects.all()` has no
+    `Meta.ordering` — so paying a gross reward before a pending penalty granted a permanent
+    level that depended on the order Postgres returned rows in.
     """
     _exige_rollback()
     from datetime import timedelta
@@ -275,7 +282,6 @@ def test_barrida_no_netea():
     from django.utils import timezone
 
     from posada.engine.legacy import evaluate_daily_penalties
-    from posada.models import CalendarEvent
 
     hoy = timezone.localdate()
     todos_los_dias = ''.join(str(d) for d in range(7))
@@ -290,9 +296,6 @@ def test_barrida_no_netea():
     # so a habit born today has no uncovered days and this check would silently cover only
     # two of the three contributors.
     DailyHabit.objects.filter(pk=bueno.pk).update(created_at=hoy - timedelta(days=10))
-    evento = CalendarEvent.objects.create(date=hoy - timedelta(days=2),
-                                          title='Evento de prueba', status='PENDING')
-
     antes = PrestigeEntry.objects.count()
     saldo_antes = GuildProfile.objects.get(id=1).prestige
     evaluate_daily_penalties()
@@ -303,11 +306,16 @@ def test_barrida_no_netea():
     # exists with an old `last_evaluated_date` — the app's main feature — a count of all new
     # rows goes red for a reason that has nothing to do with the ledger. This project already
     # lost a session to exactly that (`test_reading_progress`, fixed 2026-08-17).
-    esperadas = {('habito_evitado', vicio.id), ('habito_incumplido', bueno.id),
-                 ('evento_asistido', evento.id)}
+    esperadas = {('habito_evitado', vicio.id), ('habito_incumplido', bueno.id)}
     plantadas = [f for f in nuevas if (f.source, f.ref_id) in esperadas]
-    check(len(plantadas) == 3,
+    check(len(plantadas) == 2,
           f"la barrida escribe un asiento por evento plantado, escribió {len(plantadas)}")
+
+    # El orden importa y es lo único que mantiene el nivel del gremio estable: la
+    # penalización se paga ANTES que la recompensa, siempre.
+    check([f.source for f in plantadas] == ['habito_incumplido', 'habito_evitado'],
+          f"la barrida paga penalizaciones antes que recompensas, pagó "
+          f"{[f.source for f in plantadas]}")
 
     # Counting rows and sources is NOT enough, and this was measured: restoring the netted
     # payment under one of those three labels produces three rows and three sources too, and
@@ -320,8 +328,8 @@ def test_barrida_no_netea():
           f"{[(f.source, f.amount) for f in sin_causa]}")
 
     por_fuente = {f.source: f.amount for f in plantadas}
-    # 2 días sobrevividos × 25 (dificultad A) y 2 días incumplidos × 15. El evento paga
-    # random.randint(5, 15) — no se puede afirmar hasta que la Tarea 4 lo vuelva fijo.
+    # 2 días sobrevividos × 25 (dificultad A) y 2 días incumplidos × 15. Ambos reproducibles
+    # desde su causa, que es lo que vuelve auditable una fila del ledger.
     check(por_fuente.get('habito_evitado') == 50,
           f"el vicio evitado paga exactamente lo suyo (+50), pagó {por_fuente.get('habito_evitado')}")
     check(por_fuente.get('habito_incumplido') == -30,
@@ -332,6 +340,83 @@ def test_barrida_no_netea():
     check(sum(f.amount for f in nuevas) == saldo - saldo_antes,
           f"los asientos de la barrida suman el movimiento del saldo "
           f"({sum(f.amount for f in nuevas)} vs {saldo - saldo_antes})")
+
+
+def test_evento_pasado_no_paga():
+    """A past calendar event expires unpaid. It used to pay `random.randint(5, 15)` for
+    merely existing — no attendance check anywhere — which is both the cheapest prestige in
+    the project and a row whose amount cannot be reproduced from its cause.
+
+    The sweep is `evaluate_daily_penalties()` at `posada/engine/legacy.py:446`, named here
+    rather than looked up: a wrong import raises BEFORE the assert, and a check that crashes
+    has proved nothing.
+    """
+    _exige_rollback()
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from posada.engine.legacy import evaluate_daily_penalties
+    from posada.models import CalendarEvent
+
+    evento = CalendarEvent.objects.create(date=timezone.localdate() - timedelta(days=3),
+                                          title='Evento vencido de prueba', status='PENDING')
+    antes = PrestigeEntry.objects.filter(ref_id=evento.id,
+                                         source='evento_asistido').count()
+    evaluate_daily_penalties()
+
+    evento.refresh_from_db()
+    check(evento.status == 'EXPIRED',
+          f"un evento pasado debe vencer, quedó en '{evento.status}'")
+    # Filtrado por el evento plantado, no por el total: la barrida también procesa lo que
+    # haya en la base viva, y este check corre dentro de `bunker doctor`.
+    check(PrestigeEntry.objects.filter(ref_id=evento.id, source='evento_asistido').count() == antes,
+          "un evento vencido no escribe ningún asiento")
+
+
+def test_confirmar_paga_fijo_y_una_vez():
+    """Confirming attendance pays a fixed +3/+1, and only the first time.
+
+    Driven through the real endpoint: the guard that makes confirming idempotent lives in the
+    view, and a check that called `registrar_prestigio` directly would pass with the guard
+    deleted. Without it the endpoint is a prestige faucet — a worse version of the defect
+    this task removes.
+    """
+    _exige_rollback()
+    from django.utils import timezone
+
+    from posada.models import CalendarEvent
+
+    evento = CalendarEvent.objects.create(date=timezone.localdate(), title='Importante',
+                                          is_important=True, status='PENDING')
+    cliente = Client()
+    respuesta = cliente.post(f'/posada/api/calendar/{evento.id}/asistir/')
+    check(respuesta.status_code == 200,
+          f"confirmar responde 200, respondió {respuesta.status_code}")
+
+    asiento = PrestigeEntry.objects.filter(ref_id=evento.id,
+                                           source='evento_asistido').order_by('-id').first()
+    check(asiento is not None, "confirmar asistencia deja un asiento en el ledger")
+    check(asiento.amount == 3,
+          f"un evento importante paga exactamente 3, pagó {asiento.amount}")
+
+    evento.refresh_from_db()
+    check(evento.status == 'DONE', f"el evento queda en DONE, quedó en '{evento.status}'")
+
+    antes = PrestigeEntry.objects.filter(ref_id=evento.id, source='evento_asistido').count()
+    cliente.post(f'/posada/api/calendar/{evento.id}/asistir/')
+    despues = PrestigeEntry.objects.filter(ref_id=evento.id, source='evento_asistido').count()
+    check(despues == antes,
+          f"confirmar dos veces no puede pagar dos veces, pasó de {antes} a {despues}")
+
+    # Un evento normal paga 1, no 3: el monto sale de su causa, no de un dado.
+    normal = CalendarEvent.objects.create(date=timezone.localdate(), title='Normal',
+                                          is_important=False, status='PENDING')
+    cliente.post(f'/posada/api/calendar/{normal.id}/asistir/')
+    asiento = PrestigeEntry.objects.filter(ref_id=normal.id,
+                                           source='evento_asistido').order_by('-id').first()
+    check(asiento is not None and asiento.amount == 1,
+          f"un evento normal paga exactamente 1, pagó {asiento and asiento.amount}")
 
 
 def run_tests():
@@ -345,6 +430,8 @@ def run_tests():
         test_fuente_inventada_revienta()
         test_reinicio_del_gremio_mantiene_el_invariante()
         test_barrida_no_netea()
+        test_evento_pasado_no_paga()
+        test_confirmar_paga_fijo_y_una_vez()
         transaction.set_rollback(True)
 
     print(f"\ntest_prestige_ledger: {_checks}/{_checks}")

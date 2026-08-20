@@ -56,6 +56,7 @@ urlpatterns = [
     # Calendar URLs
     path('api/calendar/<int:year>/<int:month>/', views.list_calendar_events, name='list_calendar_events'),
     path('api/calendar/event/create/', views.create_calendar_event, name='create_calendar_event'),
+    path('api/calendar/<int:event_id>/asistir/', views.confirm_calendar_event, name='confirm_calendar_event'),
     path('api/calendar/event/edit/<int:event_id>/', views.edit_calendar_event, name='edit_calendar_event'),
     path('api/calendar/event/delete/<int:event_id>/', views.delete_calendar_event, name='delete_calendar_event'),
 

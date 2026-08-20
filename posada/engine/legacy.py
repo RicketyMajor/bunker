@@ -555,20 +555,16 @@ def evaluate_daily_penalties():
             event.save()
             penalty_log.append(f"📅 El evento '{event.title}' es HOY.")
         elif event.date < today:
-            event.status = 'DONE'
+            # ponytail: expires without paying. Prestige for a past event used to be
+            # random.randint(5, 15) with no attendance check — the cheapest prestige in the
+            # project since the 2026-07-27 audit, and unauditable in a ledger because no row
+            # could be reproduced from its cause. Attendance is confirmed now, not assumed.
+            # Ceiling: an event you really attended pays nothing until you say so, from the
+            # calendar with `m`. Upgrade: none needed unless confirming turns out to be a
+            # chore nobody does.
+            event.status = 'EXPIRED'
             event.save()
-            
-            # Dynamic rewards
-            prestige_gain = random.randint(5, 15)
-            coins = ['iron_penny', 'iron_half_penny', 'copper_penny']
-            reward_coin = random.choice(coins)
-            reward_amt = random.randint(1, 10)
-            
-            movimientos.append((prestige_gain, 'evento_asistido', event.title, event.id))
-            setattr(guild, reward_coin, getattr(guild, reward_coin) + reward_amt)
-            penalty_log.append(
-                f"✅ Evento completado: '{event.title}' (+{prestige_gain} Prestigio, +{reward_amt} {reward_coin.replace('_', ' ').title()})."
-            )
+            penalty_log.append(f"📅 El evento '{event.title}' venció sin confirmar.")
 
 
     # Penalties first, then rewards, and never in row order. `add_prestige` crosses

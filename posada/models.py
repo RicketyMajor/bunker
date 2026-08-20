@@ -849,12 +849,18 @@ class KanbanTask(models.Model):
 
 class CalendarEvent(models.Model):
     """Un evento o nota en el calendario."""
+    # Free-form until 2026-08-20, so nothing rejected a typo and a misspelled status became an
+    # event the sweep's `status__in` filter would never look at again. Metadata only — the
+    # column is unchanged.
+    ESTADOS = [('PENDING', 'Pendiente'), ('TODAY', 'Hoy'),
+               ('DONE', 'Asistido'), ('EXPIRED', 'Vencido')]
+
     date = models.DateField()
     title = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     is_important = models.BooleanField(default=False)
     color = models.CharField(max_length=20, default="white")
-    status = models.CharField(max_length=20, default="PENDING")
+    status = models.CharField(max_length=20, default="PENDING", choices=ESTADOS)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

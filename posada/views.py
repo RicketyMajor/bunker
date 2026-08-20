@@ -1507,6 +1507,40 @@ def create_calendar_event(request):
         return Response({"status": "success", "message": f"Evento '{event.title}' creado (+{prestige_gain} Prestigio)."})
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+@api_view(['POST'])
+@transaction.atomic
+def confirm_calendar_event(request, event_id):
+    """Confirma asistencia a un evento y paga el prestigio fijo por importancia.
+
+    Fixed +3/+1, matching what CREATING the event already pays. Deliberately not random: a
+    ledger row whose amount cannot be reproduced from its cause is not an audit trail, and
+    the random payer this replaces is the reason the calendar entered the ledger unauditable.
+
+    Atomic because the payment and the `DONE` mark are one fact: paying first and marking
+    second means a failure between them leaves the event payable again, which is the faucet
+    the guard below exists to prevent.
+    """
+    from .models import CalendarEvent
+    try:
+        event = CalendarEvent.objects.get(id=event_id)
+    except CalendarEvent.DoesNotExist:
+        return Response({"status": "error", "message": "Ese evento no existe."}, status=404)
+
+    # Sin esta guarda el endpoint es una fuente infinita de prestigio: una versión peor del
+    # defecto que viene a arreglar.
+    if event.status == 'DONE':
+        return Response({"status": "warning", "message": "Ya confirmaste ese evento."})
+
+    guild, _ = GuildProfile.objects.get_or_create(id=1)
+    ganancia = 3 if event.is_important else 1
+    registrar_prestigio(guild, ganancia, 'evento_asistido',
+                        detail=event.title, ref_id=event.id)
+    event.status = 'DONE'
+    event.save()
+    return Response({"status": "success",
+                     "message": f"Asistencia a '{event.title}' confirmada (+{ganancia} Prestigio)."})
+
+
 @api_view(['PUT'])
 def edit_calendar_event(request, event_id):
     """Edita un evento existente del calendario."""

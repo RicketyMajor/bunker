@@ -2853,13 +2853,48 @@ class PosadaMainScreen(Screen):
                 self.app.notify, "Fallo al crear hábito.", severity="error")
 
     def action_complete_habit(self) -> None:
-        if self.query_one(TabbedContent).active != "tab_missions":
+        activa = self.query_one(TabbedContent).active
+        # Misma tecla, misma idea: marcar algo como hecho. En el calendario confirma la
+        # asistencia, que desde 2026-08-20 es la única forma de que un evento pague — antes
+        # pagaba prestigio aleatorio por el solo hecho de haber pasado la fecha.
+        if activa == "tab_kanban":
+            self.action_confirm_calendar_event()
+            return
+        if activa != "tab_missions":
             return
         habit_id = self._get_selected_habit_id()
         if habit_id:
             self.request_habit_completion(habit_id)
         else:
             self.app.notify("Selecciona un hábito primero.", severity="warning")
+
+    def action_confirm_calendar_event(self) -> None:
+        try:
+            table = self.query_one("#calendar_table", DataTable)
+        except Exception:
+            return
+        if not table.has_focus:
+            self.app.notify("Selecciona un evento del calendario primero.", severity="warning")
+            return
+        try:
+            event_id = int(table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value)
+        except Exception:
+            return
+        self.request_event_confirmation(event_id)
+
+    @work(thread=True)
+    def request_event_confirmation(self, event_id: int) -> None:
+        try:
+            resp = httpx.post(f"{API_POSADA_BASE}calendar/{event_id}/asistir/", timeout=5.0)
+            if resp.status_code == 200:
+                datos = resp.json()
+                self.app.call_from_thread(
+                    self.app.notify, datos.get("message", "Asistencia confirmada."),
+                    severity="success" if datos.get("status") == "success" else "warning")
+                self.app.call_from_thread(self.fetch_calendar_data)
+                self.app.call_from_thread(self.sync_guild_status)
+        except Exception:
+            pass
 
     @work(thread=True)
     def request_habit_completion(self, habit_id: str) -> None:
@@ -3411,6 +3446,8 @@ class PosadaMainScreen(Screen):
                 status_str = "[bold magenta]⭐ Hoy[/bold magenta]"
             elif status == 'DONE':
                 status_str = "[bold green]✅ Hecho[/bold green]"
+            elif status == 'EXPIRED':
+                status_str = "[dim red]⌛ Vencido[/dim red]"
             else:
                 status_str = "[dim white]Pendiente[/dim white]"
                 
