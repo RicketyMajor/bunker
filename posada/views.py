@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from .models import GuildProfile, Adventurer, DeepWorkSession, AdventurerClass, AdventurerRace, AdventurerGender, DailyHabit, HabitDifficulty, InventorySlot, ItemRarity, CustomChart, ChartDataPoint, ChartPolarity, JournalEntry, Item, GuildUpgrade, GuildUnlockedUpgrade
+from .prestige import registrar_prestigio
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_habito, feedback_sesion
 import random
@@ -660,10 +661,14 @@ def complete_habit(request):
             habit.last_prestige_reward = prestige_penalty
             habit.previous_streak = habit.current_streak
 
-            guild.prestige -= prestige_penalty
+            # NOT `guild.prestige -= ...`. This was the one payer in the project that wrote
+            # the balance directly, skipping `add_prestige()` — so a ledger hooked into that
+            # method alone would have missed every relapse, which is precisely the event the
+            # weekly review most needs to show. `registrar_prestigio` saves the guild.
+            registrar_prestigio(guild, -prestige_penalty, 'recaida',
+                                detail=habit.name, ref_id=habit.id)
             habit.current_streak = 0
             habit.last_completed_date = today
-            guild.save()
             habit.save()
             return Response({
                 "status": "error",

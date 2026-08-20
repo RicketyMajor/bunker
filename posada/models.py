@@ -460,20 +460,21 @@ class GuildProfile(WealthMixin):
     def prestige_meta(self):
         return int(500 * (self.prestige_level ** 1.5))
 
-    def add_prestige(self, amount):
-        """Añade prestigio y calcula si el gremio sube de nivel (curva exponencial). Retorna True si subió."""
-        self.prestige += amount
-        leveled_up = False
-        while True:
-            meta = self.prestige_meta
-            if self.prestige >= meta:
-                self.prestige -= meta
-                self.prestige_level += 1
-                leveled_up = True
-            else:
-                break
-        self.save()
-        return leveled_up
+    def add_prestige(self, amount, source='logro', detail="", ref_id=None):
+        """Añade prestigio y calcula si el gremio sube de nivel. Retorna True si subió.
+
+        The arithmetic moved to `posada.prestige.registrar_prestigio`, which writes the
+        ledger entry in the same transaction. This method stays because twelve call sites
+        use it, and its signature is unchanged for them.
+
+        ponytail: `source` defaults to 'logro' only until Task 3 labels every caller.
+        Ceiling: an unlabelled payer lands in the ledger as `logro` and the weekly
+        breakdown lies about where the points came from. Upgrade: Task 3 of
+        `context/plans/2026-08-20-prestige-ledger.md`, which deletes this default and
+        makes `source` required, so a missed caller fails loudly at the call site.
+        """
+        from .prestige import registrar_prestigio
+        return registrar_prestigio(self, amount, source, detail, ref_id)
 
     def __str__(self):
         return f"Gremio Nivel {self.prestige_level} - Prestigio: {self.prestige}/{self.prestige_meta}"
