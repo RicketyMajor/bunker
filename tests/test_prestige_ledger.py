@@ -39,6 +39,19 @@ def check(condicion, etiqueta):
     print(f"  ok  {etiqueta}")
 
 
+def _exige_rollback():
+    """These checks drive endpoints that DELETE live rows — `reset_guild` wipes every
+    adventurer, inventory and upgrade — and are safe only because `run_tests()` wraps them in
+    `transaction.atomic()` with a forced rollback. Nothing in the module enforced that, and
+    the functions are plain module-level `test_*` names: importing one and calling it, or any
+    future runner that collects `test_*`, would wipe the guild irreversibly. Cheap guard, and
+    the failure it prevents is not recoverable."""
+    from django.db import connection
+    assert connection.in_atomic_block, (
+        "este check escribe en la base VIVA y solo es seguro dentro de "
+        "transaction.atomic() con rollback forzado — úsalo vía run_tests()")
+
+
 def test_invariante():
     """SUM(ledger) == GuildProfile.prestige, exactly.
 
@@ -84,6 +97,7 @@ def test_recaida_escribe_negativo():
     2026-08-20), so there is nothing to relapse on and the endpoint could never be exercised
     by whatever happens to be stored.
     """
+    _exige_rollback()
     habito = DailyHabit.objects.create(
         name='Recaída de prueba', is_bad_habit=True, difficulty='B', valid_days='0123456')
     saldo_antes = GuildProfile.objects.get(id=1).prestige
@@ -141,28 +155,55 @@ def test_subida_de_nivel_escribe_su_asiento():
 
 
 def test_todas_las_fuentes_declaradas():
-    """Every source literal a payer passes must exist in `FUENTES`.
+    r"""Every source a payer passes must exist in `FUENTES`, and every payer must pass one.
 
     The runtime guard in `registrar_prestigio` raises on an undeclared source, but only when
     that payer actually runs: the bestiary pays on a first monster discovery and a chart goal
     on completion, both of which can go months without firing. This reads the call sites
-    statically, so a typo fails today instead of the night it finally executes.
+    statically, so a typo fails today instead of the night the path finally executes.
+
+    Walks the AST rather than grepping, and not for elegance — two regexes were tried and
+    both were WRONG against this codebase. `add_prestige\([^,]+,` silently skips any payer
+    whose amount contains a comma (`reward_map.get(habit.difficulty, 5) * days`), and a
+    skipped payer leaves the check green. Making it non-greedy instead matched the dict key
+    inside `add_prestige(r['prestige'], 'habito_bueno')` and reported `'prestige'` as a
+    source. The AST knows which argument is which; a regex is guessing.
     """
-    import re
+    import ast
+
     raiz = pathlib.Path(__file__).resolve().parent.parent
-    patrones = [re.compile(r"add_prestige\([^,]+,\s*'([a-z_]+)'"),
-                re.compile(r"registrar_prestigio\([^,]+,\s*[^,]+,\s*'([a-z_]+)'")]
-    usadas = set()
+    usadas, sin_fuente, sitios = set(), [], 0
     for archivo in raiz.rglob('*.py'):
-        # `tests` is excluded on purpose: this file passes a deliberately invalid source
-        # to prove the runtime guard, and the scan audits production payers.
+        # `tests` is excluded on purpose: this file passes a deliberately invalid source to
+        # prove the runtime guard, and the scan audits production payers.
         if {'.venv', 'migrations', 'tests'} & set(archivo.parts):
             continue
-        texto = archivo.read_text(encoding='utf-8', errors='ignore')
-        for patron in patrones:
-            usadas.update(patron.findall(texto))
+        try:
+            arbol = ast.parse(archivo.read_text(encoding='utf-8', errors='ignore'))
+        except SyntaxError:
+            continue
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call):
+                continue
+            nombre = (nodo.func.attr if isinstance(nodo.func, ast.Attribute)
+                      else getattr(nodo.func, 'id', None))
+            if nombre not in ('add_prestige', 'registrar_prestigio'):
+                continue
+            sitios += 1
+            # `source` va en la posición 1 del método y en la 2 de la función.
+            posicion = 1 if nombre == 'add_prestige' else 2
+            argumento = (nodo.args[posicion] if len(nodo.args) > posicion else
+                         next((k.value for k in nodo.keywords if k.arg == 'source'), None))
+            if argumento is None:
+                sin_fuente.append(f"{archivo.name}:{nodo.lineno}")
+            elif isinstance(argumento, ast.Constant) and isinstance(argumento.value, str):
+                usadas.add(argumento.value)
+            # Cualquier otra cosa es una fuente dinámica; de esa se encarga la guardia
+            # en tiempo de ejecución, que es el único sitio donde su valor existe.
 
-    check(bool(usadas), f"el escaneo debe encontrar pagadores, encontró {len(usadas)}")
+    check(sitios > 10, f"el escaneo debe encontrar los pagadores, encontró {sitios} llamadas")
+    check(not sin_fuente,
+          f"todo pagador pasa su fuente, la omiten: {sin_fuente or '—'}")
     faltan = usadas - {clave for clave, _ in PrestigeEntry.FUENTES}
     check(not faltan, f"fuentes usadas y no declaradas en FUENTES: {faltan or '—'}")
 
@@ -188,6 +229,7 @@ def test_reinicio_del_gremio_mantiene_el_invariante():
     pass just as happily while `views.py` zeroed the balance behind its back. Third rule
     from handoff 023, and the reason this check exists at all.
     """
+    _exige_rollback()
     # Plants its own balance: the level-up check above runs first and leaves the guild at 0,
     # where the reset has nothing to compensate and this check would pass without being able
     # to fail. An assertion that depends on what ran before it is not an assertion.
@@ -227,6 +269,7 @@ def test_barrida_no_netea():
     review asks. Plants its own habits and event: the live database has 0 habits defined, so
     an assertion resting on it would pass without being able to fail.
     """
+    _exige_rollback()
     from datetime import timedelta
 
     from django.utils import timezone
@@ -237,9 +280,9 @@ def test_barrida_no_netea():
     hoy = timezone.localdate()
     todos_los_dias = ''.join(str(d) for d in range(7))
 
-    DailyHabit.objects.create(name='Vicio de prueba', is_bad_habit=True, difficulty='A',
-                              valid_days=todos_los_dias,
-                              last_evaluated_date=hoy - timedelta(days=3))
+    vicio = DailyHabit.objects.create(name='Vicio de prueba', is_bad_habit=True,
+                                      difficulty='A', valid_days=todos_los_dias,
+                                      last_evaluated_date=hoy - timedelta(days=3))
     bueno = DailyHabit.objects.create(name='Virtud de prueba', is_bad_habit=False,
                                       difficulty='B', valid_days=todos_los_dias,
                                       last_evaluated_date=hoy - timedelta(days=3))
@@ -247,42 +290,48 @@ def test_barrida_no_netea():
     # so a habit born today has no uncovered days and this check would silently cover only
     # two of the three contributors.
     DailyHabit.objects.filter(pk=bueno.pk).update(created_at=hoy - timedelta(days=10))
-    CalendarEvent.objects.create(date=hoy - timedelta(days=2), title='Evento de prueba',
-                                 status='PENDING')
+    evento = CalendarEvent.objects.create(date=hoy - timedelta(days=2),
+                                          title='Evento de prueba', status='PENDING')
 
     antes = PrestigeEntry.objects.count()
     saldo_antes = GuildProfile.objects.get(id=1).prestige
     evaluate_daily_penalties()
 
-    filas = list(PrestigeEntry.objects.order_by('id')[antes:])
-    fuentes = {f.source for f in filas}
-    check(len(filas) == 3,
-          f"la barrida escribe un asiento por evento, escribió {len(filas)}")
-    check(fuentes == {'habito_evitado', 'habito_incumplido', 'evento_asistido'},
-          f"cada contribuyente lleva su propia fuente, llegaron {sorted(fuentes)}")
+    nuevas = list(PrestigeEntry.objects.order_by('id')[antes:])
+    # Asserted on the PLANTED rows, never on the total. The sweep also processes whatever the
+    # live database holds, and this check runs inside `bunker doctor`: the day a real habit
+    # exists with an old `last_evaluated_date` — the app's main feature — a count of all new
+    # rows goes red for a reason that has nothing to do with the ledger. This project already
+    # lost a session to exactly that (`test_reading_progress`, fixed 2026-08-17).
+    esperadas = {('habito_evitado', vicio.id), ('habito_incumplido', bueno.id),
+                 ('evento_asistido', evento.id)}
+    plantadas = [f for f in nuevas if (f.source, f.ref_id) in esperadas]
+    check(len(plantadas) == 3,
+          f"la barrida escribe un asiento por evento plantado, escribió {len(plantadas)}")
 
     # Counting rows and sources is NOT enough, and this was measured: restoring the netted
     # payment under one of those three labels produces three rows and three sources too, and
     # an earlier version of this check passed against the very regression it exists for.
-    # What a netted row cannot do is name its cause or reproduce its amount from it.
-    sin_causa = [f for f in filas if f.ref_id is None or not f.detail]
+    # What a netted row cannot do is name its cause. Over ALL new rows, not just the planted
+    # ones — the netted row is precisely the one that would not match a planted cause.
+    sin_causa = [f for f in nuevas if f.ref_id is None or not f.detail]
     check(not sin_causa,
           f"cada asiento de la barrida apunta a la fila que lo causó, sin causa: "
           f"{[(f.source, f.amount) for f in sin_causa]}")
 
-    por_fuente = {f.source: f.amount for f in filas}
+    por_fuente = {f.source: f.amount for f in plantadas}
     # 2 días sobrevividos × 25 (dificultad A) y 2 días incumplidos × 15. El evento paga
     # random.randint(5, 15) — no se puede afirmar hasta que la Tarea 4 lo vuelva fijo.
-    check(por_fuente['habito_evitado'] == 50,
-          f"el vicio evitado paga exactamente lo suyo (+50), pagó {por_fuente['habito_evitado']:+d}")
-    check(por_fuente['habito_incumplido'] == -30,
+    check(por_fuente.get('habito_evitado') == 50,
+          f"el vicio evitado paga exactamente lo suyo (+50), pagó {por_fuente.get('habito_evitado')}")
+    check(por_fuente.get('habito_incumplido') == -30,
           f"el hábito incumplido cobra exactamente lo suyo (-30), cobró "
-          f"{por_fuente['habito_incumplido']:+d}")
+          f"{por_fuente.get('habito_incumplido')}")
 
     saldo = GuildProfile.objects.get(id=1).prestige
-    check(sum(f.amount for f in filas) == saldo - saldo_antes,
+    check(sum(f.amount for f in nuevas) == saldo - saldo_antes,
           f"los asientos de la barrida suman el movimiento del saldo "
-          f"({sum(f.amount for f in filas)} vs {saldo - saldo_antes})")
+          f"({sum(f.amount for f in nuevas)} vs {saldo - saldo_antes})")
 
 
 def run_tests():

@@ -176,8 +176,14 @@ def consolidate_adventurer_wealth(request, adv_id):
         return Response({"error": "Aventurero no encontrado"}, status=404)
 
 @api_view(['POST'])
+@transaction.atomic
 def reset_guild(request):
-    """Borra todos los datos de la Posada y reinicia el Gremio al nivel 1."""
+    """Borra todos los datos de la Posada y reinicia el Gremio al nivel 1.
+
+    Atomic because it deletes adventurers, inventory and upgrades, writes a compensating
+    ledger entry and then zeroes eleven coins. Raising anywhere in the middle used to leave
+    the guild wiped but still holding its coins, with no way back.
+    """
     guild, _ = GuildProfile.objects.get_or_create(id=1)
     
     # Borrar todos los aventureros (borra sus inventarios y grimorios en cascada)

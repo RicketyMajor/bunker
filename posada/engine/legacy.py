@@ -454,9 +454,11 @@ def evaluate_daily_penalties():
     habits = DailyHabit.objects.all()
     guild, _ = GuildProfile.objects.get_or_create(id=1)
 
-    # Only for the closing log line: every movement below is paid at its own event, so a
-    # bad week can no longer hide inside a good net number. This never pays anything.
-    neto_para_log = 0
+    # Collected here and paid at the end, in order. Each movement still becomes its own
+    # ledger entry — a bad week can no longer hide inside a good net number — but WHEN they
+    # are paid decides the guild's level, and that must not depend on row order. See the
+    # comment at the payment loop below.
+    movimientos = []
     penalty_log = []
 
     for habit in habits:
@@ -489,9 +491,7 @@ def evaluate_daily_penalties():
                 reward_map = {'S': 50, 'A': 25, 'B': 10, 'C': 5}
                 prestige_gain = reward_map.get(
                     habit.difficulty, 5) * survived_valid_days
-                guild.add_prestige(prestige_gain, 'habito_evitado',
-                                   detail=habit.name, ref_id=habit.id)
-                neto_para_log += prestige_gain
+                movimientos.append((prestige_gain, 'habito_evitado', habit.name, habit.id))
                 penalty_log.append(
                     f"Evitaste '{habit.name}' por {survived_valid_days} día(s) (+{prestige_gain} Prestigio).")
 
@@ -517,9 +517,8 @@ def evaluate_daily_penalties():
 
                 if missed_valid_days > 0:
                     prestige_loss = missed_valid_days * 15
-                    guild.add_prestige(-prestige_loss, 'habito_incumplido',
-                                       detail=habit.name, ref_id=habit.id)
-                    neto_para_log -= prestige_loss
+                    movimientos.append(
+                        (-prestige_loss, 'habito_incumplido', habit.name, habit.id))
                     habit.current_streak = 0
                     
                     coin_hierarchy = [
@@ -565,18 +564,29 @@ def evaluate_daily_penalties():
             reward_coin = random.choice(coins)
             reward_amt = random.randint(1, 10)
             
-            guild.add_prestige(prestige_gain, 'evento_asistido',
-                               detail=event.title, ref_id=event.id)
-            neto_para_log += prestige_gain
+            movimientos.append((prestige_gain, 'evento_asistido', event.title, event.id))
             setattr(guild, reward_coin, getattr(guild, reward_coin) + reward_amt)
             penalty_log.append(
                 f"✅ Evento completado: '{event.title}' (+{prestige_gain} Prestigio, +{reward_amt} {reward_coin.replace('_', ' ').title()})."
             )
 
 
-    if neto_para_log < 0:
+    # Penalties first, then rewards, and never in row order. `add_prestige` crosses
+    # `prestige_meta` against whatever balance it sees, so paying a gross reward before a
+    # penalty the same sweep is about to charge can level the guild up on points it then
+    # loses — and `prestige_level` only ever goes UP (nothing lowers it but `reset_guild`),
+    # while it gates `max_adventurers` and every `req_prestige_level` upgrade. Applying every
+    # negative first makes the balance climb monotonically to exactly the net, which is where
+    # the single netted call this replaced used to leave it. `DailyHabit.objects.all()` has
+    # no `Meta.ordering`, so without this sort the level a sweep grants depends on the order
+    # Postgres happens to return rows in.
+    for monto, fuente, detalle, ref in sorted(movimientos, key=lambda m: m[0]):
+        guild.add_prestige(monto, fuente, detail=detalle, ref_id=ref)
+
+    neto = sum(m[0] for m in movimientos)
+    if neto < 0:
         penalty_log.append(
-            f"El Gremio pierde influencia. (Impacto Neto: {neto_para_log})")
+            f"El Gremio pierde influencia. (Impacto Neto: {neto})")
 
     # Each movement above already saved the guild, but the coin changes between them are
     # in memory only, and a sweep that moves no prestige at all saves nothing. Always save.
