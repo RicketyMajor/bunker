@@ -136,6 +136,10 @@ def test_subida_de_nivel_escribe_su_asiento():
     an assertion that can only go red one day a year has not been tested, it has been
     scheduled.
     """
+    # `prestige_level` es el ÚNICO campo del gremio que no baja nunca: nada lo revierte salvo
+    # `reset_guild`, que borra todos los aventureros. Este check lo sube a propósito, así que
+    # es el escritor menos recuperable del módulo y era el único sin la guarda.
+    _exige_rollback()
     from posada.prestige import registrar_prestigio
     guild = GuildProfile.objects.get(id=1)
     nivel_antes, meta = guild.prestige_level, guild.prestige_meta
@@ -491,8 +495,18 @@ def test_snapshot_cuadra_con_ledger():
     from posada.models import PrestigeWeek
     from posada.prestige import _rango_semana, resumen_semana
 
+    clave = _semana_anterior()
+    # `resumen_semana` DEVUELVE el snapshot de una semana cerrada sin reconstruirlo. Si ya hay
+    # fila para esta semana — y la habrá, la escribe la primera revisión semanal real — plantar
+    # un asiento y volver a llamar no actualiza nada: el bucle compara un `net` viejo contra un
+    # ledger que ya incluye lo plantado, y `doctor` se pone rojo por un motivo que no tiene nada
+    # que ver con el ledger. Reproducido 2026-08-20 sembrando la fila que escribiría una
+    # revisión de W35: "el snapshot 2026-W33 dice net=0, el ledger dice 7".
+    # Se borra SOLO la semana que este check planta: los snapshots reales de las demás semanas
+    # siguen entrando en el bucle, que es lo único que este check existe para verificar.
+    PrestigeWeek.objects.filter(week_key=clave).delete()
     _planta_en_semana_cerrada(7, 'Semilla del snapshot')
-    resumen_semana(_semana_anterior())
+    resumen_semana(clave)
 
     filas = list(PrestigeWeek.objects.all())
     check(bool(filas), f"debe existir al menos un snapshot para comprobar, hay {len(filas)}")
