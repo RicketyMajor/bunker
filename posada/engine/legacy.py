@@ -342,10 +342,11 @@ def add_item_to_inventory(adv, item, event_log=None):
                 f"Mochila llena. Mensajeros llevaron [[{color}]{item.name}[/]] al Cofre {fee_msg}.")
 
         if is_stackable:
-            g_slot, _ = InventorySlot.objects.get_or_create(
-                guild=guild, item=item, adventurer=None, defaults={'quantity': 0})
-            g_slot.quantity += 1
-            g_slot.save()
+            g_slot, creado = InventorySlot.objects.get_or_create(
+                guild=guild, item=item, adventurer=None, defaults={'quantity': 1})
+            if not creado:
+                g_slot.quantity += 1
+                g_slot.save()
         else:
             InventorySlot.objects.create(
                 guild=guild, item=item, adventurer=None, quantity=1)
@@ -1012,6 +1013,15 @@ def can_afford(adv, item):
 
 def pay_with_change(adv, item):
     """Paga el coste exacto rompiendo monedas grandes y calculando el vuelto."""
+    # Every caller pairs this debit with a delivery (`_auto_equip`). Outside a transaction that
+    # pair is two independent commits, and a failure between them charges for nothing delivered.
+    # Today the only caller inherits atomicity from `process_session_completion`; this refuses to
+    # let a future caller inherit nothing and find out in production. One guard in the shared
+    # function, not a decorator on every call site.
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError(
+            "pay_with_change debe correr dentro de transaction.atomic(): "
+            "cobra antes de entregar, y sin transaccion el cobro sobrevive al fallo de la entrega.")
     if not can_afford(adv, item):
         return False
 
@@ -1085,6 +1095,10 @@ def is_class_allowed(adv, item):
     return True
 
 
+# Its only caller is `process_session_completion`, which is already atomic, so this changes
+# nothing today — a nested atomic() is just a savepoint. It exists so the guarantee survives the
+# second caller, which would otherwise inherit nothing and trip the guard in `pay_with_change`.
+@transaction.atomic
 def market_phase(adventurers_qs, event_log):
     """Simula las compras inteligentes del mercado."""
     _seed_items_if_empty()
@@ -1361,9 +1375,10 @@ def calculate_chart_reward(chart):
     drop_msg = ""
     if pool.exists():
         drop = random.choice(pool)
-        g_slot, _ = InventorySlot.objects.get_or_create(guild=guild, item=drop, adventurer=None, defaults={'quantity': 0})
-        g_slot.quantity += 1
-        g_slot.save()
+        g_slot, creado = InventorySlot.objects.get_or_create(guild=guild, item=drop, adventurer=None, defaults={'quantity': 1})
+        if not creado:
+            g_slot.quantity += 1
+            g_slot.save()
         color = ItemRarity.get_color(drop.rarity)
         drop_msg = f"\n🎁 Además, encontraste un cofre: [[{color}]{drop.name}[/]]."
 

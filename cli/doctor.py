@@ -31,6 +31,7 @@ console = Console()
 CHECKS_IN_CONTAINER = (
     "tests.test_posada_skills",
     "tests.test_posada_estados",
+    "tests.test_posada_invariantes",
     "tests.test_achievements",
     "tests.test_capture_dates",
     "tests.test_reading_progress",

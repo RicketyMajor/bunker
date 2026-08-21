@@ -730,9 +730,10 @@ def complete_habit(request):
                     
                 if pool.exists():
                     drop = random.choice(pool)
-                    g_slot, _ = InventorySlot.objects.get_or_create(guild=guild, item=drop, adventurer=None, defaults={'quantity': 0})
-                    g_slot.quantity += 1
-                    g_slot.save()
+                    g_slot, creado = InventorySlot.objects.get_or_create(guild=guild, item=drop, adventurer=None, defaults={'quantity': 1})
+                    if not creado:
+                        g_slot.quantity += 1
+                        g_slot.save()
                     color = ItemRarity.get_color(drop.rarity)
                     drop_msg += f"\n🎁 ¡Racha de {habit.current_streak} días! Cofre: \\[[{color}]{drop.name}[/]\\]"
 
@@ -744,10 +745,11 @@ def complete_habit(request):
                     pool = Item.objects.filter(rarity__in=['EPC', 'LEG'])
                     if pool.exists():
                         drop = random.choice(pool)
-                        g_slot, _ = InventorySlot.objects.get_or_create(
-                            guild=guild, item=drop, adventurer=None, defaults={'quantity': 0})
-                        g_slot.quantity += 1
-                        g_slot.save()
+                        g_slot, creado = InventorySlot.objects.get_or_create(
+                            guild=guild, item=drop, adventurer=None, defaults={'quantity': 1})
+                        if not creado:
+                            g_slot.quantity += 1
+                            g_slot.save()
                         color = ItemRarity.get_color(drop.rarity)
                         drop_msg = f"\n¡El Tablón Patrocinado te envió \\[[{color}]{drop.name}[/]\\] al cofre!"
 
@@ -806,10 +808,11 @@ def inventory_action(request):
                 if not slot.adventurer:
                     return Response({"error": "Ya está en el cofre"}, status=400)
                 if is_stackable:
-                    g_slot, _ = InventorySlot.objects.get_or_create(
-                        guild=guild, item=slot.item, adventurer=None, defaults={'quantity': 0})
-                    g_slot.quantity += 1
-                    g_slot.save()
+                    g_slot, creado = InventorySlot.objects.get_or_create(
+                        guild=guild, item=slot.item, adventurer=None, defaults={'quantity': 1})
+                    if not creado:
+                        g_slot.quantity += 1
+                        g_slot.save()
                 else:
                     InventorySlot.objects.create(
                         guild=guild, item=slot.item, adventurer=None, quantity=1)
@@ -1078,11 +1081,16 @@ def unequip_item(request, adv_id):
         if adv.inventory.count() >= adv.inventory_capacity:
             return Response({"error": "Mochila llena. Vende o guarda algo en el Cofre."}, status=400)
 
-        setattr(adv, slot_type, None)
-        adv.save()
-
         from .engine import add_item_to_inventory
-        add_item_to_inventory(adv, item)
+        # The body and the backpack are two containers, and this is the only path that moves an
+        # item from one to the other. Without the transaction `adv.save()` commits the item OFF
+        # the body, and a failure inside `add_item_to_inventory` — which reaches `guild.save()`
+        # and `universal_consolidate` on its Mensajeria Arcana branch — leaves the item in no
+        # container at all. The `except` below would then report the data loss as a 400.
+        with transaction.atomic():
+            setattr(adv, slot_type, None)
+            adv.save()
+            add_item_to_inventory(adv, item)
         return Response({"status": "success", "message": f"{item.name} desequipado."})
     except Exception as e:
         return Response({"error": str(e)}, status=400)

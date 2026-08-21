@@ -226,6 +226,26 @@ class InventorySlot(models.Model):
 
     quantity = models.PositiveIntegerField(default=1)
 
+    class Meta:
+        constraints = [
+            # Django's PositiveIntegerField already emits `quantity >= 0`; zero is the gap, and
+            # a zero-quantity slot is a phantom: it renders in the backpack, occupies one of the
+            # capacity slots, and gives nothing. `audit_inventory.py` already sweeps for these
+            # (`filter(quantity__lte=0)`) — this is what makes that sweep unable to find any.
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='inventoryslot_cantidad_positiva',
+                violation_error_message='Un slot de inventario con cantidad cero es un fantasma.'),
+            # Exactly one owner: the adventurer's backpack or the guild vault, never both and
+            # never neither. A slot owned by nobody is unreachable from every screen and no
+            # cascade deletes it.
+            models.CheckConstraint(
+                condition=(models.Q(adventurer__isnull=True, guild__isnull=False)
+                           | models.Q(adventurer__isnull=False, guild__isnull=True)),
+                name='inventoryslot_un_solo_dueno',
+                violation_error_message='Un slot pertenece al aventurero O al cofre, nunca a ambos ni a ninguno.'),
+        ]
+
     def __str__(self):
         owner = self.adventurer.name if self.adventurer else "Cofre del Gremio"
         return f"{self.quantity}x {self.item.name} ({owner})"
@@ -277,6 +297,25 @@ class Adventurer(WealthMixin):
     # --- VIDA ---
     max_hp = models.PositiveIntegerField(default=20)
     current_hp = models.IntegerField(default=20)
+
+    class Meta:
+        constraints = [
+            # `current_hp` is an IntegerField, not a PositiveIntegerField, so Postgres has never
+            # had a floor on it. `max_hp` is positive and already carries Django's own generated
+            # check (`posada_adventurer_max_hp_check`), so it is not repeated here.
+            models.CheckConstraint(
+                condition=models.Q(current_hp__gte=0),
+                name='adventurer_hp_no_negativo',
+                violation_error_message='El HP de un aventurero no puede ser negativo.'),
+            # At rest, HP above maximum is not a buff, it is a bug: combat never writes
+            # `current_hp` (it works on ctx.temp_hp, seeded once in runner.py) and every heal
+            # clamps with min(max_hp, ...). Two constraints and not one combined condition,
+            # because a single name cannot tell the two defects apart in the failure message.
+            models.CheckConstraint(
+                condition=models.Q(current_hp__lte=models.F('max_hp')),
+                name='adventurer_hp_bajo_maximo',
+                violation_error_message='El HP de un aventurero no puede superar su maximo.'),
+        ]
 
     # --- INVENTARIO GRANULAR ---
     equip_head = models.ForeignKey(
@@ -449,6 +488,20 @@ class GuildProfile(WealthMixin):
     prestige_level = models.PositiveIntegerField(default=1)
     # Permite números negativos (Deuda de Honor)
     prestige = models.IntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            # The `id=1` convention is repeated at 42 call sites and was enforced at none of
+            # them. A second row would give the project two guilds whose prestige ledgers both
+            # claim to be the only one, and `SUM(ledger) == prestige` — the one invariant in
+            # this project that already works — would start failing for a reason nobody could
+            # find. `get_or_create(id=1)` is unaffected; anything that creates a guild without
+            # naming the id now fails loudly, which is the point.
+            models.CheckConstraint(
+                condition=models.Q(id=1),
+                name='guildprofile_singleton',
+                violation_error_message='Solo puede existir un GuildProfile, y su id es 1.'),
+        ]
 
     @property
     def net_worth_in_talents(self):
