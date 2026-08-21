@@ -510,7 +510,7 @@ def test_snapshot_cuadra_con_ledger():
     _exige_rollback()
     from bunker_core.briefing import _semana_anterior
     from posada.models import PrestigeWeek
-    from posada.prestige import _rango_semana, resumen_semana
+    from posada.prestige import _rango_semana, snapshot_semana
 
     clave = _semana_anterior()
     # `resumen_semana` DEVUELVE el snapshot de una semana cerrada sin reconstruirlo. Si ya hay
@@ -523,7 +523,8 @@ def test_snapshot_cuadra_con_ledger():
     # siguen entrando en el bucle, que es lo único que este check existe para verificar.
     PrestigeWeek.objects.filter(week_key=clave).delete()
     _planta_en_semana_cerrada(7, 'Semilla del snapshot')
-    resumen_semana(clave)
+    # `snapshot_semana` y no `resumen_semana`: desde 2026-08-21 la lectura no escribe.
+    snapshot_semana(clave)
 
     filas = list(PrestigeWeek.objects.all())
     check(bool(filas), f"debe existir al menos un snapshot para comprobar, hay {len(filas)}")
@@ -548,7 +549,7 @@ def test_snapshot_es_cache_y_es_derivable():
     _exige_rollback()
     from bunker_core.briefing import _semana_anterior
     from posada.models import PrestigeWeek
-    from posada.prestige import resumen_semana
+    from posada.prestige import resumen_semana, snapshot_semana
 
     clave = _semana_anterior()
     # Deltas, nunca absolutos: `test_snapshot_cuadra_con_ledger` ya plantó en esta misma
@@ -556,14 +557,15 @@ def test_snapshot_es_cache_y_es_derivable():
     # en que corrieron los checks anteriores.
     PrestigeWeek.objects.all().delete()
     _planta_en_semana_cerrada(10, 'Primer asiento de la semana cerrada')
+    snapshot_semana(clave)
     primero = resumen_semana(clave)
     check(PrestigeWeek.objects.filter(week_key=clave).exists(),
-          f"una semana cerrada deja su fila de snapshot, {clave} no la dejó")
+          f"snapshot_semana deja la fila de {clave}")
 
     _planta_en_semana_cerrada(5, 'Asiento posterior al snapshot')
     cacheado = resumen_semana(clave)
     check(cacheado == primero,
-          f"el snapshot es una caché y debe devolver lo viejo: {cacheado} vs {primero}")
+          f"con fila presente `resumen_semana` devuelve la caché: {cacheado} vs {primero}")
 
     PrestigeWeek.objects.all().delete()
     reconstruido = resumen_semana(clave)
@@ -581,15 +583,15 @@ def test_semana_en_curso_no_se_guarda():
     _exige_rollback()
     from bunker_core.briefing import _semana_actual
     from posada.models import PrestigeWeek
-    from posada.prestige import resumen_semana
+    from posada.prestige import snapshot_semana
 
     actual = _semana_actual()
-    resumen_semana(actual)
+    snapshot_semana(actual)
     check(not PrestigeWeek.objects.filter(week_key=actual).exists(),
           f"la semana en curso {actual} no puede tener fila de snapshot")
 
     futura = '2099-W10'
-    resumen_semana(futura)
+    snapshot_semana(futura)
     check(not PrestigeWeek.objects.filter(week_key=futura).exists(),
           f"una semana futura {futura} tampoco puede cachearse")
 
@@ -646,6 +648,49 @@ def test_desglose_separa_ganado_de_perdido():
           f"cada fuente se muestra con su etiqueta legible, dio {filas}")
 
 
+def test_briefing_no_escribe_nada():
+    """`GET /api/briefing/` must be SAFE: driving it changes no row.
+
+    Behavioural and not a source grep, because handoff 028 recorded what a source grep costs
+    here: `inspect.getsource` on a DRF view returns Django's wrapper, and the probe stayed red
+    for a whole session for a reason unrelated to the view.
+
+    NOT vacuous, and that took planting. The live database holds 0 `PrestigeWeek` and 1
+    `PrestigeEntry`, so a count that starts at zero and ends at zero proves nothing about a
+    path that only fires on a CLOSED week that HAS entries. The plant and the forced review
+    below are what make the assertion mean something; without them this check passes by never
+    reaching the code it exists to guard.
+    """
+    _exige_rollback()
+    from bunker_core.briefing import _semana_anterior, construir_briefing
+    from bunker_core.models import BunkerState
+    from posada.models import PrestigeWeek
+
+    clave = _semana_anterior()
+    _planta_en_semana_cerrada(10, 'Asiento para que la semana cerrada tenga algo que resumir')
+    PrestigeWeek.objects.all().delete()
+
+    # La revisión se construye SOLO en la primera entrada de una semana nueva (`briefing.py`:
+    # `mostrar_revision`). Sin forzarla, este check no visita `_prestigio_por_semana` y pasa
+    # por no haber llegado nunca.
+    estado, _ = BunkerState.objects.get_or_create(id=1)
+    estado.last_review_week = ""
+    estado.save()
+
+    antes = (PrestigeWeek.objects.count(), PrestigeEntry.objects.count(),
+             BunkerState.objects.get(id=1).last_review_week)
+    payload = construir_briefing()
+    despues = (PrestigeWeek.objects.count(), PrestigeEntry.objects.count(),
+               BunkerState.objects.get(id=1).last_review_week)
+
+    check(payload['review'] is not None,
+          "el check debe haber recorrido la revisión; si no, no midió nada")
+    check(antes == despues,
+          f"construir_briefing escribió: {antes} -> {despues}")
+    check(not PrestigeWeek.objects.filter(week_key=clave).exists(),
+          f"una lectura no puede dejar el snapshot de {clave}")
+
+
 def run_tests():
     with transaction.atomic():
         test_invariante()
@@ -668,6 +713,7 @@ def run_tests():
         test_semana_en_curso_no_se_guarda()
         test_desglose_separa_ganado_de_perdido()
         test_semana_vacia_reporta_cero()
+        test_briefing_no_escribe_nada()
         transaction.set_rollback(True)
 
     print(f"\ntest_prestige_ledger: {_checks}/{_checks}")

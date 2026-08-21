@@ -277,8 +277,7 @@
 <div id="toast" role="status"></div>
 
 <script>window.CSRF_TOKEN = "{{ csrf_token }}";</script>
-<script src="{% static 'movil/queue.js' %}"></script>
-<script src="{% static 'movil/app.js' %}"></script>
+<script src="{% static 'movil/dist/main.js' %}"></script>
 <script>
   // Not inside the APK. There the assets are already on the device and the WebView makes no
   // network request at all, so a service worker has nothing to intercept — and /movil/sw.js is

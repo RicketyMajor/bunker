@@ -127,11 +127,25 @@ def construir_briefing():
 
 
 def marcar_visto(con_revision):
-    """Records the entry. This is the ONLY thing here that writes, and it is a POST."""
+    """Records the entry. This is the ONLY thing here that writes, and it is a POST.
+
+    Since 2026-08-21 it also persists the prestige snapshots. They used to be written by
+    `resumen_semana` on the READ path, which made `GET /api/briefing/` an unsafe GET and broke
+    the read-only criterion of `specs/movil-v3.md` before that panel existed. This is where
+    the write belongs: the endpoint that is a POST because it writes.
+
+    The weeks snapshotted are the two the review actually reported — `hoy - 7` and `hoy - 14`,
+    the same pair `_prestigio_por_semana` builds — and NOT `_semana_actual()`, which is the
+    different piece of bookkeeping below: "shown once this week".
+    """
     from bunker_core.models import BunkerState
     estado, _ = BunkerState.objects.get_or_create(id=1)
     estado.last_entry_at = timezone.now()
     if con_revision:
+        from posada.prestige import snapshot_semana
+        hoy = timezone.localdate()
+        snapshot_semana(_clave_semana(hoy - timedelta(days=7)))
+        snapshot_semana(_clave_semana(hoy - timedelta(days=14)))
         estado.last_review_week = _semana_actual()
     estado.save()
     return estado

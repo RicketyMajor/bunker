@@ -196,7 +196,26 @@ def test_el_manifiesto_sigue_el_contenido():
     for nombre, url in uno["files"].items():
         assert url.startswith("/"), f"{nombre} trae una URL absoluta: {url!r}"
 
-    ruta = settings.BASE_DIR / MOVIL_ASSETS["queue.js"]
+    # Cada URL anunciada tiene que servir EL MISMO fichero que se hasheó, y esto no es
+    # pedantería: el 2026-08-21 el manifiesto reconstruía la URL como f"/static/movil/{nombre}"
+    # mientras el fichero vivía en `dist/`. La URL resultante respondía **200** — porque
+    # `bunker_core/static/movil/main.js` existe: es el entry point SIN empaquetar — así que el
+    # APK habría bajado un módulo ES con `import`, ejecutado como script clásico, y mostrado una
+    # página que renderiza y no corre nada. Los dos status eran 200; solo el CUERPO los separaba.
+    for nombre, url in uno["files"].items():
+        if nombre == "app.html":
+            continue          # lo sirve una vista, no un fichero estático
+        servido = settings.BASE_DIR / ("bunker_core" + url)
+        hasheado = settings.BASE_DIR / MOVIL_ASSETS[nombre]
+        assert servido.exists(), f"{nombre} se anuncia en {url} y ahí no hay fichero"
+        assert servido.read_bytes() == hasheado.read_bytes(), (
+            f"{nombre} se anuncia en {url}, que sirve un fichero distinto del hasheado "
+            f"({MOVIL_ASSETS[nombre]})")
+
+    # El fichero que se toca sale del propio manifiesto: nombrar uno a mano ata este check a
+    # una lista de assets que ya cambió una vez.
+    tocable = next(n for n in sorted(MOVIL_ASSETS) if n != "app.html")
+    ruta = settings.BASE_DIR / MOVIL_ASSETS[tocable]
     original = ruta.read_bytes()
     try:
         ruta.write_bytes(original + b"\n// tocado por el test\n")

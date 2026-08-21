@@ -389,8 +389,15 @@ def movil_app(request):
 # because the manifest hashes them and the asset route serves them: two readers of one fact.
 MOVIL_ASSETS = {
     "app.html": "bunker_core/templates/movil/app.html",
-    "app.js": "bunker_core/static/movil/app.js",
-    "queue.js": "bunker_core/static/movil/queue.js",
+    # The BUILT bundles, not the sources, since 2026-08-21. The APK must install what the page
+    # actually loads, and `app.html` now loads one script instead of two.
+    #
+    # The KEYS stay plain filenames with no directory. `AssetStore.prepararGeneracion` refuses a
+    # key containing '/' — it is the trust boundary, a `..` there writes outside filesDir — and
+    # `AssetStore.handler` resolves a request by `substringAfterLast('/')` anyway, so a nested
+    # key would buy nothing and break the download.
+    "main.js": "bunker_core/static/movil/dist/main.js",
+    "selftest.js": "bunker_core/static/movil/dist/selftest.js",
 }
 
 
@@ -414,8 +421,16 @@ def movil_assets(request):
         if not ruta.exists():
             return JsonResponse({"error": f"falta {nombre} en el servidor"}, status=500)
         h.update(ruta.read_bytes())
+        # DERIVED from the same path that was just hashed, never rebuilt from the key.
+        # Rebuilding it as f"/static/movil/{nombre}" was correct only while every asset sat
+        # flat in that directory. The day `main.js` moved to `dist/`, that expression pointed
+        # at `bunker_core/static/movil/main.js` — the UNBUNDLED entry point, which is also
+        # served as a static file and answers **200**. The APK would have downloaded an ES
+        # module with `import` statements, run it as a classic script, and shown a page that
+        # renders and executes nothing. Measured 2026-08-21: both URLs answered 200 and only
+        # the BODIES told them apart.
         urls[nombre] = ("/movil/asset/app.html" if nombre == "app.html"
-                        else f"/static/movil/{nombre}")
+                        else "/" + MOVIL_ASSETS[nombre].removeprefix("bunker_core/"))
     return JsonResponse({"version": h.hexdigest(), "files": urls})
 
 

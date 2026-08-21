@@ -76,24 +76,13 @@ def _rango_semana(week_key):
     return lunes, lunes + timedelta(days=7)
 
 
-def resumen_semana(week_key):
-    """Summary for one ISO week: `{"earned", "lost", "net"}`.
+def _calcular(week_key):
+    """Sum the ledger for one ISO week. The ONE producer of the number.
 
-    Reads the snapshot for a CLOSED week and rebuilds it when it is missing; computes the
-    current week on the fly and never stores it. A week that has not finished yet cannot be
-    cached without caching a number that is still moving, and the review reports complete
-    periods only.
+    It never reads the cache, deliberately: `snapshot_semana` needs a rebuild to actually
+    rebuild, and a rebuild that returns the row it is trying to replace is not one.
     """
     lunes, siguiente = _rango_semana(week_key)
-    # Estrictamente pasada. `not en_curso` metería también las semanas FUTURAS, que se
-    # cachearían en cero y devolverían ese cero cuando por fin tuvieran asientos.
-    cerrada = siguiente <= timezone.localdate()
-
-    if cerrada:
-        fila = PrestigeWeek.objects.filter(week_key=week_key).first()
-        if fila:
-            return {"earned": fila.earned, "lost": fila.lost, "net": fila.net}
-
     # ponytail: suma en Python sobre las filas, una sola consulta. Techo: una semana con
     # miles de asientos — la historia entera son ~150 filas y una semana son unidades.
     # Mejora: dos `Sum` condicionales, que también es una consulta y se lee peor por nada.
@@ -102,11 +91,46 @@ def resumen_semana(week_key):
     ).values_list('amount', flat=True)
     ganado = sum(m for m in montos if m > 0)
     perdido = -sum(m for m in montos if m < 0)
-
-    if cerrada:
-        # `update_or_create` y no `create`: reconstruir una semana que ya tiene fila debe dar
-        # la misma fila, no un error de clave duplicada. `net` NO va aquí — lo calcula la
-        # base, y escribirlo desde la aplicación es justo lo que esta tabla no permite.
-        PrestigeWeek.objects.update_or_create(
-            week_key=week_key, defaults={"earned": ganado, "lost": perdido})
     return {"earned": ganado, "lost": perdido, "net": ganado - perdido}
+
+
+def resumen_semana(week_key):
+    """Summary for one ISO week: `{"earned", "lost", "net"}`. **Pure read.**
+
+    It used to persist the snapshot itself, which made `GET /api/briefing/` a GET that writes.
+    A GET is supposed to be safe, and the panel of `specs/movil-v3.md` asserts that nothing it
+    calls changes a row — so this one write broke that criterion before the panel had shipped a
+    line. The write moved to `snapshot_semana`, called from `marcar_visto`: the POST that
+    exists precisely because it writes. 2026-08-21.
+
+    A closed week with no snapshot row is recomputed from the ledger on every read instead of
+    once. Accepted: the whole history is ~150 rows and a week is units — the same reasoning the
+    `ponytail:` marker in `_calcular` already carries.
+    """
+    lunes, siguiente = _rango_semana(week_key)
+    # Estrictamente pasada. `not en_curso` metería también las semanas FUTURAS, que se
+    # cachearían en cero y devolverían ese cero cuando por fin tuvieran asientos.
+    if siguiente <= timezone.localdate():
+        fila = PrestigeWeek.objects.filter(week_key=week_key).first()
+        if fila:
+            return {"earned": fila.earned, "lost": fila.lost, "net": fila.net}
+    return _calcular(week_key)
+
+
+def snapshot_semana(week_key):
+    """Persist one week's summary. **The only writer of `PrestigeWeek` in the project.**
+
+    Returns `None` without writing for a week still in progress, or a future one: its number
+    is still moving, and a zero cached today is the zero handed back the day that week finally
+    has entries.
+    """
+    _, siguiente = _rango_semana(week_key)
+    if siguiente > timezone.localdate():
+        return None
+    datos = _calcular(week_key)
+    # `update_or_create` y no `create`: reconstruir una semana que ya tiene fila debe dar la
+    # misma fila, no un error de clave duplicada. `net` NO va aquí — lo calcula la base, y
+    # escribirlo desde la aplicación es justo lo que esta tabla no permite.
+    fila, _creada = PrestigeWeek.objects.update_or_create(
+        week_key=week_key, defaults={"earned": datos["earned"], "lost": datos["lost"]})
+    return fila

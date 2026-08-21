@@ -44,9 +44,13 @@ class MainActivity : AppCompatActivity() {
         val servidor = AssetStore(this).handler()
         val loader = WebViewAssetLoader.Builder()
             // Both prefixes, and the second is not optional. `app.html` is a Django template and
-            // its rendered script tags read `/static/movil/queue.js` — that is what Django emits
-            // and what the APK downloads. Registering only `/movil/` leaves those two requests
+            // its rendered script tag reads `/static/movil/dist/main.js` — that is what Django
+            // emits and what the APK downloads. Registering only `/movil/` leaves that request
             // unintercepted: the page renders, no script loads, and nothing reports an error.
+            //
+            // The extra `dist/` segment costs nothing: `AssetStore.handler` resolves a request
+            // by `substringAfterLast('/')`, so depth under this prefix is irrelevant — which is
+            // also why `copiarAssets` must stage the bundle FLAT in `assets/movil/`.
             .addPathHandler("/movil/", servidor)
             .addPathHandler("/static/movil/", servidor)
             .build()

@@ -22,7 +22,7 @@ from django.db import IntegrityError, transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.briefing import (  # noqa: E402
-    _semana_actual, _semana_anterior, construir_briefing, marcar_visto,
+    _clave_semana, _semana_actual, _semana_anterior, construir_briefing, marcar_visto,
 )
 from django.db import connection  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
@@ -122,9 +122,26 @@ def run_tests():
               "marcar_visto sin revisión no marca la semana como vista")
         check(construir_briefing()["show_review"] is True,
               "con la semana sin marcar, la revisión se ofrece")
+        # `marcar_visto` es también, desde 2026-08-21, el ÚNICO sitio que persiste los
+        # snapshots de prestigio: la escritura salió de `resumen_semana` para que
+        # `GET /api/briefing/` fuese un GET seguro. Sin esta comprobación esa llamada se puede
+        # borrar y no se pone rojo nada — una escritura sin lector, que es exactamente el
+        # defecto que este proyecto lleva encontrando desde el handoff 022.
+        #
+        # Se borran las filas ANTES: la base viva tiene cero, así que sin el borrado esto
+        # afirmaría "hay filas" contra un estado que ya las tendría de un check anterior.
+        from posada.models import PrestigeWeek
+        PrestigeWeek.objects.all().delete()
         marcar_visto(True)
         estado.refresh_from_db()
         check(estado.last_review_week != "", "marcar_visto con revisión marca la semana")
+        hoy = timezone.localdate()
+        esperadas = {_clave_semana(hoy - timedelta(days=7)),
+                     _clave_semana(hoy - timedelta(days=14))}
+        guardadas = set(PrestigeWeek.objects.values_list('week_key', flat=True))
+        check(guardadas == esperadas,
+              f"marcar_visto persiste las dos semanas revisadas: esperaba {esperadas}, "
+              f"hay {guardadas}")
         check(len(estado.last_review_week) <= 8,
               f"la clave de semana cabe en el campo: {estado.last_review_week!r}")
         check(construir_briefing()["show_review"] is False,
@@ -238,16 +255,15 @@ def run_tests():
         # Cinco módulos distintos, no seis llamadas: books sale dos veces en la lista y se
         # consulta UNA. books cuesta 2 consultas (registros + páginas), los otros 1.
         #
-        # Desde 2026-08-20 la revisión también reporta prestigio: +3 en régimen — los dos
-        # snapshots de `PrestigeWeek` y el desglose por fuente, que el snapshot no puede
-        # responder porque no guarda nada por fuente. La PRIMERA revisión de una semana nueva
-        # cuesta 17: construye los dos snapshots, y `update_or_create` gasta 8 statements en
-        # savepoints. Se calienta aquí a propósito, porque medir sin calentar ataba este
-        # número al orden en que corrieran los checks de más arriba.
-        estado.last_review_week = ""
-        estado.save()
-        construir_briefing()
-
+        # Desde 2026-08-20 la revisión también reporta prestigio: +3 — las dos semanas y el
+        # desglose por fuente, una consulta cada uno.
+        #
+        # El calentamiento que había aquí SE FUE con la escritura, 2026-08-21. Existía porque
+        # la primera revisión de una semana nueva costaba 17: `resumen_semana` construía los
+        # dos snapshots y `update_or_create` gastaba 8 statements en savepoints, así que el
+        # número dependía del orden en que corrieran los checks de más arriba. Ahora
+        # `construir_briefing` no escribe, y las dos semanas cuestan una consulta cada una
+        # tanto si hay fila de snapshot como si no — el número es estable por construcción.
         estado.last_review_week = ""
         estado.save()
         with CaptureQueriesContext(connection) as con_rev:

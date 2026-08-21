@@ -1,0 +1,13 @@
+{
+  "name": "bunker-movil",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build step for the Transmisor de Campo front-end. Dev dependency only: nothing here ships to the phone except first-party bundled code.",
+  "scripts": {
+    "build": "esbuild bunker_core/static/movil/main.js bunker_core/static/movil/selftest.js --bundle --minify --format=iife --target=es2020 --outdir=bunker_core/static/movil/dist",
+    "watch": "npm run build -- --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

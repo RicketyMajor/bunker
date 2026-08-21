@@ -6,7 +6,9 @@ reachability checks the Transmisor made necessary.
 
 No count is written here on purpose. The number lived in this docstring and went stale one
 commit after it was written; it is the fifth prose count to drift in this project. Read
-CHECKS_IN_CONTAINER — registering a script there is the only step.
+CHECKS_IN_CONTAINER — registering a script there is the only step. A check that must run on
+the HOST — because it needs the repo tree, `npx` or the venv rather than Django models —
+goes inline further down instead, beside `tests.test_cli_imports` and `tests.test_bundle`.
 """
 import os
 import shutil
@@ -125,6 +127,11 @@ def doctor():
             fallos += 1
     if not _run("tests.test_cli_imports",
                 [sys.executable, "-m", "tests.test_cli_imports"]):
+        fallos += 1
+    # On the HOST and not in `web`: it shells out to esbuild, which lives in `node_modules/`
+    # here and is not installed in the container.
+    if not _run("tests.test_bundle",
+                [sys.executable, "-m", "tests.test_bundle"]):
         fallos += 1
 
     if fallos:

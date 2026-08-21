@@ -202,7 +202,18 @@ class AssetStore(
     }
 
     companion object {
-        val REQUERIDOS = listOf("app.html", "app.js", "queue.js")
+        // The BUILT bundles since 2026-08-21, because `app.html` now loads one script instead
+        // of two. Both are required: `hayGeneracionValida` demands every name here, so a
+        // generation missing either is discarded and the packaged assets keep serving.
+        //
+        // ⚠ This list and `MOVIL_ASSETS` in `bunker_core/views.py` are the SAME fact in two
+        // languages, and only a rebuild reconciles them. A phone running the old APK against
+        // the new manifest downloads three files, keeps none — `app.js` and `queue.js` are
+        // missing from the new manifest, so `hayGeneracionValida` is false — never records the
+        // version, and goes on serving its packaged copy. Degraded, not broken, and it heals
+        // on reinstall. That is the intended failure mode; do not "fix" it by loosening
+        // `hayGeneracionValida`, which is what makes a half-downloaded set impossible.
+        val REQUERIDOS = listOf("app.html", "main.js", "selftest.js")
 
         // Guards the generations directory. `handler` sweeps it and `revisarAssets` stages into
         // it, from the Activity and the worker respectively, on the same event.

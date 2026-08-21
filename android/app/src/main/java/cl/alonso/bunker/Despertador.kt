@@ -150,5 +150,12 @@ class DespertadorReceiver : BroadcastReceiver() {
 class ArranqueReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Despertador.sincronizar(context, ColaStore(context).pendientes())
+        // A reboot also clears the JobScheduler registration, and `programar` was reachable from
+        // `MainActivity.onCreate` alone — so until a human opened the app there was no job, and
+        // `scripts/ronda_doze.sh` aborted on its absence for ten consecutive nights. Measured
+        // 2026-08-21: the process starts headlessly (`am start` gives it a pid), but the screen
+        // cannot be woken over adb (`input` is refused with INJECT_EVENTS), the Activity never
+        // resumes, and `onCreate` never runs. `KEEP` makes this idempotent with that call.
+        SyncWorker.programar(context)
     }
 }
