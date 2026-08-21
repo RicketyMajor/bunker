@@ -387,6 +387,8 @@ def test_confirmar_paga_fijo_y_una_vez():
     this task removes.
     """
     _exige_rollback()
+    from datetime import timedelta
+
     from django.utils import timezone
 
     from posada.models import CalendarEvent
@@ -412,6 +414,21 @@ def test_confirmar_paga_fijo_y_una_vez():
     despues = PrestigeEntry.objects.filter(ref_id=evento.id, source='evento_asistido').count()
     check(despues == antes,
           f"confirmar dos veces no puede pagar dos veces, pasó de {antes} a {despues}")
+
+    # Un evento FUTURO no se puede confirmar. Conducido por el endpoint real, igual que el
+    # resto: la guarda vive en la vista, y un check que llamara a `registrar_prestigio`
+    # pasaría contento con la guarda borrada. Sin ella, un evento fechado en 2099 cobraba
+    # +3 al crearse y +3 más al confirmarse el mismo día.
+    futuro = CalendarEvent.objects.create(date=timezone.localdate() + timedelta(days=365),
+                                          title='Futuro', is_important=True, status='PENDING')
+    respuesta = cliente.post(f'/posada/api/calendar/{futuro.id}/asistir/')
+    check(respuesta.status_code == 400,
+          f"confirmar un evento futuro se rechaza con 400, respondió {respuesta.status_code}")
+    check(not PrestigeEntry.objects.filter(ref_id=futuro.id, source='evento_asistido').exists(),
+          "un evento futuro no deja ningún asiento en el ledger")
+    futuro.refresh_from_db()
+    check(futuro.status == 'PENDING',
+          f"un evento futuro rechazado sigue PENDING, quedó en '{futuro.status}'")
 
     # Un evento normal paga 1, no 3: el monto sale de su causa, no de un dado.
     normal = CalendarEvent.objects.create(date=timezone.localdate(), title='Normal',

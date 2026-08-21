@@ -13,6 +13,7 @@ import logging
 
 from posada.models import InventorySlot, ItemRarity
 from posada.engine.data.loot_tables import COIN_DROPS, ITEM_DROPS
+from posada.engine.estados import NOMBRES
 
 
 def tick_combat(ctx):
@@ -95,8 +96,10 @@ def _monster_turn(ctx, m, adventurers):
         if m['hp'] <= 0:
             return
 
-    if 'STUNNED' in m['status']:
-        m['status'].remove('STUNNED')
+    # Reads STN, the code `OnHitEffect` actually writes. It read 'STUNNED' — a name no
+    # writer has ever produced — so every stun a monster took did nothing, for months.
+    if 'STN' in m['status']:
+        m['status'].remove('STN')
         ctx.script.append({"second": ctx.current_second - 8, "type": "flavor",
                             "message": f"💫 [bold red]{m['name']}[/bold red] está aturdido y no puede moverse."})
         return
@@ -107,8 +110,8 @@ def _monster_turn(ctx, m, adventurers):
     target = random.choice(valid_targets)
     adv_mods = target.get_stat_modifiers()
     adv_evasion = 8 + max(adv_mods['dex'], adv_mods['armor'])
-    adv_on_attack = 'BLINDED' in ctx.adv_status_tracker[target.id] or 'RECKLESS' in ctx.adv_status_tracker[target.id]
-    disadv_on_attack = 'BLINDED' in m['status'] or 'DODGING' in ctx.adv_status_tracker[target.id]
+    adv_on_attack = 'BLN' in ctx.adv_status_tracker[target.id] or 'RECKLESS' in ctx.adv_status_tracker[target.id]
+    disadv_on_attack = 'BLN' in m['status'] or 'DODGING' in ctx.adv_status_tracker[target.id]
 
     m_raw_roll = roll_d20(advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
     m_roll_total = m_raw_roll + m['stats']['dex']
@@ -143,7 +146,7 @@ def _monster_turn(ctx, m, adventurers):
                 ctx.script.append({"second": ctx.current_second - 8, "type": "flavor", "message": f"¡[bold red]{m['name']}[/bold red] drena {heal} HP de {target.name}!"})
             else:
                 ctx.adv_status_tracker[target.id].add(eff_m)
-                ctx.script.append({"second": ctx.current_second - 8, "type": "flavor", "message": f"¡[bold red]{m['name']}[/bold red] inyecta el estado {eff_m} a {target.name}!"})
+                ctx.script.append({"second": ctx.current_second - 8, "type": "flavor", "message": f"¡[bold red]{m['name']}[/bold red] inyecta el estado {NOMBRES.get(eff_m, eff_m)} a {target.name}!"})
 
         eff_adv = adv_mods.get('on_hit_effect', 'NON')
         if eff_adv == 'THN' and random.randint(1, 100) <= adv_mods.get('effect_chance', 0):
@@ -173,6 +176,15 @@ def _adventurer_turn(ctx, adv, adventurers):
         return
     if not ctx.active_monsters_group:
         return
+
+    # RECKLESS y DODGING duran HASTA EL PRÓXIMO TURNO, igual que en D&D y que `INSPIRED`
+    # (se consume al usarse, línea 292) y `REACTION_USED` (línea 273). Sin esto el tracker
+    # sólo se vacía al terminar el combate (línea 405), así que un solo Ataque Temerario
+    # dejaba al bárbaro con ventaja en su contra durante TODO el combate, y una Evasión
+    # dejaba desventaja permanente contra quien la lanzó. No hay `random` aquí: el orden
+    # de los guiones ya emitidos no cambia.
+    ctx.adv_status_tracker[adv.id].discard('RECKLESS')
+    ctx.adv_status_tracker[adv.id].discard('DODGING')
 
     adv_mods = adv.get_stat_modifiers()
 
@@ -207,6 +219,16 @@ def _adventurer_turn(ctx, adv, adventurers):
         if ctx.temp_hp[adv.id] <= 0:
             ctx.script.append({"second": ctx.current_second - 5, "type": "flavor", "message": f"⚠️ [bold yellow]{adv.name}[/bold yellow] ha caído inconsciente por sus heridas."})
             return
+
+    # Un aventurero aturdido pierde el turno ENTERO — ni ataque ni habilidad — igual que el
+    # monstruo en `_monster_turn`. Hasta ahora `STN` se escribía aquí (combat.py:148, el
+    # on_hit_effect del monstruo) y no lo leía nadie: un monstruo que aturdía no conseguía
+    # nada. El estado se consume en el turno, así que no encadena.
+    if 'STN' in ctx.adv_status_tracker[adv.id]:
+        ctx.adv_status_tracker[adv.id].discard('STN')
+        ctx.script.append({"second": ctx.current_second - 6, "type": "flavor",
+                            "message": f"💫 {adv.name} está aturdido y pierde el turno."})
+        return
 
     # Evaluación de habilidades de combate
     available_skills = []
@@ -260,8 +282,8 @@ def _basic_attack(ctx, adv, adv_mods, adventurers):
         target_m = random.choice(ctx.active_monsters_group)
         attack_stat = max(adv_mods['str'], adv_mods['dex'])
 
-        adv_on_attack = 'BLINDED' in target_m['status'] or 'RECKLESS' in ctx.adv_status_tracker[adv.id]
-        disadv_on_attack = 'BLINDED' in ctx.adv_status_tracker[adv.id]
+        adv_on_attack = 'BLN' in target_m['status'] or 'RECKLESS' in ctx.adv_status_tracker[adv.id]
+        disadv_on_attack = 'BLN' in ctx.adv_status_tracker[adv.id]
 
         m_evasion = 8 + max(target_m['stats']['dex'], target_m['stats'].get('armor', 0))
         a_raw_roll = roll_d20(advantage=adv_on_attack, disadvantage=disadv_on_attack)["value"]
@@ -311,8 +333,7 @@ def _basic_attack(ctx, adv, adv_mods, adventurers):
                         ctx.script.append({"second": ctx.current_second - 4, "type": "heal", "adventurer_id": adv.id, "amount": heal, "message": f"🦇 {adv.name} drena {heal} HP."})
                     else:
                         target_m['status'].add(eff)
-                        eff_names = {'PSN': 'Veneno', 'BLD': 'Sangrado', 'BRN': 'Quemaduras', 'STN': 'Aturdimiento', 'BLN': 'Ceguera'}
-                        ctx.script.append({"second": ctx.current_second - 4, "type": "flavor", "message": f"¡{adv.name} inflige {eff_names.get(eff, eff)}!"})
+                        ctx.script.append({"second": ctx.current_second - 4, "type": "flavor", "message": f"¡{adv.name} inflige {NOMBRES.get(eff, eff)}!"})
 
             final_dmg = max(1, a_dmg - target_m['stats']['con'])
             target_m['hp'] -= final_dmg

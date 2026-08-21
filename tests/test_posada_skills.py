@@ -8,7 +8,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bunker_core.settings')
 django.setup()
 
 from posada.skills import SkillRegistry
-from posada.models import Adventurer, Item
+from posada.models import Adventurer, AdventurerClass, Item
 
 # Mock Item DB call
 import unittest.mock
@@ -54,12 +54,12 @@ def run_tests():
         
         # Eval mode
         for hp_ratio in [1.0, 0.5, 0.2]:
-            adv_class = skill_data['allowed_classes'][0] if skill_data['allowed_classes'] else 'FGT'
+            adv_class = skill_data['allowed_classes'][0] if skill_data['allowed_classes'] else 'FTR'
             caster = MockAdventurer(id=1, name="Caster", adv_class=adv_class)
             caster.current_hp = int(caster.max_hp * hp_ratio)
             
             allies = [
-                MockAdventurer(id=2, name="Ally1", adv_class="CL"),
+                MockAdventurer(id=2, name="Ally1", adv_class="CLR"),
                 MockAdventurer(id=3, name="Ally2", adv_class="ROG"),
                 MockAdventurer(id=4, name="Ally3", adv_class="WIZ")
             ]
@@ -87,12 +87,12 @@ def run_tests():
                 errors.append(f"{skill_id} eval_mode failed: {str(e)}")
                 
         # Execution mode
-        adv_class = skill_data['allowed_classes'][0] if skill_data['allowed_classes'] else 'FGT'
+        adv_class = skill_data['allowed_classes'][0] if skill_data['allowed_classes'] else 'FTR'
         caster = MockAdventurer(id=1, name="Caster", adv_class=adv_class)
         caster.current_hp = 50
         
         allies = [
-            MockAdventurer(id=2, name="Ally1", adv_class="CL"),
+            MockAdventurer(id=2, name="Ally1", adv_class="CLR"),
             MockAdventurer(id=3, name="Ally2", adv_class="ROG"),
             MockAdventurer(id=4, name="Ally3", adv_class="WIZ")
         ]
@@ -132,17 +132,27 @@ def run_tests():
             print(f"- {err}")
     else:
         print(f"All {len(skills)} skills tested successfully with 0 exceptions and strict constraints met.")
+
+    cubiertas = {c for d in skills.values() for c in d['allowed_classes']}
+    faltan = set(AdventurerClass.values) - cubiertas
+    if faltan:
+        errors.append(f"clases sin ninguna skill registrada: {sorted(faltan)}")
+    print(f"  {len(skills)} skills sobre {len(cubiertas)} clases reales")
     return len(errors)
 
 def simulate_combat_balance():
     print("\n--- Phase 2: Combat Balance Simulation ---")
-    classes = ["BBN", "BDR", "CL", "DRD", "FGT", "MNK", "PAL", "RGR", "ROG", "SOR", "WLK", "WIZ", "ART"]
+    # Derivado del modelo, no escrito a mano: la lista literal traía BDR, CL y FGT — tres
+    # códigos que no existen — así que tres iteraciones corrían sobre una lista de skills
+    # vacía e imprimían un tranquilizador `Dealt 0 Dmg`, y 30 de las 132 skills (Bardo 10,
+    # Clérigo 10, Guerrero 10) no se simulaban nunca.
+    classes = list(AdventurerClass.values)
     
     for cls in classes:
         caster = MockAdventurer(id=1, name=f"{cls}_Tester", adv_class=cls, level=10)
         allies = [
-            MockAdventurer(id=2, name="Ally1", adv_class="FGT"),
-            MockAdventurer(id=3, name="Ally2", adv_class="CL")
+            MockAdventurer(id=2, name="Ally1", adv_class="FTR"),
+            MockAdventurer(id=3, name="Ally2", adv_class="CLR")
         ]
         enemies = [create_mock_enemy()] # Boss
         

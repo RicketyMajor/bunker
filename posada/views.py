@@ -1531,6 +1531,17 @@ def confirm_calendar_event(request, event_id):
     if event.status == 'DONE':
         return Response({"status": "warning", "message": "Ya confirmaste ese evento."})
 
+    # No se puede haber asistido a algo que todavía no pasa. Sin esta guarda, un evento
+    # fechado en 2099 cobraba +3 al crearse y +3 más al confirmarse, el mismo día. El
+    # prestigio del calendario ya se pagaba sin comprobar asistencia; esto cierra la mitad
+    # que quedaba. `timezone.localdate()` y NUNCA `date.today()`: el contenedor corre en UTC
+    # y el proyecto es America/Santiago.
+
+    if event.date > timezone.localdate():
+        return Response({"status": "error",
+                         "message": "Ese evento todavía no ocurre; no puedes confirmar asistencia."},
+                        status=400)
+
     guild, _ = GuildProfile.objects.get_or_create(id=1)
     ganancia = 3 if event.is_important else 1
     registrar_prestigio(guild, ganancia, 'evento_asistido',

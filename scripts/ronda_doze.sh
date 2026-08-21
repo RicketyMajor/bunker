@@ -87,7 +87,7 @@ curl -s -o /dev/null --max-time 10 localhost:8009/api/movil/assets/ || {
 JOB=$(a shell dumpsys jobscheduler | grep -oE "JOB #u0a[0-9]+/[0-9]+: [a-f0-9]+ $APP" \
       | head -1 | grep -oE "/[0-9]+" | tr -d /)
 if [ -z "${JOB:-}" ]; then
-  echo "ABORTA: no encontre el job de $APP. Hasta la Tarea 10 solo el scheduler vacia la cola,"
+  echo "ABORTA: no encontre el job de $APP. Nada lo ha encolado desde el ultimo arranque"
   echo "        y sin job no hay forma headless de armar la alarma. Abre la app una vez."
   exit 1
 fi

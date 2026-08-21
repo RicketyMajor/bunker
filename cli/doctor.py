@@ -30,6 +30,7 @@ console = Console()
 # what django.setup() needs. The label is the exact thing to type to run one by hand.
 CHECKS_IN_CONTAINER = (
     "tests.test_posada_skills",
+    "tests.test_posada_estados",
     "tests.test_achievements",
     "tests.test_capture_dates",
     "tests.test_reading_progress",

@@ -192,6 +192,10 @@ def infusiones_basicas(context):
     enemy = random.choice(context['enemies'])
     dmg = random.randint(1, 6) + caster.get_stat_modifiers()['int']
     enemy['hp'] -= dmg
+    # INFUSED_WEAPON lo lee combat.py:305 (+1 daño). El comentario de arriba decía
+    # "un buff simulado": ahora es un buff de verdad, sobre el mismo aliado que el
+    # mensaje ya nombraba.
+    context['adv_status'][target.id].add('INFUSED_WEAPON')
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"✨ {caster.name} imbuye temporalmente el arma de {target.name}. ¡El impacto infundido inflige {dmg} de daño extra a [bold red]{enemy['name']}[/bold red]!"})
     return True
@@ -412,6 +416,13 @@ def ataque_temerario(context):
     
     # Enemies have advantage against him = take recoil damage
     recoil = max(1, random.randint(1, 6))
+
+    # El motor ya sabe leer RECKLESS (combat.py:113 y 266): concede ventaja a este
+    # aventurero y también a quien le ataque. Hasta ahora esta skill lo SIMULABA tirando
+    # el daño dos veces y auto-infligiendo contragolpe, mientras el lector del motor no
+    # se disparaba nunca. Las tiradas se conservan: quitarlas cambiaría el orden de
+    # `random` y con él los guiones ya emitidos.
+    context['adv_status'][caster.id].add('RECKLESS')
     
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"⚔️ {caster.name} lanza un Ataque Temerario contra [bold red]{target['name']}[/bold red] infligiendo {final_dmg} daño masivo."})
@@ -2103,6 +2114,9 @@ def evasion_absoluta(context):
     if caster.current_hp <= (caster.max_hp * 0.3):
         heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['dex'] * 4
         caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        # DODGING lo lee combat.py:114 — los ataques contra él tiran con desventaja.
+        # La curación se mantiene: representa el daño ya evitado en este turno.
+        context['adv_status'][caster.id].add('DODGING')
         context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
                                "message": f"🌫️ ¡Evasión Absoluta! El ataque de área iba a ser mortal, pero {caster.name} se mueve más rápido que la luz (Esquiva impecable: {heal_amount} HP curados/evitados)."})
         return True
@@ -2493,6 +2507,9 @@ def evasion_rogue(context):
     if caster.current_hp < caster.max_hp * 0.4:
         heal_amount = random.randint(30, 50) + caster.get_stat_modifiers()['dex'] * 4
         caster.current_hp = min(caster.max_hp, caster.current_hp + heal_amount)
+        # DODGING lo lee combat.py:114 — los ataques contra él tiran con desventaja.
+        # La curación se mantiene: representa el daño ya evitado en este turno.
+        context['adv_status'][caster.id].add('DODGING')
         context['log'].append({"second": context['current_second'], "type": "heal", "adventurer_id": caster.id, "amount": heal_amount,
                                "message": f"🌫️ ¡EVASIÓN PERFECTA! El aliento destructivo del enemigo iba a incinerarlo, pero {caster.name} no sufre ni un rasguño ({heal_amount} HP de letalidad evadida in-extremis)."})
         return True

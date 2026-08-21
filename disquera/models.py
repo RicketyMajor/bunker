@@ -101,7 +101,9 @@ class ListeningEntry(models.Model):
 
     ponytail: same removal as MovieViewingSession, 2026-08-14. The table held one row of 45
     minutes, which is the whole evidence that the feature was never used. Kept, not dropped;
-    the dashboard counts MusicAnnualRecord rows for the week instead.
+    the dashboard counts MusicAnnualRecord rows for the week instead. Upgrade: drop it if a
+    schema cleanup ever runs for its own reasons — a destructive migration buys nothing on
+    its own, same as its twin at movies/models.py:108.
     """
     album = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='listening_entries')
     date = models.DateField(default=localdate)
