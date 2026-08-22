@@ -2,6 +2,7 @@
 
 Moved out of `legacy.py` unchanged (Phase 3, Task 8). Touches no other seam.
 """
+import itertools
 import random
 
 from posada.models import GuildProfile
@@ -12,12 +13,8 @@ def get_chart_completion_status(chart):
     x_end = int(chart.goal_x_value)
     expected = set(range(x_start, x_end + 1))
 
-    points = chart.data_points.all().order_by('x_value')
-    covered = set()
-    for p in points:
-        int_x = int(p.x_value)
-        if int_x in expected:
-            covered.add(int_x)
+    # Sin order_by: esto alimenta un set, que ya descarta el orden.
+    covered = {int(p.x_value) for p in chart.data_points.all()} & expected
 
     missing = sorted(expected - covered)
     return {
@@ -53,13 +50,12 @@ def calculate_chart_reward(chart):
 
     # Cálculo del área real del usuario, Suma de Riemann trapezoidal
     area = 0
-    for i in range(1, len(points)):
-        dx = points[i].x_value - points[i-1].x_value
+    for anterior, actual in itertools.pairwise(points):
+        dx = actual.x_value - anterior.x_value
         # La altura se mide desde el "suelo" del gráfico (y_min)
-        h1 = max(0.0, points[i-1].y_value - chart.y_min)
-        h2 = max(0.0, points[i].y_value - chart.y_min)
-        dy = (h1 + h2) / 2.0
-        area += dx * dy
+        h1 = max(0.0, anterior.y_value - chart.y_min)
+        h2 = max(0.0, actual.y_value - chart.y_min)
+        area += dx * (h1 + h2) / 2.0
 
     rendimiento = area / total_area
 

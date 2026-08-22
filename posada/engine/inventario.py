@@ -7,7 +7,7 @@ hands the displaced item back to `add_item_to_inventory` rather than leaving it 
 from django.utils import timezone
 
 from posada.models import GuildProfile, InventorySlot, ItemRarity, JournalEntry
-from posada.engine.data.tablas import CLASS_PROFICIENCIES
+from posada.engine.data.tablas import CLASS_PROFICIENCIES, SLOT_POR_TIPO
 from posada.engine.economia import universal_consolidate
 
 def get_item_score(item):
@@ -21,36 +21,35 @@ def get_item_score(item):
 
 def add_item_to_inventory(adv, item, event_log=None):
     """Maneja la lógica de stacks, mejoras de Gremio, y comisión de Mensajería Arcana."""
+    # Un alias en vez de siete `if event_log is not None:`. Si el llamador no quiere log, los
+    # mensajes caen en una lista que se descarta.
+    log = event_log if event_log is not None else []
     guild, _ = GuildProfile.objects.get_or_create(id=1)
     is_stackable = item.item_type in ['CNS', 'MSC']
     color = ItemRarity.get_color(item.rarity)
 
     # Intentar agrupar si es stackeable
     if is_stackable:
-        slots = InventorySlot.objects.filter(
-            adventurer=adv, item=item, quantity__lt=16)
-        if slots.exists():
-            slot = slots.first()
+        slot = InventorySlot.objects.filter(
+            adventurer=adv, item=item, quantity__lt=16).first()
+        if slot:
             slot.quantity += 1
             slot.save()
-            if event_log is not None:
-                event_log.append(
+            log.append(
                     f"{adv.name} guardó [[{color}]{item.name}[/]] (x{slot.quantity}).")
             return
 
     # Intentar usar un nuevo slot en la mochila (usa la propiedad dinámica)
     if adv.inventory.count() < adv.inventory_capacity:
         InventorySlot.objects.create(adventurer=adv, item=item, quantity=1)
-        if event_log is not None:
-            event_log.append(
+        log.append(
                 f"{adv.name} guardó [[{color}]{item.name}[/]] en su mochila.")
     else:
         # if Mochila llena, intentar usar Mensajería Arcana
         has_mensajeria = guild.unlocked_upgrades.filter(
             upgrade__key='mensajeria_arcana').exists()
         if not has_mensajeria:
-            if event_log is not None:
-                event_log.append(
+            log.append(
                     f"Mochila de {adv.name} llena. [[{color}]{item.name}[/]] fue abandonado (Requiere Mensajería Arcana).")
             return
 
@@ -84,8 +83,7 @@ def add_item_to_inventory(adv, item, event_log=None):
                 fee_msg = "(-1 Drabín)"
 
         if not fee_paid:
-            if event_log is not None:
-                event_log.append(
+            log.append(
                     f"Mochila llena. El Gremio no tiene fondos para el envío de [[{color}]{item.name}[/]]. Objeto perdido.")
             return
 
@@ -94,8 +92,7 @@ def add_item_to_inventory(adv, item, event_log=None):
             guild.save()
             universal_consolidate(guild)  # Ordenar el vuelto
 
-        if event_log is not None:
-            event_log.append(
+        log.append(
                 f"Mochila llena. Mensajeros llevaron [[{color}]{item.name}[/]] al Cofre {fee_msg}.")
 
         if is_stackable:
@@ -162,25 +159,23 @@ def _auto_equip(adv, item, event_log, pull_type):
             add_item_to_inventory(adv, item, event_log)
         return
 
-    # el resto del equipo
-    slot_map = {
-        'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-        'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
-        'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
-        'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
-    }
-
-    slot_name = slot_map.get(item.item_type)
+    # el resto del equipo. `slot_de` devuelve None tambien para el escudo con mandoble ya
+    # equipado, que antes era un segundo bloque aparte.
+    slot_name = SLOT_POR_TIPO.get(item.item_type)
+    if slot_name and item.item_type == 'OFF':
+        principal = adv.equip_main_hand
+        if principal and principal.item_type == 'W2H':
+            slot_name = None          # escudo bloqueado por mandoble
     if not slot_name:
+        # Antes esto era un `return` a secas y el objeto se PERDIA: ni equipado, ni guardado, ni
+        # mencionado en el log. Con 'LEG' en el mapa en vez de 'LGS', esa rama se comia las 21
+        # piezas de piernas del catalogo. El mapa esta arreglado; esto es la red por si un
+        # item_type nuevo vuelve a caer aqui.
+        add_item_to_inventory(adv, item, event_log)
         return
 
     current_item = getattr(adv, slot_name)
     score_current = get_item_score(current_item) if current_item else -1
-
-    # Bloqueo de Escudo si usa Mandoble
-    if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
-        add_item_to_inventory(adv, item, event_log)
-        return
 
     if score_new > score_current:
         if current_item:

@@ -9,6 +9,7 @@ import random
 from django.db import transaction
 
 from posada.models import GuildProfile
+from posada.engine.data.tablas import MANCOMUNIDAD, IMPERIAL
 
 def universal_consolidate(entity):
     """Aplica la consolidación a cualquier entidad (Aventurero o Gremio)."""
@@ -76,62 +77,25 @@ def universal_consolidate(entity):
 def calculate_sell_value(item, pct=0.50):
     """Calcula el valor de venta de un item como porcentaje de su coste real.
 
-    Convierte todo el coste del item a unidades base (ardites = 32 u.b. para
-    la Mancomunidad, medios peniques para Imperial), aplica el porcentaje,
-    y redistribuye en denominaciones óptimas.
+    Convierte todo el coste del item a unidades base, aplica el porcentaje, y redistribuye en
+    denominaciones optimas.
+
+    Las tablas vienen de `data/tablas.py` ordenadas de mayor a menor, y ese orden es lo que hace
+    correcta la descomposicion: la lista que vivia aqui tenia sueldo (1100) ANTES que iota
+    (3520), asi que vender 4 iotas devolvia 12 sueldos + 2 drabines + 5 ardites — las
+    denominaciones equivocadas y 16 unidades base DESTRUIDAS bajo la moneda minima.
 
     Returns:
         dict con las 11 monedas y sus cantidades resultantes.
     """
-    # --- Valor total en unidades base de la Mancomunidad ---
-    cw_total = (
-        item.cost_marco * 352000 +
-        item.cost_real * 88000 +
-        item.cost_talento * 35200 +
-        item.cost_sueldo * 1100 +
-        item.cost_iota * 3520 +
-        item.cost_drabin * 352 +
-        item.cost_ardite * 32
-    )
-    cw_sell = int(cw_total * pct)
+    def _descomponer(entity, tabla):
+        resto = int(_en_base(entity, tabla) * pct)
+        salida = {}
+        for moneda, valor in tabla.items():
+            salida[moneda], resto = divmod(resto, valor)
+        return salida
 
-    # --- Valor total en unidades base Imperial (medios peniques de hierro) ---
-    imp_total = (
-        item.cost_silver_penny * 100 +
-        item.cost_copper_penny * 10 +
-        item.cost_iron_penny * 2 +
-        item.cost_iron_half_penny
-    )
-    imp_sell = int(imp_total * pct)
-
-    # --- Descomponer Mancomunidad en denominaciones óptimas ---
-    result = {}
-    cw_denominations = [
-        ('marco', 352000), ('real', 88000), ('talento', 35200),
-        ('sueldo', 1100), ('iota', 3520), ('drabin', 352), ('ardite', 32)
-    ]
-    remainder = cw_sell
-    for coin_name, value in cw_denominations:
-        if remainder >= value:
-            result[coin_name] = remainder // value
-            remainder %= value
-        else:
-            result[coin_name] = 0
-
-    # --- Descomponer Imperial en denominaciones óptimas ---
-    imp_denominations = [
-        ('silver_penny', 100), ('copper_penny', 10),
-        ('iron_penny', 2), ('iron_half_penny', 1)
-    ]
-    remainder = imp_sell
-    for coin_name, value in imp_denominations:
-        if remainder >= value:
-            result[coin_name] = remainder // value
-            remainder %= value
-        else:
-            result[coin_name] = 0
-
-    return result
+    return {**_descomponer(item, MANCOMUNIDAD), **_descomponer(item, IMPERIAL)}
 
 
 def add_wealth_from_dict(entity, wealth_dict):
@@ -143,34 +107,24 @@ def add_wealth_from_dict(entity, wealth_dict):
     universal_consolidate(entity)
 
 
+def _en_base(entity, tabla):
+    """Total value of `entity` in base units, per `tabla`.
+
+    `entity` is either a wealth holder (Aventurero/Gremio, fields `marco`) or an Item (fields
+    `cost_marco`). Both shapes were already handled by the getattr chains this replaces.
+    """
+    return sum(getattr(entity, moneda, getattr(entity, f'cost_{moneda}', 0)) * valor
+               for moneda, valor in tabla.items())
+
+
 def get_imperial_value(entity):
     """Convierte toda la riqueza Imperial a Medios Peniques."""
-    silver = getattr(entity, 'silver_penny', getattr(entity, 'cost_silver_penny', 0))
-    copper = getattr(entity, 'copper_penny', getattr(entity, 'cost_copper_penny', 0))
-    iron = getattr(entity, 'iron_penny', getattr(entity, 'cost_iron_penny', 0))
-    half_iron = getattr(entity, 'iron_half_penny', getattr(entity, 'cost_iron_half_penny', 0))
-    return (silver * 100) + (copper * 10) + (iron * 2) + half_iron
+    return _en_base(entity, IMPERIAL)
 
 
 def get_commonwealth_value(entity):
     """Convierte toda la riqueza de la Mancomunidad a fracciones de Ardite (Base 32)."""
-    marco = getattr(entity, 'marco', getattr(entity, 'cost_marco', 0))
-    real = getattr(entity, 'real', getattr(entity, 'cost_real', 0))
-    talento = getattr(entity, 'talento', getattr(entity, 'cost_talento', 0))
-    sueldo = getattr(entity, 'sueldo', getattr(entity, 'cost_sueldo', 0))
-    iota = getattr(entity, 'iota', getattr(entity, 'cost_iota', 0))
-    drabin = getattr(entity, 'drabin', getattr(entity, 'cost_drabin', 0))
-    ardite = getattr(entity, 'ardite', getattr(entity, 'cost_ardite', 0))
-
-    val = 0
-    val += marco * 352000
-    val += real * 88000
-    val += talento * 35200
-    val += sueldo * 1100
-    val += iota * 3520
-    val += drabin * 352
-    val += ardite * 32
-    return val
+    return _en_base(entity, MANCOMUNIDAD)
 
 
 def can_afford(adv, item):

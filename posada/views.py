@@ -7,6 +7,7 @@ from .prestige import registrar_prestigio
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_habito, feedback_sesion
 import random
+from posada.engine.data.tablas import SLOT_POR_TIPO
 from .engine import process_session_completion, generate_session_script, consolidate_wealth, distribute_random_stats, evaluate_daily_penalties, universal_consolidate, calculate_chart_reward, get_chart_completion_status, is_class_allowed, get_derived_skills, calculate_sell_value, add_wealth_from_dict, pay_with_change
 from django.utils import timezone
 from datetime import datetime, time, timedelta
@@ -850,13 +851,7 @@ def inventory_action(request):
                 if item.item_type in ['CNS', 'MSC']:
                     return Response({"error": "No puedes equipar esto."}, status=400)
 
-                slot_map = {
-                    'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-                    'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs', 'LGS': 'equip_legs',
-                    'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
-                    'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
-                }
-                attr_name = slot_map.get(item.item_type)
+                attr_name = SLOT_POR_TIPO.get(item.item_type)
                 if item.item_type == 'RNG':
                     attr_name = 'equip_ring_1' if not adv.equip_ring_1 else 'equip_ring_2'
 

@@ -160,3 +160,38 @@ CLASS_PROFICIENCIES = {
     'WLK': {'armor': ['NON', 'LGT'], 'weapons': ['MAG', 'BLD', 'SLS'], 'forbidden_materials': []},
     'WIZ': {'armor': ['NON'], 'weapons': ['MAG', 'BLD'], 'forbidden_materials': []},
 }
+
+
+# The equipment slot each item_type occupies. SINGLE definition: this was copy-pasted five times
+# (four in the engine, one in posada/views.py) and the copies had already drifted apart.
+#
+# ⚠ The engine's four copies mapped 'LEG', which is NOT in `Item.item_type`'s choices, and did NOT
+# map 'LGS', which IS — with 21 items behind it. `_auto_equip` returns early on an unmapped type
+# WITHOUT storing the item, so every leg piece the engine pulled was destroyed in silence: not
+# equipped, not stored, not even logged. Measured 2026-08-22, then fixed here.
+#
+# 'RNG' is deliberately absent: a ring has two slots and is resolved before this map is consulted.
+SLOT_POR_TIPO = {
+    'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
+    'HED': 'equip_head', 'TRS': 'equip_torso', 'LGS': 'equip_legs',
+    'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
+    'BRC': 'equip_bracelet', 'EAR': 'equip_earring',
+}
+
+
+# Value of each coin in base units, DESCENDING. The order is load-bearing: every greedy
+# decomposition in `economia.py` walks these top-down, and a coin placed after one worth less
+# than it can never be assembled.
+#
+# ⚠ Measured 2026-08-22: the inline list in `calculate_sell_value` had ('sueldo', 1100) BEFORE
+# ('iota', 3520). Selling 4 iotas at 100% returned 12 sueldos + 2 drabines + 5 ardites =
+# 14,064 base units instead of 14,080 — the wrong denominations AND 16 units destroyed, because
+# the leftover fell below the smallest coin. `tests/test_engine_split.py` now refuses any table
+# here that is not sorted descending.
+MANCOMUNIDAD = {
+    'marco': 352000, 'real': 88000, 'talento': 35200, 'iota': 3520,
+    'sueldo': 1100, 'drabin': 352, 'ardite': 32,
+}
+IMPERIAL = {
+    'silver_penny': 100, 'copper_penny': 10, 'iron_penny': 2, 'iron_half_penny': 1,
+}

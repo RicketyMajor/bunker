@@ -107,7 +107,6 @@ def evaluate_daily_penalties():
                                 break
                     
                     if coins_lost:
-                        from collections import Counter
                         lost_counts = Counter(coins_lost)
                         lost_str = ", ".join(f"{count} {c.replace('_', ' ').title()}" for c, count in lost_counts.items())
                         penalty_log.append(

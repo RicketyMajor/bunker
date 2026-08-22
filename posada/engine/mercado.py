@@ -10,6 +10,7 @@ from django.db import transaction
 from posada.models import Item, GuildUpgrade
 from posada.engine.economia import universal_consolidate, can_afford, pay_with_change
 from posada.engine.inventario import get_item_score, is_class_allowed, _auto_equip
+from posada.engine.data.tablas import SLOT_POR_TIPO
 from posada.engine.economia import get_imperial_value, get_commonwealth_value
 
 def _seed_items_if_empty():
@@ -35,6 +36,14 @@ def _seed_guild_upgrades():
         {'key': 'boveda_gremio', 'name': 'Bóveda de Gremio', 'description': 'Permite amasar grandes riquezas sin penalización.', 'cost_coin': 'marco', 'cost_amount': 12, 'req_prestige_level': 9},
         {'key': 'ciudadela', 'name': 'Ciudadela del Gremio', 'description': 'El gremio se convierte en el gobernante de la región.', 'cost_coin': 'marco', 'cost_amount': 15, 'req_prestige_level': 10},
     ]
+    # ponytail: si ya estan las 12, no se reescribe nada. Antes esto corria 12 update_or_create
+    # en CADA market_phase, o sea en cada sesion completada. Techo: editar la descripcion o el
+    # coste de una mejora en la lista de arriba ya NO llega a la base de datos una vez el conteo
+    # cuadra. Mejora: una migracion de datos, o un `--force` en un management command, el dia que
+    # haga falta cambiar una mejora ya sembrada.
+    if GuildUpgrade.objects.count() == len(upgrades):
+        return
+
     for up in upgrades:
         GuildUpgrade.objects.update_or_create(
             key=up['key'],
@@ -87,13 +96,7 @@ def market_phase(adventurers_qs, event_log):
                     s2 = get_item_score(adv.equip_ring_2)
                     curr_score = min(s1, s2)
                 else:
-                    slot_map = {
-                        'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-                        'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
-                        'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
-                        'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
-                    }
-                    slot_name = slot_map.get(item.item_type)
+                    slot_name = SLOT_POR_TIPO.get(item.item_type)
                     if slot_name:
                         if not getattr(adv, slot_name):
                             is_saving = True
@@ -126,13 +129,7 @@ def market_phase(adventurers_qs, event_log):
                             purchased_item = item
                             break
                     else:
-                        slot_map = {
-                            'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-                            'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
-                            'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
-                            'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
-                        }
-                        slot_name = slot_map.get(item.item_type)
+                        slot_name = SLOT_POR_TIPO.get(item.item_type)
                         if slot_name and not getattr(adv, slot_name):
                             # Si está comprando un OFF, validar que no tenga un W2H
                             if item.item_type == 'OFF' and getattr(adv, 'equip_main_hand') and getattr(adv, 'equip_main_hand').item_type == 'W2H':
@@ -157,13 +154,7 @@ def market_phase(adventurers_qs, event_log):
                         s2 = get_item_score(adv.equip_ring_2) if adv.equip_ring_2 else -1
                         curr_score = min(s1, s2)
                     else:
-                        slot_map = {
-                            'W1H': 'equip_main_hand', 'W2H': 'equip_main_hand', 'OFF': 'equip_off_hand',
-                            'HED': 'equip_head', 'TRS': 'equip_torso', 'LEG': 'equip_legs',
-                            'HND': 'equip_hands', 'FET': 'equip_feet', 'NCK': 'equip_necklace',
-                            'BRC': 'equip_bracelet', 'EAR': 'equip_earring'
-                        }
-                        slot_name = slot_map.get(item.item_type)
+                        slot_name = SLOT_POR_TIPO.get(item.item_type)
                         if slot_name:
                             curr_item = getattr(adv, slot_name)
                             curr_score = get_item_score(curr_item) if curr_item else -1
