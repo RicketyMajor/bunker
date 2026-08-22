@@ -381,7 +381,13 @@ def health_check(request):
 
 
 def movil_app(request):
-    """The PWA. One template, inline CSS, no build step and no CDN."""
+    """The PWA. One template, one bundled script, no CDN.
+
+    Serves THREE routes: `/movil/` (capture), `/movil/asset/app.html` (what the APK caches) and
+    `/panel/` (consultation). One template because the APK loads exactly one hardcoded URL
+    (`MainActivity.kt`) and a second template is the second page to keep in sync that killed the
+    original panel. The client reads `location.pathname` and shows the right surface.
+    """
     return render(request, 'movil/app.html')
 
 
@@ -485,14 +491,10 @@ def movil_estado(request):
             "page_count": ultima.book.page_count,
         }
 
-    # Only habits that are actually due today. `valid_days` is a comma-separated list of
-    # weekday numbers, and it is what the penalty engine reads (legacy.py:481) — offering a
-    # Monday-only habit on a Sunday would pay prestige for a day the engine never scored.
-    # ponytail: substring match, correct because weekdays are single digits 0-6; if the
-    # field ever holds anything wider, this needs a real membership test.
+    # Only habits that are actually due today, and PENDING: `de_hoy` owns the "scheduled for
+    # today" rule (see `DailyHabit.de_hoy`), this view only drops the ones already done.
     habitos = list(
-        DailyHabit.objects
-        .filter(valid_days__contains=str(hoy.weekday()))
+        DailyHabit.de_hoy(hoy)
         .exclude(last_completed_date=hoy)
         .values("id", "name", "difficulty", "is_bad_habit")
     )
@@ -545,6 +547,60 @@ def stats_timeline(request):
         return Response({"error": str(exc)}, status=400)
     return Response({"module": modulo, "period": periodo,
                      "window": len(datos), "series": datos})
+
+
+@api_view(['GET'])
+def panel_datos(_request):
+    """Everything the consultation panel shows, in ONE GET that writes nothing.
+
+    One round trip, not four, because the panel is one screen and the phone is often on a bad
+    link: four requests is four chances to half-render. Each block still resolves its own visible
+    state on the client — a missing key is a block's `vacio`, not a blank screen.
+
+    NOT `/api/briefing/` and NOT `/api/dashboard/`. The first persisted `PrestigeWeek` on the read
+    path until 2026-08-21, and this endpoint exists so the panel never depends on that staying
+    fixed by accident; the second pays prestige for past calendar events on every GET
+    (state-of-the-project.md §1). Both would have made a *consultation* screen mutate the game.
+    """
+    from posada.models import Achievement, PrestigeEntry
+    from posada.prestige import resumen_semana
+    from bunker_core.briefing import _clave_semana
+
+    hoy = localdate()
+
+    # The ledger's SUM, never `GuildProfile.prestige`. That field is a BALANCE toward the next
+    # level — `add_prestige()` subtracts `prestige_meta` on level-up — so it is not a total and
+    # never was. This is the whole reason `PrestigeEntry` exists.
+    total = PrestigeEntry.objects.aggregate(t=Sum('amount'))['t'] or 0
+
+    ultima = DeepWorkSession.objects.order_by('-start_time').first()
+
+    return Response({
+        "prestigio": {"total": total, "semana": resumen_semana(_clave_semana(hoy))},
+        # Today's habits, DONE ones included: the panel answers "how am I doing", and a list that
+        # hides what you already did answers a different question than `movil_estado`'s, which
+        # offers what is left to capture. Same rule underneath — `DailyHabit.de_hoy`.
+        "habitos": [
+            {"nombre": h.name, "hecho": h.last_completed_date == hoy,
+             "malo": h.is_bad_habit, "racha": h.current_streak}
+            for h in DailyHabit.de_hoy(hoy)
+        ],
+        "logros": [
+            {"nombre": a.name, "icono": a.icon, "fecha": a.unlocked_at.date().isoformat()}
+            for a in Achievement.objects.filter(unlocked_at__isnull=False)
+                                        .order_by('-unlocked_at')[:5]
+        ],
+        # Read straight off the persisted JSONField. This block CANNOT re-run the engine and so
+        # cannot pay anything — `event_log` is written when the session is filed and never
+        # regenerated. Verified in `posada/models.py`, not assumed.
+        "bitacora": {
+            "categoria": ultima.category,
+            "minutos": ultima.survived_minutes if ultima.survived_minutes is not None
+                       else ultima.duration_minutes,
+            "completada": ultima.completed,
+            "eventos": ultima.event_log or [],
+        } if ultima else None,
+    })
 
 
 @api_view(['POST'])

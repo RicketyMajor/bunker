@@ -48,9 +48,31 @@ android {
 // ships raw and breaks the BUNDLED copy. It is self-healing — the first successful contact with
 // the server replaces the bundle with Django's own render — so the upgrade is worth it only if a
 // phone ever has to live on bundled assets for long.
-val copiarAssets by tasks.registering(Copy::class) {
+// Node, and therefore a dependency the Android build did not have before. Accepted 2026-08-21:
+// in exchange `copiarAssets` cannot stage a stale bundle, because this runs first by dependency.
+// A machine without Node fails HERE, by name, instead of shipping last week's front-end.
+val construirBundle by tasks.registering(Exec::class) {
+    workingDir = rootDir.parentFile
+    commandLine("npm", "run", "build")
+    // `dist/` is this task's OUTPUT. Declaring the whole directory as the input — as the plan
+    // first did — makes the task never up-to-date, which is the opposite of the guarantee wanted.
+    inputs.files(fileTree(rootDir.parentFile.resolve("bunker_core/static/movil")) {
+        exclude("dist/**")
+    })
+    outputs.dir(rootDir.parentFile.resolve("bunker_core/static/movil/dist"))
+}
+
+// `Sync`, not `Copy`: the destination is a MIRROR of what the APK must carry. A plain Copy leaves
+// whatever it staged on an earlier run — `app.js` and `queue.js` sat there after the bundle moved
+// to `dist/`, and would have been packaged into the APK for ever. Gradle only sweeps stale outputs
+// under the build directory, and this destination is not one.
+val copiarAssets by tasks.registering(Sync::class) {
+    dependsOn(construirBundle)
     val repo = rootDir.parentFile
-    from(repo.resolve("bunker_core/static/movil")) { include("app.js", "queue.js") }
+    // FLAT, no `into("dist")`: `AssetStore.handler` resolves a request with
+    // `substringAfterLast('/')`, so a nested directory in the packaged assets is never found.
+    // The three names that land here are exactly `AssetStore.REQUERIDOS`.
+    from(repo.resolve("bunker_core/static/movil/dist"))
     from(repo.resolve("bunker_core/templates/movil")) {
         include("app.html")
         filter { linea: String ->

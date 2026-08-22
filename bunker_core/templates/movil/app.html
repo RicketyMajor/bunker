@@ -32,6 +32,110 @@
     -webkit-tap-highlight-color: rgba(250, 189, 47, .25);
   }
   h1 { font: inherit; margin: 0; }
+
+  /* ---- The surface switch. One template, two pages; `Panel.montar()` sets the attribute. ---- */
+  body[data-superficie="panel"] #home { display: none; }
+  body[data-superficie="panel"] #panel { display: block; }
+  /* Una columna de teléfono, también en el portátil. Esto es una superficie móvil: a 2400px
+     de ancho el SVG de la serie se estiraba a 696px de alto y la cifra que debía dominar
+     quedaba diminuta al lado. Medido, no supuesto. El tope hace que la vista de escritorio
+     sea una previsualización fiel del teléfono en vez de otra maqueta que mantener. */
+  #panel { display: none; padding: 16px; max-width: 460px; margin: 0 auto; }
+
+  /* ---- El panel de consulta.
+     Intención: Alonso, con el teléfono en una mano, de noche o al despertar, leyendo "cómo voy"
+     en menos de cinco segundos. Se lee como el estado de una radio de campaña: frío, denso,
+     monoespaciado — el mismo mundo que el TUI y la cabecera TRANSMISOR.
+     Jerarquía: UNA cifra domina (el prestigio, 34px/600) y todo lo demás baja. La rejilla de
+     tarjetas métricas iguales es justamente el defecto que esto rechaza: sin foco, la vista no
+     tiene dónde ir. Profundidad: solo superficies, --bg → --bg-alt, un salto. Sin sombras (no
+     leen en oscuro) ni bordes decorativos; el borde solo marca fallo. Base de 4px. ---- */
+  #panel section { margin: 0 0 12px; padding: 14px; background: var(--bg-alt); }
+  /* h2 y no h3: el único h1 de la página es TRANSMISOR, en la cabecera, y estos bloques son
+     sus pares directos. Saltarse un nivel rompe el recorrido de un lector de pantalla. */
+  #panel h2 { font: inherit; font-size: 11px; font-weight: 500; letter-spacing: .12em;
+              color: var(--dim); margin: 0 0 10px; text-wrap: balance; }
+  #panel p, #panel li { text-wrap: pretty; }
+  .p-bloque { margin: 0 0 18px; }
+  .p-bloque:last-child { margin-bottom: 0; }
+
+  /* El foco de la pantalla. `tabular-nums` porque la cifra cambia y no debe saltar de ancho. */
+  .p-cifra { font-size: 34px; font-weight: 600; line-height: 1.1; margin: 0;
+             font-variant-numeric: tabular-nums; }
+  .p-delta { display: block; font-size: 13px; font-weight: 500; margin-top: 2px; }
+  .p-delta[data-signo="sube"]  { color: var(--green); }
+  .p-delta[data-signo="baja"]  { color: var(--red); }
+  .p-delta[data-signo="igual"] { color: var(--dim); }
+
+  .p-lista, .p-log { list-style: none; padding: 0; margin: 0; }
+  .p-lista li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 8px;
+                align-items: baseline; padding: 7px 0; font-size: 15px; }
+  /* `minmax(0, 1fr)` arriba y esto: una pista de grid tiene `min-width: auto`, así que un
+     nombre largo SIN espacios empujaba la fila fuera de su caja. Medido con un hábito de 68
+     caracteres: `li.scrollWidth > li.clientWidth`. Los dos hacen falta, ninguno solo basta. */
+  .p-lista li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+  .p-lista li + li { border-top: 1px solid var(--bg); }
+  /* El estado NUNCA es solo color: el validador de `dataviz` reprobó --green/--yellow/--red
+     como paleta categórica (ΔE 3.6 en protanopia entre verde y amarillo). El glifo y la
+     palabra llevan el estado; el color solo les da la razón. */
+  .p-marca { font-weight: 600; }
+  li[data-marca="hecho"]      .p-marca { color: var(--green); }
+  li[data-marca="pendiente"]  .p-marca { color: var(--dim); }
+  li[data-marca="recaida"]    .p-marca { color: var(--red); }
+  li[data-marca="recaida"]    .p-meta  { color: var(--red); }
+  .p-meta { color: var(--dim); font-size: 13px; }
+
+  .p-log li { font-size: 14px; padding: 5px 0 5px 12px; border-left: 2px solid var(--bg);
+              color: var(--fg); }
+
+  /* Una serie, un tono, una línea base. Sin rejilla, sin ejes, sin leyenda: el título la nombra. */
+  #p-serie svg { width: 100%; height: auto; display: block; }
+  .p-barra path { fill: var(--yellow); }
+  /* El blanco táctil, invisible y del alto de la columna. `fill: transparent` y no
+     `opacity: 0`: opacity 0 sigue recibiendo el toque, pero un lector de pantalla lo
+     anuncia igual, y aquí el que habla es el <title> del grupo. */
+  .p-blanco { fill: transparent; }
+  .p-barra:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .p-base { stroke: var(--dim); stroke-width: 1; opacity: .35; }
+  .p-etiqueta { fill: var(--dim); font-family: ui-monospace, "Roboto Mono", monospace;
+                font-size: 9px; text-anchor: middle; font-variant-numeric: tabular-nums; }
+  text.p-etiqueta:first-of-type { text-anchor: middle; }
+  #p-serie svg > text.p-etiqueta:last-of-type { text-anchor: start; }
+
+  #p-modulos { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
+  /* 48px de alto: es el mínimo táctil, y el pulgar de una mano no acierta menos. */
+  #p-modulos button { font: inherit; font-size: 13px; min-height: 48px; padding: 0 14px;
+                      background: none; color: var(--dim); border: 1px solid var(--bg);
+                      cursor: pointer; }
+  #p-modulos button[aria-pressed="true"] { color: var(--bg); background: var(--yellow);
+                                           border-color: var(--yellow); font-weight: 600; }
+  #p-modulos button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  /* Guardado por `hover: hover` como el resto de la app, para que un móvil no deje el estado
+     pegado tras un toque. */
+  @media (hover: hover) {
+    #p-modulos button:hover { color: var(--fg); border-color: var(--dim); }
+    #p-modulos button[aria-pressed="true"]:hover { color: var(--bg); border-color: var(--fg); }
+  }
+
+  /* ---- The five states are visible because they are VISIBLE, not because a console says so.
+     Five distinct renderings; "not the same as another one" is a criterion, so they differ in
+     colour AND in shape. --red and --dim are rated against --bg only, so a state that uses them
+     drops the --bg-alt surface underneath it.
+     Every selector is prefixed with `#panel` on purpose. `#panel section` above is (0,1,0,1) and
+     a bare `[data-estado]` is (0,0,1,0), so the plain attribute selectors LOST the background
+     and left --dim and --red sitting on --bg-alt — 4.17:1 and 3.92:1, under the 4.5:1 floor this
+     spec sets. Measured in the browser 2026-08-21, not read off the cascade. ---- */
+  #panel [data-estado="cargando"]   { opacity: .55; }
+  #panel [data-estado="sin-enlace"] { color: var(--red); background: var(--bg); border: 1px dashed var(--red); }
+  #panel [data-estado="rechazado"]  { color: var(--fg); background: var(--bg-alt); border-left: 3px solid var(--yellow); }
+  #panel [data-estado="roto"]       { color: var(--red); background: var(--bg); border-left: 3px solid var(--red); }
+  #panel [data-estado="vacio"]      { color: var(--dim); background: var(--bg); font-style: italic; }
+  #panel [data-estado="listo"]      { color: var(--fg); }
+
+  /* Ships in the same block as the motion it disables, per the spec — never audited in later. */
+  @media (prefers-reduced-motion: no-preference) {
+    #panel [data-estado] { transition: opacity 160ms ease-out; }
+  }
   header {
     display: flex; justify-content: space-between; align-items: center;
     padding: 12px 16px; border-bottom: 1px solid var(--bg-alt);
@@ -62,6 +166,9 @@
     background: var(--yellow); color: var(--bg); border: 0; cursor: pointer;
     letter-spacing: .05em;
   }
+  /* La misma columna de teléfono que el panel. Medido 2026-08-21: en el portátil `#home`
+     ocupaba 2400px y los cinco verbos se estiraban a botones de un palmo. */
+  #home { max-width: 460px; margin: 0 auto; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .grid button {
     min-height: 72px; font: inherit; background: var(--bg);
@@ -75,7 +182,27 @@
     button.act:hover { background: var(--fg); }
     #chip:hover { text-decoration: underline; }
   }
-  .grid button:active, button.act:active { opacity: .8; }
+  /* Confirmación táctil de que la UI oyó el toque. `scale(.97)` y no `opacity: .8`: atenuar
+     lee como "deshabilitado", empujar lee como "pulsado", y es la diferencia entre un botón que
+     parece roto en una red lenta y uno que parece que ya salió. 120ms, y solo `transform` y
+     `opacity`, que son las dos que compone la GPU. Nunca `ease-in`: retrasa el primer
+     fotograma, que es justo el que el dedo está mirando.
+     Su variante de movimiento reducido es el `*` global del final de esta hoja, que apaga
+     transition Y animation — más completo que repetirla en cada bloque. */
+  .grid button, button.act, #modo-verbo button {
+    transition: transform 120ms cubic-bezier(.23, 1, .32, 1),
+                border-color 120ms cubic-bezier(.23, 1, .32, 1);
+  }
+  .grid button:active, button.act:active { transform: scale(.97); }
+
+  /* Las hojas son superficies ocasionales, no acciones de cien veces al día: se animan.
+     Suben desde abajo porque es de donde vienen — `margin: auto auto 0` las ancla al borde
+     inferior — y 200ms porque por encima de 300 se siente como esperar. La salida es
+     instantánea a propósito: una animación de cierre es tiempo en el camino. */
+  @keyframes hoja-sube { from { transform: translateY(10px); opacity: 0; } }
+  @keyframes velo-entra { from { opacity: 0; } }
+  dialog[open] { animation: hoja-sube 200ms cubic-bezier(.23, 1, .32, 1); }
+  dialog[open]::backdrop { animation: velo-entra 200ms cubic-bezier(.23, 1, .32, 1); }
   /* Keyboard and switch users need to see where they are; the phone's own focus ring does
      not survive a custom background. */
   :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
@@ -118,6 +245,22 @@
     <button data-verb="sesion" style="grid-column:1/-1">EXPEDICIÓN <span class="n" id="n-sesion"></span></button>
   </div>
   <p id="instantanea" class="pos" style="text-align:center;margin:14px 0 0"></p>
+</main>
+
+<main id="panel">
+  <!-- `data-fuente` is the block's endpoint: the URL lives in the markup so a state can be
+       forced with `?fuente=` without rebuilding the bundle. One request carries four blocks —
+       one round trip is the offline-first shape, and each block still renders its own empty
+       state through `vaciar`, so "the request worked but this block has nothing" is visible. -->
+  <section id="p-datos" data-fuente="/api/panel/" aria-busy="false"></section>
+
+  <section id="p-serie-caja">
+    <h2>ACTIVIDAD POR MES</h2>
+    <!-- Filters in one row above the chart. `aria-pressed` and not a class, because which
+         module is showing is a real fact about the screen, not decoration. -->
+    <div id="p-modulos" role="group" aria-label="Módulo de la serie"></div>
+    <div id="p-serie" data-fuente="/api/stats/timeline/" aria-busy="false"></div>
+  </section>
 </main>
 
 <dialog id="despachos" aria-labelledby="t-despachos">

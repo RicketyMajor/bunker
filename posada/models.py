@@ -661,6 +661,23 @@ class DailyHabit(models.Model):
     last_coin_type = models.CharField(max_length=20, blank=True, null=True)
     last_coin_amount = models.PositiveIntegerField(default=0)
 
+    @classmethod
+    def de_hoy(cls, dia):
+        """Habits actually scheduled for `dia`, in name order.
+
+        ONE definition of "due today", because there were about to be two. `valid_days` is what
+        the penalty engine reads (`legacy.py`), so a habit offered on a day it is not scheduled
+        for pays prestige for a day the engine never scored — the defect §1 already records for
+        `complete_habit`. `movil_estado` had the rule inline; the panel needed the same rule with
+        a different filter on top (it wants the DONE ones too), and a second copy is how a rule
+        that already has three definitions gets a fourth.
+
+        ponytail: substring match, correct because weekdays are single digits 0-6. Ceiling: if
+        `valid_days` ever holds anything wider than one digit per day, this needs a real
+        membership test — and so does `legacy.py`, which reads the field the same way.
+        """
+        return cls.objects.filter(valid_days__contains=str(dia.weekday())).order_by('name')
+
     def __str__(self):
         return f"[{self.difficulty}] {self.name}"
 

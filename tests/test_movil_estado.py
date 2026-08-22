@@ -227,6 +227,44 @@ def test_el_manifiesto_sigue_el_contenido():
     print("OK · el manifiesto sigue el contenido y sirve rutas relativas")
 
 
+def test_panel_es_una_ruta_real_con_su_marca():
+    """`/panel/` resolves, renders the same template, and carries the panel's own markup.
+
+    Three things this catches that a 200 does not. The route could resolve to the capture
+    template with no panel markup at all, in which case `Panel.montar()` finds no `#p-briefing`
+    and returns silently — a blank page and no error, which is the failure mode this whole task
+    exists to make impossible. The `data-fuente` attribute is the block's endpoint and lives in
+    the markup, so losing it makes every block fetch `undefined`. And the state CSS must be
+    prefixed with `#panel`: unprefixed, `#panel section` outranks it and the states lose their
+    background — measured in the browser 2026-08-21, --dim landed on --bg-alt at 4.17:1.
+    """
+    from django.test import Client
+
+    respuesta = Client().get('/panel/')
+    assert respuesta.status_code == 200, f"/panel/ dio {respuesta.status_code}"
+    html = respuesta.content.decode()
+
+    assert 'id="panel"' in html, "/panel/ no trae el <main id=\"panel\">"
+    assert 'id="p-datos"' in html, "/panel/ no trae ningun bloque que montar"
+    assert 'id="p-serie"' in html, "/panel/ perdio el bloque de la serie"
+    assert '<h2>ACTIVIDAD POR MES</h2>' in html, (
+        "el bloque de la serie perdio su h2; h1 -> h3 salta un nivel de encabezado")
+    assert 'data-fuente="/api/panel/"' in html, (
+        "el bloque perdio su data-fuente; `pedir` recibiria undefined")
+    assert 'body[data-superficie="panel"] #home' in html, (
+        "sin el conmutador de superficie el panel se pinta ENCIMA de la captura")
+    for estado in ('cargando', 'sin-enlace', 'rechazado', 'roto', 'vacio'):
+        assert f'#panel [data-estado="{estado}"]' in html, (
+            f"el estado {estado} no tiene regla propia, o perdio el prefijo #panel que le gana "
+            f"a `#panel section`")
+
+    # La misma vista para las tres rutas: un segundo template es la segunda pagina que
+    # mantener sincronizada, que es lo que mato al panel original.
+    assert Client().get('/movil/').content.decode().count('id="p-datos"') == 1, (
+        "/movil/ y /panel/ dejaron de ser el mismo template")
+    print("OK · /panel/ existe, monta y sus cinco estados tienen regla propia")
+
+
 if __name__ == "__main__":
     PRUEBAS = [
         test_payload_shape_is_the_contract,
@@ -238,6 +276,7 @@ if __name__ == "__main__":
         test_el_estado_trae_la_nomina,
         test_el_manifiesto_sigue_el_contenido,
         test_query_budget,
+        test_panel_es_una_ruta_real_con_su_marca,
     ]
     for prueba in PRUEBAS:
         prueba()
