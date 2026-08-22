@@ -8,9 +8,12 @@ services:
     environment:
       - POSTGRES_DB=library_db
       - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=supersecret
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?falta en .env}
+    # 127.0.0.1 a proposito: en 0.0.0.0 cualquiera de la LAN o del tailnet abria la base
+    # entera como admin, saltandose Django por completo. Nada del codigo usa este puerto
+    # (grep 5436 = 0 coincidencias); esta publicado solo para un psql manual desde el host.
     ports:
-      - "5436:5432"
+      - "127.0.0.1:5436:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d library_db"]
       interval: 10s
@@ -26,8 +29,15 @@ services:
     volumes:
       - .:/app
       - bunker_backups:/app/backups
+    # 127.0.0.1, no 0.0.0.0: `tailscale serve` proxea desde http://127.0.0.1:8009 (verificado
+    # con `tailscale serve status`), asi que el telefono sigue llegando y la LAN deja de
+    # llegar. Eso cierra de una linea el vector LAN de los 50 endpoints de escritura, los 23
+    # GET y /admin/, sin tocar ni un permission_class. Lo que queda expuesto es el tailnet,
+    # que son sus propios dispositivos.
+    # El APK postea a https://alonso-inspiron-5570.tail834684.ts.net (build.gradle.kts:20-21)
+    # y la TUI a BUNKER_API_URL=http://localhost:8009. Ninguno usa la IP de LAN.
     ports:
-      - "8009:8000"
+      - "127.0.0.1:8009:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -48,7 +58,7 @@ services:
     environment:
       - POSTGRES_DB=library_db
       - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=supersecret
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?falta en .env}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       # Sin esto el contenedor corre en UTC y el cron de las 00:00 dispara a las 20:00 locales.
@@ -71,8 +81,12 @@ services:
     build: ./scraper
     restart: unless-stopped
     command: npm run start:movies
-    env_file:
-      - .env # Pasa la clave TMDB_API_KEY
+    # Sin env_file a proposito. El comentario que habia aqui decia "Pasa la clave
+    # TMDB_API_KEY" y era falso: ningun fichero del scraper lee TMDB_API_KEY (grep
+    # process.env en scraper/ = 4 coincidencias, ninguna es esa). Lo unico que lee este
+    # servicio es PUPPETEER_EXECUTABLE_PATH, que no esta en .env y cae a null.
+    # Montar .env entero aqui metia POSTGRES_PASSWORD y DJANGO_SECRET_KEY en un contenedor
+    # de Node que no las usa.
     volumes:
       - ./scraper:/app
       - /app/node_modules
@@ -85,8 +99,11 @@ services:
     build: ./scraper
     restart: unless-stopped
     command: npm run start:music
-    env_file:
-      - .env # Pasa DISCOGS_API_KEY: sin ella la estrategia de Discogs se omite entera
+    # Solo la clave que de verdad lee (scraper/strategies/music/discogs.js:7); sin ella la
+    # estrategia de Discogs se omite entera. Antes esto era `env_file: .env`, que ademas le
+    # entregaba POSTGRES_PASSWORD y DJANGO_SECRET_KEY sin que las necesite.
+    environment:
+      - DISCOGS_API_KEY=${DISCOGS_API_KEY:?falta en .env}
     volumes:
       - ./scraper:/app
       - /app/node_modules

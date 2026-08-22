@@ -467,6 +467,14 @@ def _montar_contexto(datos):
 _VIDAS = (0.1, 0.5, 1.0)
 
 
+# The same shape as _VIDAS, for the other axis the SESSION context moves along.
+# `_montar_contexto` fixed `current_second` at 10 against a `session_duration` of 7200, so a
+# skill scoring only in the session's second half reads as dead at every HP level. The loot
+# family is gated exactly that way, so one value would report six skills unreachable right
+# after they were fixed. Early, middle and late, because a skill may gate in either direction.
+_SEGUNDOS = (10, 3600, 7000)
+
+
 def _precondicion(contexto, caster, aliados, fraccion):
     """Plant what a skill needs in order to be able to do anything at all.
 
@@ -513,9 +521,13 @@ def test_ninguna_skill_es_un_no_op():
 
     for skill_id, datos in sorted(skills.items()):
         disparo = False
-        for fraccion in _VIDAS:
+        # Both axes, not just HP: the loot family scores only in the session's second half and
+        # `_montar_contexto` pins `current_second` at 10, so sweeping _VIDAS alone reported six
+        # skills muted right after they were fixed. See _SEGUNDOS.
+        for fraccion, segundo in [(f, sg) for f in _VIDAS for sg in _SEGUNDOS]:
             caster, aliados, enemigos, contexto = _montar_contexto(datos)
             _precondicion(contexto, caster, aliados, fraccion)
+            contexto['current_second'] = segundo
 
             antes = _instantanea(contexto, caster, aliados, enemigos)
             try:
@@ -530,7 +542,7 @@ def test_ninguna_skill_es_un_no_op():
             except Exception as exc:
                 # Recogido, no tragado: una skill que revienta con la precondición puesta es
                 # un hallazgo, y abortar aquí escondería a las 131 restantes.
-                reventaron.append(f"{skill_id} @{fraccion}: {type(exc).__name__} {exc}")
+                reventaron.append(f"{skill_id} @{fraccion}/{segundo}s: {type(exc).__name__} {exc}")
                 disparo = True
                 break
             if _instantanea(contexto, caster, aliados, enemigos) != antes:
@@ -552,27 +564,17 @@ def test_ninguna_skill_es_un_no_op():
 
 # Los dos despachadores arrancan en `best_score = 50` y seleccionan con `score > best_score`
 # (`exploring.py:256`, `combat.py:224`), así que una skill que nunca supera 50 no puede ser
-# elegida jamás y su cuerpo entero es código muerto. **18 de las 132 están así hoy**, por
-# tres causas distintas y todas reales, verificadas una por una:
+# elegida jamás y su cuerpo entero es código muerto.
 #
-#   · SESSION escritas como si fueran COMBAT — puntúan `X if context['enemies'] else 0`, y el
-#     despachador SESSION siempre pasa `enemies: []`. Puntúan 0 siempre.
-#     (blindaje_runico, presencia_intimidante, zancada_poderosa, infusiones_basicas…)
-#   · Empate exacto con el umbral: devuelven 50 y pierden contra el `>`.
-#     (dominio_divino, furia_feroz, inspiracion_bardica, paso_forestal, postura_firme,
-#      sintonia_avanzada, tradicion_arcana)
-#   · Puntaje siempre bajo el umbral: 40 o 45.
-#
-# ponytail: línea base congelada en vez de arreglar las 18. Techo: sólo caza REGRESIONES —
-# una skill nueva inalcanzable falla, pero las 18 existentes siguen muertas y verdes. Mejora:
-# vaciar la lista arreglando cada causa, que es trabajo de balance (Fase 1b), no de reparación.
-_INALCANZABLES_CONOCIDAS = {
-    'blindaje_runico', 'chatarra_magica', 'dominio_divino', 'druidico', 'enemigo_favorecido',
-    'entrenamiento_fisico', 'erudito_todo', 'flujo_estable', 'furia_feroz',
-    'infusiones_basicas', 'inspiracion_bardica', 'paso_forestal', 'postura_firme',
-    'presencia_intimidante', 'senda_furia', 'sintonia_avanzada', 'tradicion_arcana',
-    'zancada_poderosa',
-}
+# Empty since 2026-08-22. It held 18 ids from 2026-08-21, frozen rather than fixed because
+# changing an eval score changes skill selection, which is balance work. They were fixed in
+# four families: five recategorised to COMBAT, five heals to 65, six loot skills to
+# 50 + req_level gated on the session's second half, two combat basics to 55.
+# The guard below still earns its place: it fails on any NEW unreachable skill, and it fails
+# equally if a name is added here without being unreachable.
+_INALCANZABLES_CONOCIDAS = set()
+
+
 _UMBRAL_DESPACHADOR = 50
 
 
@@ -591,11 +593,14 @@ def test_ninguna_skill_nueva_es_inalcanzable():
     inalcanzables = set()
     for skill_id, datos in sorted(SkillRegistry.get_all_skills().items()):
         mejor = 0
-        for fraccion in _VIDAS:
+        # Both axes. Sweeping _VIDAS alone pins `current_second` at 10 and reports the whole
+        # loot family unreachable the moment it is gated on the session's second half.
+        for fraccion, segundo in [(f, sg) for f in _VIDAS for sg in _SEGUNDOS]:
             caster, aliados, enemigos, contexto = _montar_contexto(datos)
             _precondicion(contexto, caster, aliados, fraccion)
             if datos['type'] == 'SESSION':
                 contexto['enemies'] = []      # la forma real del despachador SESSION
+            contexto['current_second'] = segundo
             contexto['eval_mode'] = True
             random.seed(11)
             try:
@@ -615,6 +620,84 @@ def test_ninguna_skill_nueva_es_inalcanzable():
           f"la línea base está al día; ya alcanzables, bórralas de la lista: {sorted(resueltas)}")
 
 
+def test_ninguna_session_lee_enemies():
+    """A skill whose body reads `enemies` cannot be a SESSION skill.
+
+    The SESSION dispatcher always passes `'enemies': []` (`exploring.py:241`), so such a body
+    either returns False immediately or picks from an empty list. Registering it SESSION is a
+    categorisation error, not a balance one, and no score can repair it. Measured 2026-08-22,
+    before the fix, this found exactly five: blindaje_runico, infusiones_basicas,
+    presencia_intimidante, senda_furia, zancada_poderosa.
+    """
+    import inspect
+    from posada.skills import SkillRegistry
+
+    malas = []
+    for skill_id, datos in sorted(SkillRegistry.get_all_skills().items()):
+        if datos['type'] != 'SESSION':
+            continue
+        try:
+            fuente = inspect.getsource(datos['execute'])
+        except (OSError, TypeError):
+            continue
+        if "'enemies'" in fuente or '"enemies"' in fuente:
+            malas.append(skill_id)
+
+    check(not malas,
+          f"ninguna skill SESSION lee 'enemies' en su cuerpo; las que lo hacen: {malas}")
+
+
+def test_cada_clase_nivel_1_puede_actuar():
+    """A class whose only session skill cannot fire spends the session doing nothing.
+
+    `exploring.py` has no default action — `best_action = None` — unlike combat, which falls back
+    to "BASIC_ATTACK". Measured 2026-08-22: ART, CLR, DRD and RGR each had exactly one session
+    skill at level 1 and all four were under the floor. Classes with NO session skill at level 1
+    (BRD, FTR, ROG, WIZ) are out of scope: nothing is dead, there is simply nothing yet.
+    """
+    import random
+    from posada.skills import SkillRegistry
+
+    todas = SkillRegistry.get_all_skills()
+    ses = [d for d in todas.values() if d['type'] == 'SESSION']
+    clases = sorted({c for d in todas.values() for c in d['allowed_classes']})
+
+    hambrientas = []
+    for clase in clases:
+        disponibles = [d for d in ses
+                       if clase in d['allowed_classes'] and d['req_level'] <= 1]
+        if not disponibles:
+            continue                      # nada que desbloquear todavia, no es un defecto
+        vivas = []
+        for datos in disponibles:
+            for fraccion in _VIDAS:
+                for segundo in _SEGUNDOS:
+                    caster, aliados, enemigos, contexto = _montar_contexto(datos)
+                    _precondicion(contexto, caster, aliados, fraccion)
+                    contexto['enemies'] = []
+                    contexto['current_second'] = segundo
+                    contexto['eval_mode'] = True
+                    random.seed(11)
+                    try:
+                        puntaje = datos['execute'](contexto)
+                    except Exception:
+                        puntaje = 0
+                    if isinstance(puntaje, bool):
+                        puntaje = 0
+                    if (puntaje or 0) > _UMBRAL_DESPACHADOR:
+                        vivas.append(datos['id'])
+                        break
+                else:
+                    continue
+                break
+        if not vivas:
+            hambrientas.append((clase, [d['id'] for d in disponibles]))
+
+    check(not hambrientas,
+          f"toda clase con una skill SESSION a nivel 1 puede lanzar al menos una; "
+          f"sin nada que hacer: {hambrientas}")
+
+
 if __name__ == '__main__':
     test_vocabulario_es_coherente()
     test_ningun_nombre_fuera_del_vocabulario()
@@ -625,5 +708,7 @@ if __name__ == '__main__':
     test_temerario_concede_ventaja_de_verdad()
     test_un_aventurero_aturdido_pierde_el_turno()
     test_ninguna_skill_es_un_no_op()
+    test_ninguna_session_lee_enemies()
+    test_cada_clase_nivel_1_puede_actuar()
     test_ninguna_skill_nueva_es_inalcanzable()
     print(f"\n{_checks} comprobaciones OK.")

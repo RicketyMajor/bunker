@@ -11,8 +11,10 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from urllib.parse import urlparse
 import os
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,13 +30,36 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-r57@yay8wlt5gifn*x9x5@k!*#&)tdhd*)f!&=qi&5#^ulj$^h'
+# All three come from the environment since 2026-08-22. They used to be literals in this
+# file, which is tracked in a PUBLIC repository: the key signed session cookies, so anyone
+# reading the repo could forge an is_superuser cookie for /admin/, and DEBUG=True returned
+# the settings dictionary — every API key and BUNKER_BACKUP_TOKEN — on any uncaught 500.
+# Fails closed, like _reject_if_bad_token: no default, because the old default is public.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY no esta en el entorno. Ponla en .env; no hay valor por defecto '
+        'a proposito, porque el que habia esta publicado en el repositorio.'
+    )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').strip().lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['*']
+# With DEBUG=False this list is load-bearing: a Host outside it gets a 400. It must carry
+# 'web' (the three scrapers post to http://web:8000) and 'localhost' (the container's own
+# healthcheck). The tailnet host is appended from BUNKER_PUBLIC_ORIGIN below, so there is
+# one place to change when the tailnet name does.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
+    'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,web').split(',') if h.strip()]
+
+# 'testserver' es el Host por defecto de django.test.Client, y ocho llamadas repartidas por
+# cinco ficheros de tests/ lo usan. Normalmente lo parchea setup_test_environment(), pero
+# estos scripts no pasan por el runner de Django y no pueden llamarlo desde tests/__init__.py
+# porque cada modulo hace django.setup() DESPUES de importarse el paquete. Con el puerto ya
+# atado a 127.0.0.1 y sin generacion de URLs absolutas a partir del Host, un nombre de mas en
+# esta lista no es una frontera de seguridad aqui.
+# ponytail: si algun dia los checks pasan por el runner de Django, esta linea sobra.
+if 'testserver' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('testserver')
 
 # Origins Django will accept an HTTPS POST from when CSRF is actually enforced. Measured
 # 2026-08-13: it is NOT enforced on the capture endpoints today, because they are DRF
@@ -52,6 +77,10 @@ CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app',
 _public_origin = os.environ.get('BUNKER_PUBLIC_ORIGIN', '').strip().rstrip('/')
 if _public_origin:
     CSRF_TRUSTED_ORIGINS.append(_public_origin)
+    # Same origin, the bare hostname: ALLOWED_HOSTS matches Host headers, not URLs.
+    _public_host = urlparse(_public_origin).hostname
+    if _public_host and _public_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_public_host)
 
 
 # Application definition

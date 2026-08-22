@@ -162,9 +162,12 @@ def trance_feroz(context):
 def chatarra_magica(context):
     caster = context['caster']
     if context.get('eval_mode'):
+        # 65 is the heal family's score, above the loot family's 51-56: treating a wounded ally
+        # beats picking up coins. The condition is unchanged - all five already only score when
+        # somebody is hurt, so raising the constant does not make them fire more often, only earlier.
         # Solo usar si hay aliados heridos
         allies = [a for a in context['allies'] if a.current_hp < a.max_hp]
-        return 45 if allies else 0
+        return 65 if allies else 0
 
     adv_mods = caster.get_stat_modifiers()
     heal_amount = max(1, random.randint(1, 4) + adv_mods['int'])
@@ -176,13 +179,21 @@ def chatarra_magica(context):
                                "message": f"🔧 {caster.name} ajusta la armadura abollada de {target.name}, restaurando {heal_amount} HP."})
     return True
 
+# COMBAT, not SESSION: the body picks a target out of `context['enemies']` and attacks it, and
+# the SESSION dispatcher always passes `'enemies': []` (exploring.py:241). Registered SESSION,
+# the body could only ever return False. Measured 2026-08-22: these five were the only SESSION
+# skills whose source mentions `enemies`.
 @SkillRegistry.register(
-    skill_id="infusiones_basicas", name="Infusiones Básicas", skill_type="SESSION", req_level=2, allowed_classes=["ART"]
+    skill_id="infusiones_basicas", name="Infusiones Básicas", skill_type="COMBAT", req_level=2, allowed_classes=["ART"]
 )
 def infusiones_basicas(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 40
+        # 55, over the dispatcher's floor of 50. The flat 40 it returned could never be
+        # selected, which is why the INFUSED_WEAPON write added in Phase 1 Task 4 was
+        # unreachable: the static contract counted the write and went green, because source
+        # cannot show reachability.
+        return 55
 
     target = random.choice(context['allies'])
     # Se traduce como un ataque gratuito del aliado (un buff simulado)
@@ -282,7 +293,7 @@ def municion_arcana(context):
 def sintonia_avanzada(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 50 if caster.current_hp < caster.max_hp else 0
+        return 65 if caster.current_hp < caster.max_hp else 0
 
     adv_mods = caster.get_stat_modifiers()
     heal_amount = max(1, random.randint(2, 8) + adv_mods['int'])
@@ -310,8 +321,9 @@ def genio_intermitente(context):
         return True
     return False
 
+# COMBAT, not SESSION — same reason as `infusiones_basicas` above.
 @SkillRegistry.register(
-    skill_id="blindaje_runico", name="Blindaje Rúnico", skill_type="SESSION", req_level=8, allowed_classes=["ART"]
+    skill_id="blindaje_runico", name="Blindaje Rúnico", skill_type="COMBAT", req_level=8, allowed_classes=["ART"]
 )
 def blindaje_runico(context):
     caster = context['caster']
@@ -374,7 +386,10 @@ def replica_objeto(context):
 def furia_feroz(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 50 if context['enemies'] else 0
+        # 55. The condition is "there are enemies", which is always true in combat, so this is
+        # effectively unconditional - and harmless, because combat.py:232 filters out skills
+        # already used this combat, so it fires once and leaves the candidate set.
+        return 55 if context['enemies'] else 0
 
     if not context['enemies']: return False
     
@@ -430,8 +445,9 @@ def ataque_temerario(context):
                            "message": f"🩸 Por exponerse tanto, {caster.name} recibe {recoil} daño de contragolpe."})
     return True
 
+# COMBAT, not SESSION — same reason as `infusiones_basicas` above.
 @SkillRegistry.register(
-    skill_id="senda_furia", name="Senda de la Furia", skill_type="SESSION", req_level=3, allowed_classes=["BBN"]
+    skill_id="senda_furia", name="Senda de la Furia", skill_type="COMBAT", req_level=3, allowed_classes=["BBN"]
 )
 def senda_furia(context):
     caster = context['caster']
@@ -533,8 +549,9 @@ def instinto_salvaje(context):
                            "message": f"⚡ Movido por su Instinto Salvaje, {caster.name} se abalanza primero y destroza a [bold red]{target['name']}[/bold red] con {dmg} de daño."})
     return True
 
+# COMBAT, not SESSION — same reason as `infusiones_basicas` above.
 @SkillRegistry.register(
-    skill_id="zancada_poderosa", name="Zancada Poderosa", skill_type="SESSION", req_level=8, allowed_classes=["BBN"]
+    skill_id="zancada_poderosa", name="Zancada Poderosa", skill_type="COMBAT", req_level=8, allowed_classes=["BBN"]
 )
 def zancada_poderosa(context):
     caster = context['caster']
@@ -569,8 +586,9 @@ def critico_brutal(context):
                            "message": f"🩸 ¡CRÍTICO BRUTAL! {caster.name} parte en dos a [bold red]{target['name']}[/bold red] infligiendo unos monstruosos {dmg} de daño."})
     return True
 
+# COMBAT, not SESSION — same reason as `infusiones_basicas` above.
 @SkillRegistry.register(
-    skill_id="presencia_intimidante", name="Presencia Intimidante", skill_type="SESSION", req_level=10, allowed_classes=["BBN"]
+    skill_id="presencia_intimidante", name="Presencia Intimidante", skill_type="COMBAT", req_level=10, allowed_classes=["BBN"]
 )
 def presencia_intimidante(context):
     caster = context['caster']
@@ -603,7 +621,7 @@ def presencia_intimidante(context):
 def inspiracion_bardica(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 50 if context['enemies'] and context['allies'] else 0
+        return 55 if context['enemies'] and context['allies'] else 0  # 55, ver furia_feroz
 
     if not context['enemies'] or not context['allies']: return False
     
@@ -624,7 +642,9 @@ def inspiracion_bardica(context):
 def erudito_todo(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 45
+        if context['current_second'] <= context['session_duration'] / 2:
+            return 0
+        return 52  # 50 + req_level, ver druidico
 
     coins = random.randint(1, 5) * 5 # 5 a 25 cobres
     context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
@@ -797,7 +817,7 @@ def dominio_divino(context):
     caster = context['caster']
     if context.get('eval_mode'):
         allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
-        return 50 if allies_hurt >= 1 else 0
+        return 65 if allies_hurt >= 1 else 0
 
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"🕊️ Guiado por su Dominio Divino, {caster.name} proyecta un santuario de paz."})
@@ -1006,7 +1026,15 @@ def intervencion_divina(context):
 def druidico(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 45
+        # 50 + req_level. Six skills across six classes are the same mechanic - a flat coin
+        # drop differing only in flavour and payout - so they share one rule instead of six
+        # numbers. The ties at 51 and 52 are harmless: no two of them share a class, so they
+        # never compete. Gated on the session's second half: you have been exploring a while,
+        # now you find something. An HP gate was rejected - `current_hp` does not move during a
+        # session (sesion.py writes it only at close), so it would be settled before tick one.
+        if context['current_second'] <= context['session_duration'] / 2:
+            return 0
+        return 51
 
     coins = random.randint(2, 6) * 5 # 10 a 30 cobres
     context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
@@ -1064,7 +1092,7 @@ def paso_forestal(context):
     caster = context['caster']
     if context.get('eval_mode'):
         allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
-        return 50 if allies_hurt >= 1 else 0
+        return 65 if allies_hurt >= 1 else 0
 
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"🍃 Con su Paso Forestal, {caster.name} guía al grupo con seguridad a través de un denso matorral de espinas ponzoñosas."})
@@ -1200,7 +1228,9 @@ def inmunidad_naturaleza(context):
 def enemigo_favorecido(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 45
+        if context['current_second'] <= context['session_duration'] / 2:
+            return 0
+        return 51  # 50 + req_level, ver druidico
 
     coins = random.randint(3, 8) * 5 # 15 a 40 cobres
     context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
@@ -1464,7 +1494,7 @@ def postura_firme(context):
     caster = context['caster']
     if context.get('eval_mode'):
         allies_hurt = sum(1 for a in context['allies'] if a.current_hp < a.max_hp)
-        return 50 if allies_hurt >= 1 else 0
+        return 65 if allies_hurt >= 1 else 0
 
     context['log'].append({"second": context['current_second'], "type": "flavor",
                            "message": f"🛡️ {caster.name} adopta una Postura Firme, anclándose para proteger al grupo de un derrumbe inesperado."})
@@ -1500,7 +1530,9 @@ def ataque_extra_ftr(context):
 def entrenamiento_fisico(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 45
+        if context['current_second'] <= context['session_duration'] / 2:
+            return 0
+        return 56  # 50 + req_level, ver druidico
 
     coins = random.randint(5, 12) * 5 # 25 a 60 cobres
     context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
@@ -1648,7 +1680,9 @@ def metamagia_basica(context):
 def flujo_estable(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 45
+        if context['current_second'] <= context['session_duration'] / 2:
+            return 0
+        return 54  # 50 + req_level, ver druidico
 
     coins = random.randint(4, 10) * 5 # 20 a 50 cobres
     context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
@@ -1815,7 +1849,9 @@ def proyectil_magico(context):
 def tradicion_arcana(context):
     caster = context['caster']
     if context.get('eval_mode'):
-        return 50
+        if context['current_second'] <= context['session_duration'] / 2:
+            return 0
+        return 52  # 50 + req_level, ver druidico
 
     coins = random.randint(3, 8) * 10 # 30 a 80 cobres
     context['log'].append({"second": context['current_second'], "type": "loot", "amount": coins,
