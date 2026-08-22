@@ -14,14 +14,13 @@ import logging
 from posada.models import InventorySlot, ItemRarity
 from posada.engine.data.loot_tables import COIN_DROPS, ITEM_DROPS
 from posada.engine.estados import NOMBRES
+from posada.engine.data.tablas import COIN_COLORS, MONSTER_COLORS, FLAVOR_ADV, FLAVOR_MONSTER
+from posada.engine.progresion import roll_d20
+from posada.engine.inventario import is_class_allowed
 
 
 def tick_combat(ctx):
     """Ejecuta un tick de 15 segundos en estado COMBAT."""
-    from posada.engine.legacy import (
-        roll_d20, is_class_allowed, FLAVOR_ADV, FLAVOR_MONSTER,
-        COIN_COLORS, MONSTER_COLORS
-    )
     from posada.skills import SkillRegistry
 
     ctx.current_second += 15
@@ -60,7 +59,6 @@ def tick_combat(ctx):
 
 def _combat_flavor(ctx, adventurers):
     """Genera un texto de inmersión de combate (50% aventurero, 50% monstruo)."""
-    from posada.engine.legacy import FLAVOR_ADV, FLAVOR_MONSTER
 
     if random.random() < 0.5:
         f_adv = random.choice(adventurers)
@@ -76,7 +74,6 @@ def _combat_flavor(ctx, adventurers):
 
 def _monster_turn(ctx, m, adventurers):
     """Ejecuta el turno de un monstruo."""
-    from posada.engine.legacy import roll_d20
 
     if m['hp'] <= 0:
         return
@@ -169,7 +166,6 @@ def _monster_turn(ctx, m, adventurers):
 
 def _adventurer_turn(ctx, adv, adventurers):
     """Ejecuta el turno de un aventurero."""
-    from posada.engine.legacy import roll_d20, is_class_allowed
     from posada.skills import SkillRegistry
 
     if ctx.temp_hp[adv.id] <= 0:
@@ -271,7 +267,6 @@ def _adventurer_turn(ctx, adv, adventurers):
 
 def _basic_attack(ctx, adv, adv_mods, adventurers):
     """Ejecuta un ataque básico del aventurero."""
-    from posada.engine.legacy import roll_d20
 
     ctx.adv_status_tracker[adv.id].discard('REACTION_USED')
     attacks = 2 if adv.level >= 5 and adv.adv_class in ['FTR', 'BBN', 'RGR', 'PAL', 'MNK'] else 1
@@ -348,7 +343,6 @@ def _basic_attack(ctx, adv, adv_mods, adventurers):
 
 def _check_deaths(ctx, adventurers):
     """Comprueba muertes de monstruos, genera drops y XP."""
-    from posada.engine.legacy import COIN_COLORS, MONSTER_COLORS, is_class_allowed
 
     for m in list(ctx.active_monsters_group):
         if m['hp'] <= 0:

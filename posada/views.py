@@ -637,7 +637,7 @@ def complete_habit(request):
         habit = DailyHabit.objects.get(id=habit_id)
 
         # A habit only exists on the days it is scheduled for. `valid_days` was read by
-        # exactly one place — the penalty engine (engine/legacy.py:481, :511), which counts a
+        # exactly one place — the penalty engine (engine/habitos.py), which counts a
         # day as missed or survived only if it is in the list — so completing a Mon-Fri habit
         # on a Sunday paid full prestige, coins and a streak increment for a day the engine
         # never scored. The expression is copied verbatim from the engine so the two cannot

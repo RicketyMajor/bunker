@@ -13,14 +13,13 @@ import logging
 from posada.models import InventorySlot, ItemRarity
 from posada.engine.data.flavor_tables import EVENT_TEXTS, FLAVOR_DATABASE
 from posada.engine.data.loot_tables import COIN_POOL
+from posada.engine.data.tablas import COIN_COLORS, MONSTER_COLORS
+from posada.engine.progresion import roll_d20, safe_randint, get_derived_skills
+from posada.engine.inventario import is_class_allowed
 
 
 def tick_exploring(ctx):
     """Ejecuta un tick de 30 segundos en estado EXPLORING."""
-    from posada.engine.legacy import (
-        get_derived_skills, roll_d20, safe_randint, is_class_allowed,
-        COIN_COLORS, MONSTER_COLORS
-    )
     from posada.skills import SkillRegistry
 
     ctx.current_second += 30
@@ -54,7 +53,6 @@ def tick_exploring(ctx):
 
 def _narrative_skill_check(ctx, adventurers):
     """25% de chance de un evento narrativo con skill check."""
-    from posada.engine.legacy import get_derived_skills, roll_d20
 
     if random.random() >= 0.25:
         return
@@ -131,7 +129,6 @@ def _consumable_flavor_event(ctx, flavor_adv):
 
 def _spawn_encounter(ctx):
     """Genera un grupo de monstruos y transiciona a COMBAT."""
-    from posada.engine.legacy import safe_randint, MONSTER_COLORS
 
     avg_level = sum(a.level for a in ctx.adventurers) / len(ctx.adventurers) if ctx.adventurers else 1
     
@@ -179,7 +176,6 @@ def _spawn_encounter(ctx):
 
 def _exploration_loot(ctx, adventurers):
     """Cada aventurero vivo busca botín por su cuenta."""
-    from posada.engine.legacy import COIN_COLORS, is_class_allowed
 
     for explore_adv in adventurers:
         if ctx.temp_hp[explore_adv.id] <= 0:
@@ -313,7 +309,6 @@ def _event_magic_spring(ctx, adventurers):
 
 def _event_trapped_chest(ctx, adventurers):
     """El aventurero con mayor DEX intenta abrir un cofre trampa."""
-    from posada.engine.legacy import roll_d20
     from posada.models import ItemRarity
     import random
 
@@ -351,7 +346,6 @@ def _event_trapped_chest(ctx, adventurers):
 
 def _event_ancient_inscription(ctx, adventurers):
     """El aventurero con mayor INT o WIS descifra runas para ganar XP."""
-    from posada.engine.legacy import roll_d20
     import random
 
     best_adv = max(adventurers, key=lambda a: max(a.get_stat_modifiers()['int'], a.get_stat_modifiers()['wis']))
@@ -380,7 +374,6 @@ def _event_ancient_inscription(ctx, adventurers):
 
 def _event_wandering_merchant(ctx, adventurers):
     """Un mercader agradece al grupo y les dona monedas valiosas."""
-    from posada.engine.legacy import COIN_COLORS
     import random
 
     ctx.script.append({"second": ctx.current_second - 20, "type": "flavor", 

@@ -215,7 +215,7 @@ def probar_atomicidad():
     why the two live in separate scopes in `__main__`.
     """
     global comprobaciones
-    from posada.engine.legacy import pay_with_change
+    from posada.engine.economia import pay_with_change
 
     comprobaciones += 1
     if connection.in_atomic_block:
@@ -225,7 +225,7 @@ def probar_atomicidad():
         fallos.append("FALLO: la precondicion de esta prueba no se cumple — ya estamos dentro de "
                       "una transaccion, asi que no puede comprobar que pay_with_change la exija")
         return
-    from posada.engine.legacy import can_afford
+    from posada.engine.economia import can_afford
 
     adv = _un_aventurero()
     item = _un_item()

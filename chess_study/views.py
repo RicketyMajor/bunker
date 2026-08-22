@@ -55,7 +55,7 @@ class ChessRoomViewSet(viewsets.ModelViewSet):
 
         try:
             from posada.models import Adventurer, GuildProfile, DeepWorkSession
-            from posada.engine.legacy import check_level_up
+            from posada.engine.progresion import check_level_up
         except ImportError:
             return Response({"error": "El motor de Posada no está disponible."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -309,7 +309,7 @@ def solve_daily_puzzle(request):
         
     try:
         from posada.models import Adventurer, GuildProfile, DeepWorkSession
-        from posada.engine.legacy import check_level_up
+        from posada.engine.progresion import check_level_up
         
         adv = Adventurer.objects.first()
         guild = GuildProfile.objects.first()

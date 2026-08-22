@@ -413,7 +413,7 @@ def test_the_two_posada_verbs_answer_with_a_fact():
     refusals do not: a 409 answers something that did not happen.
 
     The surrender case is the one worth pinning. `process_session_completion` marks every
-    session `completed` even when abandoned (engine/legacy.py:765) and never adjusts
+    session `completed` even when abandoned (engine/sesion.py) and never adjusts
     `duration_minutes`, which is the TARGET duration. A feedback reading it straight would
     tell someone who quit after 5 minutes that they did 50.
     """

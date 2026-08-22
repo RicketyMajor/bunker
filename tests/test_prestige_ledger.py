@@ -285,7 +285,7 @@ def test_barrida_no_netea():
 
     from django.utils import timezone
 
-    from posada.engine.legacy import evaluate_daily_penalties
+    from posada.engine.habitos import evaluate_daily_penalties
 
     hoy = timezone.localdate()
     todos_los_dias = ''.join(str(d) for d in range(7))
@@ -351,7 +351,7 @@ def test_evento_pasado_no_paga():
     merely existing — no attendance check anywhere — which is both the cheapest prestige in
     the project and a row whose amount cannot be reproduced from its cause.
 
-    The sweep is `evaluate_daily_penalties()` at `posada/engine/legacy.py:446`, named here
+    The sweep is `evaluate_daily_penalties()` at `posada/engine/habitos.py`, named here
     rather than looked up: a wrong import raises BEFORE the assert, and a check that crashes
     has proved nothing.
     """
@@ -360,7 +360,7 @@ def test_evento_pasado_no_paga():
 
     from django.utils import timezone
 
-    from posada.engine.legacy import evaluate_daily_penalties
+    from posada.engine.habitos import evaluate_daily_penalties
     from posada.models import CalendarEvent
 
     evento = CalendarEvent.objects.create(date=timezone.localdate() - timedelta(days=3),

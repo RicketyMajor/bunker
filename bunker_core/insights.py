@@ -114,7 +114,7 @@ def feedback_sesion(session, minutos_reales=None):
     """A Deep Work session closed. The fact is that category's total for the session's month.
 
     `duration_minutes` is the session's TARGET, and `process_session_completion` marks a
-    session completed even when it was abandoned (engine/legacy.py:765) without ever
+    session completed even when it was abandoned (engine/sesion.py) without ever
     adjusting it. So a caller that knows what was actually survived passes it in
     `minutos_reales`; otherwise the target is the honest figure, because the session ran.
 
