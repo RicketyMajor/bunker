@@ -146,7 +146,11 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get('POSTGRES_DB', 'library_db'),
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'postgres'),
+        # No default, for the same reason SECRET_KEY has none: this file is tracked in a
+        # PUBLIC repository, and a literal here is a working credential. Compose line 61
+        # and load_dotenv above both guarantee the variable, so the KeyError only fires
+        # when it is genuinely absent — and it names the variable, which 'postgres' did not.
+        'PASSWORD': os.environ['POSTGRES_PASSWORD'],
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }

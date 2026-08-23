@@ -103,7 +103,7 @@ services:
     # estrategia de Discogs se omite entera. Antes esto era `env_file: .env`, que ademas le
     # entregaba POSTGRES_PASSWORD y DJANGO_SECRET_KEY sin que las necesite.
     environment:
-      - DISCOGS_API_KEY=${DISCOGS_API_KEY:?falta en .env}
+      - DISCOGS_API_KEY=${DISCOGS_API_KEY:-}
     volumes:
       - ./scraper:/app
       - /app/node_modules

@@ -40,11 +40,41 @@ _checks = 0
 _CLAVE_PUBLICADA = 'django-insecure-r57@yay8wlt5gifn*x9x5@k!*#&)tdhd*)f!&=qi&5#^ulj$^h'
 _PASSWORD_PUBLICADA = 'supersecret'
 
-# Assignments of a secret to a literal, as opposed to ${VAR} or os.environ.get(...).
-_LITERAL = re.compile(
-    r'^\s*-?\s*(POSTGRES_PASSWORD|SECRET_KEY)\s*[=:]\s*(?!\$\{)(?!os\.environ)'
-    r'[\'"]?([^\'"\s$][^\'"\n]*)',
+# A line that assigns a secret. The name is spelled three ways across the two files: compose
+# uses POSTGRES_PASSWORD, settings.py uses SECRET_KEY, and Django's DATABASES dict uses the bare
+# key 'PASSWORD'. The previous version listed only the first two, so the whole DATABASES block
+# was invisible to it and `'PASSWORD': 'supersecret'` would have passed.
+_ASIGNACION = re.compile(
+    r"""^[ \t]*-?[ \t]*['"]?(POSTGRES_PASSWORD|SECRET_KEY|PASSWORD)['"]?[ \t]*[=:][ \t]*"""
+    r"""(.+?),?[ \t]*(?:\#.*)?$""",
     re.M)
+
+# The only value shapes a secret may take, matched against the WHOLE value. This is an
+# ALLOWLIST on purpose. The previous version was a blocklist of safe-looking prefixes
+# — `(?!\$\{)(?!os\.environ)` — tested against how the value STARTED, and it was wrong in both
+# directions: everything after an allowed prefix was invisible, so a literal default inside
+# os.environ.get(...) passed; and any spelling not on the list, `os.getenv` among them, was
+# reported as a violation. An allowlist fails closed, which is the direction a secrets guard
+# should fail.
+#
+# An EMPTY default is allowed: it cannot authenticate, and settings.py:39 turns it into an
+# ImproperlyConfigured. A non-empty one is a working secret in a public file.
+_VALOR_SEGURO = re.compile(
+    r"""\A(?:
+          \$\{[A-Za-z_]\w*(?::\?[^}]*|:?-)?\}       # ${VAR}, ${VAR:?mensaje}, ${VAR:-}
+                                                  # NO ${VAR:-literal}: en compose ese
+                                                  # texto es un VALOR, no un mensaje.
+        | os\.environ\[[^\]]+\]                      # os.environ['CLAVE']
+        | os\.(?:environ\.get|getenv)\([^,)]+(?:,[ \t]*(?:\'\'|""))?\)   # get('CLAVE') / get('CLAVE', '')
+        )(?:\.strip\(\))?\Z""",
+    re.X)
+
+# Variables whose absence must genuinely stop the stack, and so may use compose's `${VAR:?}`.
+# That marker aborts the interpolation of the WHOLE FILE, so `up`, `ps`, `logs`, `down` and the
+# 18 `docker compose exec` of cli/doctor.py:130 die with it — not just the service that reads
+# the variable. DISCOGS_API_KEY was on this list and should not have been: the stack runs fine
+# without it, because scraper/strategies/music/discogs.js:7 skips its strategy when it is empty.
+_REQUERIDAS_EN_COMPOSE = {'POSTGRES_PASSWORD'}
 
 
 def check(condicion, etiqueta):
@@ -54,15 +84,42 @@ def check(condicion, etiqueta):
     print(f"  ok  {etiqueta}")
 
 
+_COMPOSE = settings.BASE_DIR / 'docker-compose.yml'
+_SETTINGS = settings.BASE_DIR / 'bunker_core' / 'settings.py'
+
+
 def test_ningun_secreto_literal_en_ficheros_rastreados():
     """docker-compose.yml and settings.py must reach the secrets through the environment."""
-    for ruta in ('/app/docker-compose.yml', '/app/bunker_core/settings.py'):
-        with open(ruta, encoding='utf-8') as f:
-            texto = f.read()
-        hallazgos = [m.group(0).strip() for m in _LITERAL.finditer(texto)]
-        check(not hallazgos, f"{ruta} no asigna secretos literales; encontrado: {hallazgos}")
-        check(_PASSWORD_PUBLICADA not in texto,
-              f"{ruta} no contiene la contraseña publicada")
+    for ruta in (_COMPOSE, _SETTINGS):
+        texto = ruta.read_text(encoding='utf-8')
+        asignaciones = [(m.group(1), m.group(2)) for m in _ASIGNACION.finditer(texto)]
+        # Non-vacuity: a pattern that matches nothing reports "no literals" for ever. Both
+        # files assign at least one secret, so zero matches means the regex broke, not that
+        # the file is clean.
+        check(bool(asignaciones),
+              f"{ruta.name}: la sonda VE asignaciones de secreto ({len(asignaciones)})")
+        hallazgos = [f"{n} = {v}" for n, v in asignaciones if not _VALOR_SEGURO.match(v)]
+        check(not hallazgos,
+              f"{ruta.name} no asigna secretos literales; encontrado: {hallazgos}")
+        for publicado, nombre in ((_PASSWORD_PUBLICADA, 'la contraseña publicada'),
+                                  (_CLAVE_PUBLICADA, 'la SECRET_KEY publicada')):
+            check(publicado not in texto, f"{ruta.name} no contiene {nombre}")
+
+
+def test_compose_no_exige_variables_opcionales():
+    """`${VAR:?}` aborts the interpolation of the whole file, not just its own service.
+
+    Measured 2026-08-23: with `${DISCOGS_API_KEY:?falta en .env}` on the scraper-music service,
+    `DISCOGS_API_KEY= docker compose ps` exited 1 — and so did every other subcommand, plus the
+    18 `docker compose exec` that cli/doctor.py:130 makes. A fresh clone could not boot the
+    stack because an OPTIONAL scraper key was missing.
+    """
+    texto = _COMPOSE.read_text(encoding='utf-8')
+    exigidas = set(re.findall(r'\$\{([A-Za-z_]\w*):\?', texto))
+    check(bool(exigidas), f"la sonda VE marcadores ${{VAR:?}} en compose ({exigidas})")
+    check(exigidas <= _REQUERIDAS_EN_COMPOSE,
+          f"sólo las variables sin las que el stack no arranca usan ${{VAR:?}}; "
+          f"de más: {sorted(exigidas - _REQUERIDAS_EN_COMPOSE)}")
 
 
 def test_la_secret_key_viva_no_es_la_publicada():
@@ -71,6 +128,26 @@ def test_la_secret_key_viva_no_es_la_publicada():
           "SECRET_KEY viva NO es la que está en el repositorio público")
     check(not settings.SECRET_KEY.startswith('django-insecure-'),
           "SECRET_KEY no es una generada por startproject")
+
+
+def test_la_contrasena_viva_de_postgres_no_es_la_publicada():
+    """The half that was missing, and it is the half that decides.
+
+    The two published constants had exactly complementary coverage: _CLAVE_PUBLICADA was only
+    ever compared against LIVE config, _PASSWORD_PUBLICADA only ever searched for as TEXT in
+    the tracked files. So the file could report every check OK while `docker compose config`
+    printed `supersecret` — which is precisely what happened between 2026-08-22 and today.
+    Rotating .env alone does NOT fix this: the postgres image applies POSTGRES_PASSWORD only
+    when it creates the volume. It needs, inside the `db` container,
+
+        ALTER USER admin WITH PASSWORD '<nueva>';
+
+    and only then the new value in .env plus `docker compose up -d --force-recreate`.
+    """
+    viva = settings.DATABASES['default']['PASSWORD']
+    check(bool(viva), "la contraseña de Postgres no está vacía")
+    check(viva != _PASSWORD_PUBLICADA,
+          "la contraseña VIVA de Postgres NO es la que está en el repositorio público")
 
 
 def test_debug_apagado_y_allowed_hosts_cerrado():
@@ -120,7 +197,9 @@ def test_un_500_no_entrega_una_variable_local():
 def run_tests():
     print("Comprobando secretos y superficie de error…")
     test_ningun_secreto_literal_en_ficheros_rastreados()
+    test_compose_no_exige_variables_opcionales()
     test_la_secret_key_viva_no_es_la_publicada()
+    test_la_contrasena_viva_de_postgres_no_es_la_publicada()
     test_debug_apagado_y_allowed_hosts_cerrado()
     test_un_500_no_entrega_una_variable_local()
     print(f"\n{_checks} comprobaciones OK.")
