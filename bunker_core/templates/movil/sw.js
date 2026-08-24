@@ -14,7 +14,17 @@
 // queue.js kept executing the previous version with transferSize 0 and no error anywhere.
 // Network-first has to mean the network, or the second cache silently defeats the first.
 const CACHE = 'transmisor-v1';
-const SHELL = ['/movil/', '/movil/manifest.json', '/static/movil/queue.js', '/static/movil/app.js'];
+// The BUNDLE, not the sources. `app.html:423` loads `movil/dist/main.js` and has done since
+// esbuild landed on 2026-08-21; this list kept naming `app.js` and `queue.js`, which the page
+// never requests. All three answer 200 — 42471, 8365 and 24501 bytes measured 2026-08-24 —
+// so nothing looked wrong, and that is the same trap as the APK manifest that served the
+// unbundled module: compare bodies, not statuses.
+//
+// The handler below is network-first and caches every successful GET, so an install that has
+// loaded once online is fine either way. What this list is FOR is the install that goes
+// offline before that: it had the shell and no JS at all, which is the one case the whole
+// offline PWA exists for.
+const SHELL = ['/movil/', '/movil/manifest.json', '/static/movil/dist/main.js'];
 
 self.addEventListener('install', (event) => {
   // Cached one by one rather than with addAll: addAll is atomic, so a single 404 rejects the

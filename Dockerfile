@@ -24,11 +24,11 @@ COPY bunker_crontab /etc/cron.d/bunker-cron
 RUN chmod 0644 /etc/cron.d/bunker-cron
 RUN touch /var/log/cron.log
 
-# Volcar el entorno a /etc/bunker.env antes de arrancar cron: las tareas de cron no heredan
-# las variables de compose (solo las recibe PID 1), y backup.sh necesita las POSTGRES_*.
-# --insecure: con DEBUG=False runserver deja de servir /static/, y el movil pide
-# {% static 'movil/dist/main.js' %}, que daria 404. Un solo flag en vez de anadir
-# whitenoise + collectstatic a un servicio de un unico usuario detras del tailnet.
-# ponytail: --insecure sirve estaticos sin cache ni compresion; si el panel se nota
-# lento en el movil, ahi es cuando toca whitenoise.
+# Dump the environment to /etc/bunker.env before starting cron: cron jobs do not inherit
+# compose's variables (only PID 1 receives them), and backup.sh needs the POSTGRES_* ones.
+# --insecure: with DEBUG=False runserver stops serving /static/, and the phone requests
+# {% static 'movil/dist/main.js' %}, which would 404. One flag instead of adding
+# whitenoise + collectstatic to a single-user service behind the tailnet.
+# ponytail: --insecure serves static files with no caching and no compression; the day the
+# panel feels slow on the phone is when whitenoise earns its place.
 CMD printenv | grep -E '^(POSTGRES_|TZ=)' > /etc/bunker.env && cron && python manage.py runserver --insecure 0.0.0.0:8000

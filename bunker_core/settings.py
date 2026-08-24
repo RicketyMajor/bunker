@@ -42,6 +42,19 @@ if not SECRET_KEY:
         'a proposito, porque el que habia esta publicado en el repositorio.'
     )
 
+# Empty is not absent, and that distinction is load-bearing. `.env.example` ships
+# POSTGRES_PASSWORD empty on purpose, so compose's `${POSTGRES_PASSWORD:?}` fails loudly. But
+# after `cp .env.example .env`, load_dotenv above sets it to '' — PRESENT — so the
+# `os.environ[...]` in DATABASES never raised, and anything not going through compose
+# (manage.py, a host-side check, doctor outside Docker) connected with an empty password and
+# died at query time with `password authentication failed`: the same late, far-from-cause
+# failure the empty value was chosen to prevent. Same shape as SECRET_KEY's guard above.
+if not os.environ.get('POSTGRES_PASSWORD', '').strip():
+    raise ImproperlyConfigured(
+        'POSTGRES_PASSWORD no esta en el entorno, o esta vacia. Ponla en .env; no hay valor '
+        'por defecto a proposito, porque el que habia esta publicado en el repositorio.'
+    )
+
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').strip().lower() in ('1', 'true', 'yes')
 
 # With DEBUG=False this list is load-bearing: a Host outside it gets a 400. It must carry
@@ -51,13 +64,13 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'False').strip().lower() in ('1', 'true',
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
     'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,web').split(',') if h.strip()]
 
-# 'testserver' es el Host por defecto de django.test.Client, y ocho llamadas repartidas por
-# cinco ficheros de tests/ lo usan. Normalmente lo parchea setup_test_environment(), pero
-# estos scripts no pasan por el runner de Django y no pueden llamarlo desde tests/__init__.py
-# porque cada modulo hace django.setup() DESPUES de importarse el paquete. Con el puerto ya
-# atado a 127.0.0.1 y sin generacion de URLs absolutas a partir del Host, un nombre de mas en
-# esta lista no es una frontera de seguridad aqui.
-# ponytail: si algun dia los checks pasan por el runner de Django, esta linea sobra.
+# 'testserver' is django.test.Client's default Host, and eight calls across five files in
+# tests/ use it. setup_test_environment() normally patches it in, but these scripts do not go
+# through Django's runner and cannot call it from tests/__init__.py, because every module runs
+# django.setup() AFTER the package is imported. With the port already bound to 127.0.0.1 and no
+# absolute URLs generated from the Host, one extra name in this list is not a security boundary
+# here.
+# ponytail: the day the checks run through Django's own runner, this line is dead weight.
 if 'testserver' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('testserver')
 
@@ -76,10 +89,24 @@ CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app',
 # Origin the mobile companion is served from, e.g. https://bunker.tailXXXX.ts.net
 _public_origin = os.environ.get('BUNKER_PUBLIC_ORIGIN', '').strip().rstrip('/')
 if _public_origin:
+    # The scheme is not decoration. Without it `urlparse` puts the whole value in `path` and
+    # `hostname` is None, so the ALLOWED_HOSTS append below was skipped IN SILENCE and the
+    # failure surfaced much later as a CSRF `(4_0.E001)` — pointing the operator debugging a
+    # 400 from the phone at the wrong setting. CSRF_TRUSTED_ORIGINS requires a scheme too, so
+    # a value without one was never going to work; say so here, where the cause is.
+    _partes = urlparse(_public_origin)
+    # The SCHEME, not just the hostname. Testing `hostname` alone let a protocol-relative
+    # `//bunker.ts.net` through — `urlparse` gives it a hostname — and it then landed in
+    # CSRF_TRUSTED_ORIGINS in exactly the shape Django rejects with `(4_0.E001)`, which is
+    # the late, misleading failure this raise exists to eliminate. Verified both spellings.
+    _public_host = _partes.hostname
+    if _partes.scheme not in ('http', 'https') or not _public_host:
+        raise ImproperlyConfigured(
+            f"BUNKER_PUBLIC_ORIGIN debe empezar por http:// o https://: '{_public_origin}' "
+            f"no lo hace. Usa 'https://{_public_host or _public_origin.lstrip('/')}'.")
     CSRF_TRUSTED_ORIGINS.append(_public_origin)
     # Same origin, the bare hostname: ALLOWED_HOSTS matches Host headers, not URLs.
-    _public_host = urlparse(_public_origin).hostname
-    if _public_host and _public_host not in ALLOWED_HOSTS:
+    if _public_host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_public_host)
 
 
@@ -147,9 +174,15 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB', 'library_db'),
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
         # No default, for the same reason SECRET_KEY has none: this file is tracked in a
-        # PUBLIC repository, and a literal here is a working credential. Compose line 61
-        # and load_dotenv above both guarantee the variable, so the KeyError only fires
-        # when it is genuinely absent — and it names the variable, which 'postgres' did not.
+        # PUBLIC repository, and a literal here is a working credential.
+        #
+        # The emptiness guard is up beside SECRET_KEY's and runs long before this line, so by
+        # here the variable is present AND non-empty and this read cannot fail. It stays
+        # written as `os.environ[...]` rather than as the guard's variable because
+        # `tests/test_secretos.py` is an ALLOWLIST of value shapes: a bare identifier is not
+        # one of them and never should be, since a name says nothing about what it holds.
+        # The guard is what makes an EMPTY value fatal — a KeyError only fires when the
+        # variable is absent, and `.env.example` ships it empty on purpose.
         'PASSWORD': os.environ['POSTGRES_PASSWORD'],
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),

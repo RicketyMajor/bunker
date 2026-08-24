@@ -71,7 +71,16 @@ class DespertadorTest {
         // left to re-arm is the periodic that this phone was measured never dispatching.
         Despertador.cancelar(ctx)
         ColaStore(ctx).encolar("paginas", """{"pages":7}""")
-        ArranqueReceiver().onReceive(ctx, Intent(Intent.ACTION_BOOT_COMPLETED))
+        // `runCatching` like the sibling above, and for a sibling reason: `onReceive` arms the
+        // alarm FIRST and then calls `SyncWorker.programar`, which throws under Robolectric
+        // ("WorkManager is not initialized properly"). What this test asserts is the alarm, and
+        // the assertion still discriminates -- if `sincronizar` stopped arming, `programada()`
+        // would be null and this would go red regardless of the swallow.
+        // ponytail: the job-registration half is unasserted here; it was proven on the device
+        // instead (2026-08-24, `Enqueue time` of the job == the BOOT_COMPLETED broadcast, with
+        // no Activity started). Add `androidx.work:work-testing` the day that stops being
+        // enough.
+        runCatching { ArranqueReceiver().onReceive(ctx, Intent(Intent.ACTION_BOOT_COMPLETED)) }
         assertNotNull("un reinicio dejo la cola sin despertador", programada())
     }
 

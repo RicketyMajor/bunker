@@ -25,6 +25,7 @@ database cannot satisfy it.
 """
 import os
 import re
+import sys
 
 import django
 
@@ -180,18 +181,63 @@ def test_un_500_no_entrega_una_variable_local():
     modulo.urlpatterns = [path('boom/', revienta)]
     sys.modules['_urlconf_test_secretos'] = modulo
 
+    # Both of these used to leak. `logging.disable(NOTSET)` restores "nothing disabled", which
+    # is not the same as restoring the previous level, and the fabricated urlconf stayed in
+    # `sys.modules` for the life of the process. Harmless while this file is a standalone
+    # script; it stops being harmless the day `cli/doctor.py` runs the checks in one process.
+    nivel_previo = logging.root.manager.disable
     logging.disable(logging.CRITICAL)
     try:
         with override_settings(ROOT_URLCONF='_urlconf_test_secretos'):
             respuesta = Client(raise_request_exception=False).get('/boom/')
             cuerpo = respuesta.content.decode('utf-8', 'replace')
     finally:
-        logging.disable(logging.NOTSET)
+        logging.disable(nivel_previo)
+        sys.modules.pop('_urlconf_test_secretos', None)
 
     check(respuesta.status_code == 500, "la vista de prueba devuelve 500")
     check(centinela not in cuerpo,
           f"un 500 NO entrega la local del frame ({len(cuerpo)} bytes devueltos)")
     check('Traceback' not in cuerpo, "un 500 NO entrega la traza")
+
+
+def test_un_origen_publico_sin_esquema_falla_ruidosamente():
+    """A `BUNKER_PUBLIC_ORIGIN` with no scheme must abort, not be dropped in silence.
+
+    `urlparse('bunker.ts.net').hostname` is None -- the whole value lands in `path` -- so the
+    `if _public_host` that guards the ALLOWED_HOSTS append skipped it without a word, and the
+    failure surfaced much later as a CSRF `(4_0.E001)`, pointing whoever was debugging a 400
+    from the phone at the wrong setting. Both directions are asserted: a scheme-less value
+    raises, and a proper one still reaches ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS -- a guard
+    that rejected everything would pass the first half alone.
+    """
+    import subprocess
+    guion = (
+        "import django, os;"
+        "os.environ.setdefault('DJANGO_SETTINGS_MODULE','bunker_core.settings');"
+        "django.setup();"
+        "from django.conf import settings;"
+        "print('HOSTS', settings.ALLOWED_HOSTS);"
+        "print('CSRF', settings.CSRF_TRUSTED_ORIGINS[-1])"
+    )
+
+    # Both spellings of "no scheme". `//host` is the one a hostname test misses: urlparse
+    # DOES give it a hostname, so a guard written as `if not hostname` passes it through, and
+    # it lands in CSRF_TRUSTED_ORIGINS in exactly the shape Django rejects with (4_0.E001) --
+    # the late failure the guard exists to prevent. Found by review, verified by running.
+    for malo in ('bunker.tail834684.ts.net', '//bunker.tail834684.ts.net'):
+        sin = subprocess.run([sys.executable, '-c', guion], capture_output=True, text=True,
+                             env={**os.environ, 'BUNKER_PUBLIC_ORIGIN': malo})
+        check(sin.returncode != 0 and 'ImproperlyConfigured' in sin.stderr,
+              f"'{malo}' aborta el arranque (salio {sin.returncode})")
+        check('debe empezar por http' in sin.stderr,
+              f"y el mensaje de '{malo}' nombra la causa, no un sintoma de CSRF")
+
+    con = subprocess.run([sys.executable, '-c', guion], capture_output=True, text=True,
+                         env={**os.environ,
+                              'BUNKER_PUBLIC_ORIGIN': 'https://bunker.tail834684.ts.net'})
+    check(con.returncode == 0 and 'bunker.tail834684.ts.net' in con.stdout,
+          f"y uno CON esquema sigue llegando a ALLOWED_HOSTS (salio {con.returncode})")
 
 
 def run_tests():
@@ -202,6 +248,7 @@ def run_tests():
     test_la_contrasena_viva_de_postgres_no_es_la_publicada()
     test_debug_apagado_y_allowed_hosts_cerrado()
     test_un_500_no_entrega_una_variable_local()
+    test_un_origen_publico_sin_esquema_falla_ruidosamente()
     print(f"\n{_checks} comprobaciones OK.")
 
 

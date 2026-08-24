@@ -698,17 +698,6 @@ def test_cada_clase_nivel_1_puede_actuar():
           f"sin nada que hacer: {hambrientas}")
 
 
-def _party_de_sonda(clases, hp):
-    """Planted party. The database holds ONE adventurer (a CLR), so a check that runs a
-    session against `Adventurer.objects.all()` exercises a single class and reports green
-    for the wrong reason. Callers wrap this in a transaction they roll back."""
-    from posada.models import Adventurer
-    return [Adventurer.objects.create(
-        name=f"Sonda{i}", adv_class=c, race='HUM', level=10, max_hp=100, current_hp=hp,
-        base_str=14, base_dex=14, base_con=14, base_int=14, base_wis=14, base_cha=14,
-        base_luk=10, class_resources={}) for i, c in enumerate(clases)]
-
-
 def test_la_ventana_de_hp_devuelve_lo_que_pidio_prestado():
     """The whole contract of `hp_vivos`, the window both dispatchers borrow HP through.
 
@@ -753,6 +742,45 @@ def test_la_ventana_de_hp_devuelve_lo_que_pidio_prestado():
     check(adv2.current_hp == 50,
           f"una excepcion dentro de la ventana tampoco deja el espejo puesto; "
           f"quedo en {adv2.current_hp}")
+
+
+def test_la_ventana_no_resucita_a_un_caido():
+    """A downed adventurer must not come back through the dispatch window.
+
+    `hp_vivos` lent every adventurer their live HP, downed ones included, and wrote back
+    whatever the skill left. `aura_proteccion` (skills.py:2342) is the one skill that writes an
+    ALLY's `current_hp`, gated on `adv.current_hp < adv.max_hp * 0.4` -- true for the first
+    time when the lent value is negative -- and its `min(max_hp, current_hp + heal)` put the
+    corpse back above zero. Measured through the real dispatcher 2026-08-24: an ally at -12
+    came back at 20, re-entering initiative (`combat.py:42`) and the monsters' target pool
+    (`combat.py:104`). Before the window existed they read the session-start snapshot, the
+    gate was false, and no revival was possible; this engine has no revival mechanic.
+
+    A whole-session probe does NOT catch this and went green over it: `aura_proteccion` is once
+    per session and the PAL spends it on a merely wounded ally long before anyone falls. The
+    state has to be built, which is why this check builds it instead of running a session.
+    """
+    from types import SimpleNamespace
+    from posada.engine.context import hp_vivos
+
+    caido = SimpleNamespace(id=1, current_hp=100, max_hp=100)
+    en_pie = SimpleNamespace(id=2, current_hp=100, max_hp=100)
+    ctx = SimpleNamespace(temp_hp={1: -12, 2: 30})   # 30 < 40; 40 seria el borde
+
+    with hp_vivos(ctx, [caido, en_pie]):
+        check(caido.current_hp == 100,
+              f"a un caido NO se le presta su HP negativo; leyo {caido.current_hp}")
+        check(en_pie.current_hp == 30,
+              f"y al que sigue en pie si; leyo {en_pie.current_hp}")
+        # What aura_proteccion would do to both if its gate opened.
+        for a in (caido, en_pie):
+            if a.current_hp < a.max_hp * 0.4:
+                a.current_hp = min(a.max_hp, a.current_hp + 32)
+
+    check(ctx.temp_hp[1] == -12,
+          f"el caido sigue caido al salir de la ventana; quedo en {ctx.temp_hp[1]}")
+    check(ctx.temp_hp[2] == 62,
+          f"y la cura del que estaba en pie si se conserva; quedo en {ctx.temp_hp[2]}")
 
 
 def test_el_despachador_de_sesion_entrega_hp_vivos():
@@ -808,6 +836,25 @@ def _recursos_como_el_runner(clase, nivel):
     if clase == 'BBN':
         return {'furia': 2 + nivel // 3}
     return {'stamina': nivel * 2}
+
+
+# Measured 2026-08-24 through `_pares_sin_despacho`, both ends of the HP axis, and pinned as
+# exact sets rather than ceilings. A ceiling is what let this check pass green over a defect
+# twice already: `len(secos) <= 12` against a measured 6 had 2x of slack, and the level-1
+# filter in `test_cada_clase_nivel_1_puede_actuar` sweeps one axis fewer than the defect does.
+#
+# These are BALANCE, not dispatch: every pair here has no SESSION skill that can clear the
+# floor at that HP. Changing them is Alonso's call; changing this list without measuring is
+# how a check stops meaning anything.
+_SECOS_HERIDO = {'BRD1', 'FTR1', 'FTR2', 'ROG1', 'ROG2', 'WIZ1'}
+_SECOS_SANO = {
+    'ART1', 'ART2', 'ART3', 'ART4', 'ART5', 'ART6', 'ART7', 'ART8', 'ART9',
+    'BRD1', 'CLR1', 'CLR2', 'CLR3', 'CLR4', 'CLR5', 'CLR6', 'CLR7', 'CLR8',
+    'FTR1', 'FTR2', 'FTR3', 'FTR4', 'FTR5',
+    'MNK1', 'MNK2', 'MNK3', 'MNK4', 'MNK5', 'MNK6', 'MNK7', 'MNK8',
+    'PAL1', 'PAL2', 'PAL3', 'ROG1', 'ROG2', 'SOR1', 'SOR2', 'SOR3',
+    'WLK1', 'WLK2', 'WLK3', 'WIZ1',
+}
 
 
 def _pares_sin_despacho(hp_vivo, segundos=(1200, 2400, 3400)):
@@ -867,9 +914,23 @@ def test_un_grupo_herido_despierta_las_skills_condicionadas_a_hp():
     they have no SESSION skill that can clear the floor at any HP. That list is Alonso's.
     """
     secos = _pares_sin_despacho(hp_vivo=20)
-    check(len(secos) <= 12,
-          f"con el grupo herido, 12 pares (clase, nivel) o menos se quedan sin despachar; "
-          f"son {len(secos)}: {' '.join(secos)}")
+    check(set(secos) == _SECOS_HERIDO,
+          f"con el grupo herido quedan exactamente los {len(_SECOS_HERIDO)} pares conocidos; "
+          f"sobran {sorted(set(secos) - _SECOS_HERIDO)}, "
+          f"faltan {sorted(_SECOS_HERIDO - set(secos))}")
+
+    # The other end of the same axis, and the reason this check now sweeps it. A threshold of
+    # "12 or fewer" over one pinned HP passed green with the healthy end unmeasured -- the same
+    # shape as the level-1 filter that let the level-2 holes through, and as the pinned
+    # `current_second` that reported 84. A healthy party is where the SESSION grid is emptiest,
+    # because most of the 68 HP-conditioned skills are heals that correctly score 0 at full HP.
+    # Pinned as an exact set, not a ceiling: a 44th pair going dry is a regression, and a pair
+    # coming back to life is balance work that should update this list on purpose.
+    sanos = _pares_sin_despacho(hp_vivo=100)
+    check(set(sanos) == _SECOS_SANO,
+          f"con el grupo sano quedan exactamente los {len(_SECOS_SANO)} pares conocidos; "
+          f"sobran {sorted(set(sanos) - _SECOS_SANO)}, "
+          f"faltan {sorted(_SECOS_SANO - set(sanos))}")
 
 
 if __name__ == '__main__':
@@ -886,6 +947,7 @@ if __name__ == '__main__':
     test_cada_clase_nivel_1_puede_actuar()
     test_ninguna_skill_nueva_es_inalcanzable()
     test_la_ventana_de_hp_devuelve_lo_que_pidio_prestado()
+    test_la_ventana_no_resucita_a_un_caido()
     test_el_despachador_de_sesion_entrega_hp_vivos()
     test_un_grupo_herido_despierta_las_skills_condicionadas_a_hp()
     print(f"\n{_checks} comprobaciones OK.")

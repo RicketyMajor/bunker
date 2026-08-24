@@ -13,6 +13,7 @@ measured 2026-08-21, two builds of `main.js` byte-identical at 17830 bytes — s
 temp directory and comparing bytes answers the real question exactly, in about six milliseconds.
 The deviation from the spec's wording is deliberate and strictly stronger.
 """
+import re
 import shutil
 import subprocess
 import sys
@@ -53,7 +54,46 @@ def _construir(entrada, destino):
         cwd=RAIZ, capture_output=True, text=True, timeout=120)
 
 
+def _comprobar_shell_del_sw():
+    """Every file the service worker precaches must be one the page actually loads.
+
+    Measured 2026-08-24: SHELL named `/static/movil/app.js` and `/static/movil/queue.js` --
+    the unbundled ES modules -- while `app.html` has loaded `movil/dist/main.js` since esbuild
+    landed on 2026-08-21. All three URLs answer 200, so nothing looked broken. The fetch
+    handler is network-first and caches what it fetches, so an install that has been online
+    once is unaffected; the case this list exists for is the install that goes OFFLINE FIRST,
+    and that one had the shell and no JavaScript.
+
+    Asserted against the template's own <script src>, not against a literal, so the two cannot
+    drift apart again.
+    """
+    sw = (RAIZ / "bunker_core/templates/movil/sw.js").read_text()
+    html = (RAIZ / "bunker_core/templates/movil/app.html").read_text()
+
+    m = re.search(r"const SHELL = \[(.*?)\];", sw, re.S)
+    check(m is not None, "sw.js declara un SHELL que se puede leer")
+    if not m:
+        return
+    shell = set(re.findall(r"'([^']+)'", m.group(1)))
+
+    cargados = {f"/static/movil/{r}" for r in re.findall(r"{% static 'movil/([^']+)' %}", html)}
+    check(cargados, f"app.html carga al menos un asset estatico; encontrados {cargados}")
+
+    faltan = cargados - shell
+    check(not faltan,
+          f"el SHELL del service worker precachea todo lo que app.html carga; faltan {faltan}")
+
+    sobran = {u for u in shell - cargados if u.startswith("/static/")}
+    check(not sobran,
+          f"y no precachea estaticos que la pagina nunca pide; sobran {sobran}")
+
+
 def main():
+    # Before the npx guard: this one reads two templates and needs no toolchain, so putting it
+    # after the early return meant it never ran on a machine without Node -- which is the same
+    # machine that cannot rebuild the bundle and therefore needs the check most.
+    _comprobar_shell_del_sw()
+
     if shutil.which("npx") is None:
         # Not a skip. Node became a hard dependency of this project on 2026-08-21 and a gate
         # that goes green because it could not run is the failure this project keeps finding.

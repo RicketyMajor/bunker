@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -156,13 +157,22 @@ class ColaStore(private val context: Context) {
         // create path keeps "w", which is also the only mode this phone has ever exercised: the
         // name probe never matched, so the "wt" branch that lived here never ran on the device.
         val modo = if (guardado != null) "wt" else "w"
-        if (destino == null) false
-        else {
+        if (destino == null) {
+            Log.w(TAG, "respaldo NO escrito: no hay Uri destino y crearRespaldo() devolvio null")
+            false
+        } else {
             context.contentResolver.openOutputStream(destino, modo)!!
                 .use { it.write(serializar().toByteArray()) }
             true
         }
     } catch (e: Exception) {
+        // The spec asks that a failed backup BE REPORTED and not abort the capture. The second
+        // half always held; this is the first. The exception was caught, flattened to `false`,
+        // and dropped at both call sites (`encolar`, `descartar`), so a phone whose backup had
+        // broken -- a revoked Uri, a full disk, a Documents/ the user emptied -- looked exactly
+        // like a phone whose backup worked. Logged here and not at the call sites because both
+        // route through this function, and because the exception is only visible here.
+        Log.w(TAG, "respaldo NO escrito: ${e.javaClass.simpleName}: ${e.message}", e)
         false
     }
 
@@ -214,6 +224,9 @@ class ColaStore(private val context: Context) {
     }
 
     companion object {
+        /** logcat tag for the backup's failure paths. `adb logcat -s ColaStore`. */
+        private const val TAG = "ColaStore"
+
         const val NOMBRE_RESPALDO = "bunker-cola.json"
 
         /**

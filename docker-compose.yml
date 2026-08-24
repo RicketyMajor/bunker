@@ -9,9 +9,9 @@ services:
       - POSTGRES_DB=library_db
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?falta en .env}
-    # 127.0.0.1 a proposito: en 0.0.0.0 cualquiera de la LAN o del tailnet abria la base
-    # entera como admin, saltandose Django por completo. Nada del codigo usa este puerto
-    # (grep 5436 = 0 coincidencias); esta publicado solo para un psql manual desde el host.
+    # 127.0.0.1 on purpose: on 0.0.0.0 anyone on the LAN or the tailnet opened the whole
+    # database as admin, bypassing Django entirely. Nothing in the code uses this port
+    # (grep 5436 = 0 hits); it is published only for a manual psql from the host.
     ports:
       - "127.0.0.1:5436:5432"
     healthcheck:

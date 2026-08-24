@@ -21,8 +21,8 @@ class AssetStoreTest {
     private fun manifiesto(version: String) = """
         {"version":"$version","files":{
           "app.html":"/movil/asset/app.html",
-          "app.js":"/static/movil/app.js",
-          "queue.js":"/static/movil/queue.js"}}
+          "main.js":"/static/movil/dist/main.js",
+          "selftest.js":"/static/movil/dist/selftest.js"}}
     """.trimIndent()
 
     private fun conFetch(fetch: (String) -> String) =
@@ -30,7 +30,7 @@ class AssetStoreTest {
 
     @Test
     fun `sin snapshot devuelve un objeto vacio, no null`() {
-        // app.js does JSON.parse on this. "" or null would throw inside the WebView, where the
+        // main.js does JSON.parse on this. "" or null would throw inside the WebView, where the
         // only symptom is a blank screen with the reason in a console the phone has not got.
         assertEquals("{}", store().estadoCacheado())
     }
@@ -59,18 +59,18 @@ class AssetStoreTest {
     fun `una generacion a medias no se instala`() {
         // A partially downloaded set means the HTML of one version running the JS of another.
         val s = store()
-        s.prepararGeneracion("abc123", mapOf("app.html" to "<html>", "app.js" to "x"))
-        assertFalse("instalo una generacion sin queue.js", s.hayGeneracionValida("abc123"))
-        s.prepararGeneracion("abc123", mapOf("app.html" to "<html>", "app.js" to "x",
-                                             "queue.js" to "y"))
+        s.prepararGeneracion("abc123", mapOf("app.html" to "<html>", "main.js" to "x"))
+        assertFalse("instalo una generacion sin selftest.js", s.hayGeneracionValida("abc123"))
+        s.prepararGeneracion("abc123", mapOf("app.html" to "<html>", "main.js" to "x",
+                                             "selftest.js" to "y"))
         assertTrue(s.hayGeneracionValida("abc123"))
     }
 
     @Test
     fun `volver a lo empaquetado borra la generacion`() {
         val s = store()
-        s.prepararGeneracion("abc123", mapOf("app.html" to "<html>", "app.js" to "x",
-                                             "queue.js" to "y"))
+        s.prepararGeneracion("abc123", mapOf("app.html" to "<html>", "main.js" to "x",
+                                             "selftest.js" to "y"))
         s.volverALoEmpaquetado()
         assertFalse(s.hayGeneracionValida("abc123"))
     }
@@ -102,7 +102,7 @@ class AssetStoreTest {
         val s = conFetch { url ->
             when {
                 url.endsWith("/api/movil/assets/") -> manifiesto("v2")
-                url.endsWith("queue.js") -> throw java.io.IOException("se corto")
+                url.endsWith("selftest.js") -> throw java.io.IOException("se corto")
                 else -> "contenido"
             }
         }
@@ -149,8 +149,8 @@ class AssetStoreTest {
         val s = store()
         for (malo in listOf("../fuera", "v1/anidado", "")) {
             try {
-                s.prepararGeneracion(malo, mapOf("app.html" to "x", "app.js" to "x",
-                                                 "queue.js" to "x"))
+                s.prepararGeneracion(malo, mapOf("app.html" to "x", "main.js" to "x",
+                                                 "selftest.js" to "x"))
                 throw AssertionError("acepto una version con ruta: $malo")
             } catch (e: IllegalArgumentException) { /* esperado */ }
         }
@@ -187,8 +187,8 @@ class AssetStoreTest {
         // which is the check above this one.
         val s = conFetch { url ->
             if (url.endsWith("/api/movil/assets/")) {
-                """{"version":"v9","files":{"app.html":"/a","app.js":"/b",
-                   "queue.js":"/c","sw.js":"/d"}}"""
+                """{"version":"v9","files":{"app.html":"/a","main.js":"/b",
+                   "selftest.js":"/c","sw.js":"/d"}}"""
             } else "contenido"
         }
         assertTrue("un archivo de mas congelo la instalacion", s.revisarAssets())
@@ -200,7 +200,7 @@ class AssetStoreTest {
         // The one place in this class that touches a real socket, so the one check that needs
         // one — twelve lines of ServerSocket, no dependency. With `instanceFollowRedirects` off,
         // `inputStream` throws only from 400 up: the body of a captive portal's redirect comes
-        // back as an ordinary string, gets written as `app.js`, and passes `hayGeneracionValida`,
+        // back as an ordinary string, gets written as `main.js`, and passes `hayGeneracionValida`,
         // which only asks whether the file is non-empty.
         val server = ServerSocket(0)
         thread {

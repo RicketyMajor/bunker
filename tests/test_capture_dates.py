@@ -289,6 +289,64 @@ def test_habit_refuses_a_day_it_is_not_scheduled_for():
         pass
 
 
+def test_habit_pays_and_saves_in_one_transaction():
+    """The guild write and the habit write must stand or fall together.
+
+    `complete_habit` writes two models on both branches: the good one calls
+    `guild.add_prestige()` (which saves the guild) and then `habit.save()`; the bad one saves
+    the guild and then the habit. An exception between them paid the reward and lost the streak
+    -- the same failure class as the rollover bug fixed 2026-08-11 and the one `finish_book`
+    had.
+
+    Inverted by making `habit.save()` raise. Without `@transaction.atomic` on the view the
+    guild keeps the prestige it was paid for a habit that never got marked; with it, the
+    savepoint takes both back. The raise is a plain Python exception, not a database error, so
+    the connection stays usable and the surrounding test transaction survives either way --
+    which is what makes the two outcomes comparable.
+    """
+    from django.db import transaction
+    from rest_framework.test import APIRequestFactory
+
+    from posada.models import DailyHabit, GuildProfile
+    from posada.views import complete_habit
+
+    f = APIRequestFactory()
+    original = DailyHabit.save
+    try:
+        with transaction.atomic():
+            guild, _ = GuildProfile.objects.get_or_create(id=1)
+            habito = DailyHabit.objects.create(
+                name="Habito atomico", difficulty="B", valid_days=str(HOY.weekday()),
+                current_streak=3)
+            guild.refresh_from_db()
+            prestigio_antes = guild.prestige
+
+            def revienta(self, *a, **kw):
+                raise RuntimeError("el disco se cae justo entre las dos escrituras")
+
+            DailyHabit.save = revienta
+            try:
+                complete_habit(f.post("/", {"habit_id": habito.id}, format="json"))
+            except RuntimeError:
+                pass
+            finally:
+                DailyHabit.save = original
+
+            guild.refresh_from_db()
+            assert guild.prestige == prestigio_antes, (
+                f"la guilda se quedo con el prestigio de un habito que no se guardo: "
+                f"{prestigio_antes} -> {guild.prestige}")
+            habito.refresh_from_db()
+            assert habito.current_streak == 3, f"la racha se movio a {habito.current_streak}"
+
+            print("OK · un fallo entre las dos escrituras no deja prestigio pagado")
+            raise transaction.TransactionManagementError("rollback")
+    except transaction.TransactionManagementError:
+        pass
+    finally:
+        DailyHabit.save = original
+
+
 def test_finish_book_rejects_an_id_that_does_not_exist():
     """The failure this guards is late and looks like a success.
 
@@ -525,6 +583,7 @@ if __name__ == "__main__":
         test_habit_refuses_a_past_date_and_leaves_the_streak_alone,
         test_habit_today_still_works,
         test_habit_refuses_a_day_it_is_not_scheduled_for,
+        test_habit_pays_and_saves_in_one_transaction,
         test_finish_book_rejects_an_id_that_does_not_exist,
         test_finish_book_without_an_id_still_works,
         test_the_collection_capture_verbs_answer_with_a_fact,

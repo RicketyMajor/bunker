@@ -611,6 +611,11 @@ def create_habit(request):
 
 
 @api_view(['POST'])
+# Both branches write two models: the good one pays the guild through `add_prestige()` (which
+# saves it) and then saves the habit; the bad one saves the guild and then the habit. Without
+# this, an exception between the two paid the reward and lost the streak increment -- the same
+# failure class as the 2026-08-11 rollover bug and the one `finish_book` had.
+@transaction.atomic
 def complete_habit(request):
     today = timezone.localdate()
     habit_id = request.data.get('habit_id')

@@ -31,14 +31,28 @@ def hp_vivos(ctx, adventurers):
     basic-attack branch. A leaked mirror hands `sesion.py` a live value where it expects the
     snapshot, and the session's damage would then be netted against the wrong base.
     """
-    foto = {a.id: a.current_hp for a in adventurers}
-    for a in adventurers:
+    # Only adventurers the simulation still counts as ALIVE. A downed one (`temp_hp <= 0`) is
+    # out of the fight -- `combat.py:42` keeps them out of initiative, `combat.py:104` out of
+    # the target pool, and both dispatchers return early when the CASTER is down -- but they
+    # stay in the `allies` list every skill receives. Lending them their negative HP made
+    # `aura_proteccion`'s ally gate (`adv.current_hp < adv.max_hp * 0.4`, skills.py:2342) true
+    # for the first time, and its `min(max_hp, current_hp + heal)` wrote the corpse back above
+    # zero: measured through the real dispatcher, an ally at -12 came back at 20 and re-entered
+    # initiative. Before this window existed they read the session-start snapshot, the gate was
+    # false, and no revival was possible. This engine has no revival mechanic -- `sesion.py`
+    # has an infirmary branch instead -- so restoring that invariant is the conservative read.
+    #
+    # A whole-session probe missed this: the PAL spends `aura_proteccion` on a merely wounded
+    # ally long before anyone falls, and it is once per session. The state had to be built.
+    en_pie = [a for a in adventurers if ctx.temp_hp[a.id] > 0]
+    foto = {a.id: a.current_hp for a in en_pie}
+    for a in en_pie:
         a.current_hp = ctx.temp_hp[a.id]
-    vivo = {a.id: a.current_hp for a in adventurers}
+    vivo = {a.id: a.current_hp for a in en_pie}
     try:
         yield
     finally:
-        for a in adventurers:
+        for a in en_pie:
             delta = a.current_hp - vivo[a.id]
             ctx.temp_hp[a.id] = a.current_hp
             a.current_hp = max(0, min(a.max_hp, foto[a.id] + delta))

@@ -32,7 +32,22 @@ class MockAdventurer:
         self.class_resources = {}
         
     def get_stat_modifiers(self):
-        return {'str': 3, 'dex': 3, 'con': 3, 'int': 3, 'wis': 3, 'cha': 3}
+        # The real `Adventurer.get_stat_modifiers` (posada/models.py:405-408) declares
+        # SEVENTEEN keys; this mock declared six, so any skill indexing one of the other
+        # eleven directly raised KeyError. `golpe_brutal:102` does `adv_mods['damage']` --
+        # note the lines around it use `.get(..., default)` -- and it only runs when the
+        # attack lands, which is why it surfaced as "the gate fails about 1 run in 10"
+        # rather than as a test that simply fails. Measured 2026-08-24: seeds 3 and 33 of
+        # the first 40. It was never an engine bug: the model always seeds `damage: 2`.
+        #
+        # Mirrored by hand rather than called for real, because the real method walks
+        # `get_equipped_items()` and that hits the database. If the model gains a key, the
+        # seed sweep described at SEMILLA is what finds it.
+        return {'str': 3, 'dex': 3, 'con': 3, 'int': 3, 'wis': 3, 'cha': 3, 'luk': 3,
+                'armor': 0, 'damage': 2, 'weapon_dice_count': 0, 'weapon_dice_sides': 0,
+                'bonus_dmg_dice_count': 0, 'bonus_dmg_dice_sides': 0,
+                'on_hit_effect': 'NON', 'effect_chance': 0, 'effect_dice_count': 1,
+                'effect_dice_sides': 4}
 
 def create_mock_enemy():
     return {
@@ -43,9 +58,26 @@ def create_mock_enemy():
         'stats': {'str': 12, 'dex': 12, 'con': 12, 'int': 12, 'wis': 12, 'cha': 12, 'armor': 14}
     }
 
+# The gate is seeded, the fuzzing is kept, and the two are the same knob.
+#
+# Nothing seeded the global RNG here, so every run simulated a different 50-turn combat and
+# roughly 1 run in 10 missed an assertion. `bunker doctor` is the only automated gate this
+# project has and every session starts with it: a gate that cries wolf once in ten teaches its
+# reader to ignore it, which is worse than a test that simply fails.
+#
+# But the accidental fuzzing was the only thing in this project that ever exercised the combat
+# engine across many seeds, and pinning it alone would hide whatever it was finding. So the
+# seed is a variable with a default: `bunker doctor` gets a reproducible run, and a sweep is
+#     for s in $(seq 1 200); do BUNKER_SEMILLA=$s python -m tests.test_posada_skills || \
+#       echo "SEMILLA MALA: $s"; done
+# A seed that fails is reproducible by definition -- pin it in its own check and fix it.
+SEMILLA = int(os.environ.get('BUNKER_SEMILLA', '4242'))
+
+
 def run_tests():
+    random.seed(SEMILLA)
     skills = SkillRegistry.get_all_skills()
-    print(f"Testing {len(skills)} skills...")
+    print(f"Testing {len(skills)} skills... (semilla {SEMILLA})")
     
     errors = []
     
@@ -141,6 +173,10 @@ def run_tests():
     return len(errors)
 
 def simulate_combat_balance():
+    # Seeded again rather than relying on run_tests' seed: the two are run together today, but
+    # a caller that runs only this one would otherwise get an unseeded RNG and the flakiness
+    # back. See SEMILLA above for how to sweep.
+    random.seed(SEMILLA)
     print("\n--- Phase 2: Combat Balance Simulation ---")
     # Derivado del modelo, no escrito a mano: la lista literal traía BDR, CL y FGT — tres
     # códigos que no existen — así que tres iteraciones corrían sobre una lista de skills
