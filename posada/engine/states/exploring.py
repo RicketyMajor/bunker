@@ -11,6 +11,7 @@ import random
 import logging
 
 from posada.models import InventorySlot, ItemRarity
+from posada.engine.context import hp_vivos
 from posada.engine.data.flavor_tables import EVENT_TEXTS, FLAVOR_DATABASE
 from posada.engine.data.loot_tables import COIN_POOL
 from posada.engine.data.tablas import COIN_COLORS, MONSTER_COLORS
@@ -237,37 +238,38 @@ def _session_skill_eval(ctx, adventurers):
                     available_session_skills.append(skill_data)
 
         if available_session_skills:
-            context = {
-                'caster': skill_adv,
-                'allies': adventurers,
-                'enemies': [],
-                'adv_status': ctx.adv_status_tracker,
-                'current_second': ctx.current_second - 2,
-                'log': ctx.script,
-                'eval_mode': True,
-                'session_duration': ctx.total_seconds
-            }
-            best_action = None
-            best_score = 50
-            for skill in available_session_skills:
-                try:
-                    score = skill["execute"](context)
-                    if isinstance(score, bool):
-                        score = 0
-                    if score > best_score:
-                        best_score = score
-                        best_action = skill
-                except Exception as e:
-                    logging.warning(f"Skill eval error: {e}")
+            with hp_vivos(ctx, adventurers):
+                context = {
+                    'caster': skill_adv,
+                    'allies': adventurers,
+                    'enemies': [],
+                    'adv_status': ctx.adv_status_tracker,
+                    'current_second': ctx.current_second - 2,
+                    'log': ctx.script,
+                    'eval_mode': True,
+                    'session_duration': ctx.total_seconds
+                }
+                best_action = None
+                best_score = 50
+                for skill in available_session_skills:
+                    try:
+                        score = skill["execute"](context)
+                        if isinstance(score, bool):
+                            score = 0
+                        if score > best_score:
+                            best_score = score
+                            best_action = skill
+                    except Exception as e:
+                        logging.warning(f"Skill eval error: {e}")
 
-            if best_action:
-                context['eval_mode'] = False
-                try:
-                    success = best_action["execute"](context)
-                    if success:
-                        ctx.session_skills_tracker[skill_adv.id].add(best_action["id"])
-                except Exception as e:
-                    logging.warning(f"Skill exec error: {e}")
+                if best_action:
+                    context['eval_mode'] = False
+                    try:
+                        success = best_action["execute"](context)
+                        if success:
+                            ctx.session_skills_tracker[skill_adv.id].add(best_action["id"])
+                    except Exception as e:
+                        logging.warning(f"Skill exec error: {e}")
 
 
 def _discovery_event(ctx, adventurers):

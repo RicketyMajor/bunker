@@ -12,6 +12,7 @@ import random
 import logging
 
 from posada.models import InventorySlot, ItemRarity
+from posada.engine.context import hp_vivos
 from posada.engine.data.loot_tables import COIN_DROPS, ITEM_DROPS
 from posada.engine.estados import NOMBRES
 from posada.engine.data.tablas import COIN_COLORS, MONSTER_COLORS, FLAVOR_ADV, FLAVOR_MONSTER
@@ -246,23 +247,27 @@ def _adventurer_turn(ctx, adv, adventurers):
         'eval_mode': True
     }
 
-    for skill in available_skills:
-        try:
-            score = skill["execute"](context)
-            if score > best_score:
-                best_score = score
-                best_action = skill
-        except Exception as e:
-            logging.warning(f"Skill eval error: {e}")
+    with hp_vivos(ctx, adventurers):
+        for skill in available_skills:
+            try:
+                score = skill["execute"](context)
+                if score > best_score:
+                    best_score = score
+                    best_action = skill
+            except Exception as e:
+                logging.warning(f"Skill eval error: {e}")
 
-    context['eval_mode'] = False
+        context['eval_mode'] = False
 
+        if best_action != "BASIC_ATTACK":
+            success = best_action["execute"](context)
+            if success:
+                ctx.combat_skills_tracker[adv.id].add(best_action["id"])
+
+    # OUTSIDE the window on purpose: `_basic_attack` moves `ctx.temp_hp` itself, and the window
+    # writes the mirror back into that same dict on exit -- it would undo the damage just dealt.
     if best_action == "BASIC_ATTACK":
         _basic_attack(ctx, adv, adv_mods, adventurers)
-    else:
-        success = best_action["execute"](context)
-        if success:
-            ctx.combat_skills_tracker[adv.id].add(best_action["id"])
 
 
 def _basic_attack(ctx, adv, adv_mods, adventurers):

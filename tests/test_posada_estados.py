@@ -698,6 +698,180 @@ def test_cada_clase_nivel_1_puede_actuar():
           f"sin nada que hacer: {hambrientas}")
 
 
+def _party_de_sonda(clases, hp):
+    """Planted party. The database holds ONE adventurer (a CLR), so a check that runs a
+    session against `Adventurer.objects.all()` exercises a single class and reports green
+    for the wrong reason. Callers wrap this in a transaction they roll back."""
+    from posada.models import Adventurer
+    return [Adventurer.objects.create(
+        name=f"Sonda{i}", adv_class=c, race='HUM', level=10, max_hp=100, current_hp=hp,
+        base_str=14, base_dex=14, base_con=14, base_int=14, base_wis=14, base_cha=14,
+        base_luk=10, class_resources={}) for i, c in enumerate(clases)]
+
+
+def test_la_ventana_de_hp_devuelve_lo_que_pidio_prestado():
+    """The whole contract of `hp_vivos`, the window both dispatchers borrow HP through.
+
+    Written this way after the obvious check failed to discriminate: asserting at session level
+    that `current_hp` never comes back below where it started stays GREEN with the restore
+    ripped out, because the live simulation ends healed anyway. Measured on seed 4242 --
+    correct: `{MNK:100, ROG:73, PAL:46, FTR:57}`; leaking: `{MNK:99, ROG:100, PAL:98, FTR:100}`.
+    Both satisfy "never below 20". A weak invariant over a real session is worth less than the
+    exact contract over a fake one.
+
+    The contract: inside the window a skill reads the live value; on the way out the live dict
+    keeps whatever the skill wrote, and `current_hp` gets its own accumulated value plus that
+    same delta -- which is what a skill doing `current_hp = min(max_hp, current_hp + heal)`
+    produced before the window existed. `sesion.py:91` discards a negative net, so those direct
+    writes are the only thing that persists healing; restoring the bare snapshot deletes it.
+    """
+    from types import SimpleNamespace
+    from posada.engine.context import hp_vivos
+
+    adv = SimpleNamespace(id=1, current_hp=50, max_hp=100)
+    ctx = SimpleNamespace(temp_hp={1: 20})
+
+    with hp_vivos(ctx, [adv]):
+        visto = adv.current_hp
+        adv.current_hp += 10          # a skill heals 10, computed off the live value
+
+    check(visto == 20, f"dentro de la ventana la skill lee el valor VIVO; leyo {visto}")
+    check(ctx.temp_hp[1] == 30, f"al salir, temp_hp se queda con lo que la skill escribio; "
+                                f"es {ctx.temp_hp[1]}")
+    check(adv.current_hp == 60, f"y current_hp recupera su propio valor mas el delta (50+10); "
+                                f"es {adv.current_hp}")
+
+    # A skill that raises must not leave the mirror behind: both dispatchers catch exceptions
+    # around the call, and combat's basic-attack branch leaves through the same `finally`.
+    adv2 = SimpleNamespace(id=2, current_hp=50, max_hp=100)
+    ctx2 = SimpleNamespace(temp_hp={2: 20})
+    try:
+        with hp_vivos(ctx2, [adv2]):
+            raise RuntimeError("una skill que revienta")
+    except RuntimeError:
+        pass
+    check(adv2.current_hp == 50,
+          f"una excepcion dentro de la ventana tampoco deja el espejo puesto; "
+          f"quedo en {adv2.current_hp}")
+
+
+def test_el_despachador_de_sesion_entrega_hp_vivos():
+    """A SESSION skill must be chosen on the HP the engine is actually simulating.
+
+    The assertion is on what the dispatcher DID, not on `current_hp` afterwards: the window
+    restores it on the way out, so reading the field after the call proves nothing. A CLR at
+    level 1 has exactly one SESSION skill, `dominio_divino`, and it is gated on being hurt.
+    With the snapshot saying 100/100 it scores at or below the floor and nothing is dispatched;
+    with the live value at 20/100 it clears the floor.
+
+    Measured 2026-08-23 across the whole grid: 75 of 130 (class, level) pairs change which
+    skill they dispatch once the live value reaches them.
+    """
+    from types import SimpleNamespace
+    from posada.models import Adventurer
+    from posada.engine.states.exploring import _session_skill_eval
+
+    adv = Adventurer(id=8001, name="Sonda", adv_class='CLR', race='HUM', level=1,
+                     max_hp=100, current_hp=100, base_str=14, base_dex=14, base_con=14,
+                     base_int=14, base_wis=14, base_cha=14, base_luk=10,
+                     class_resources={'mana': 3})
+    ctx = SimpleNamespace(temp_hp={8001: 20},
+                          session_skills_tracker={8001: set()},
+                          adv_status_tracker={8001: set()},
+                          script=[], current_second=2400, total_seconds=3600)
+
+    _session_skill_eval(ctx, [adv])
+
+    check(ctx.session_skills_tracker[8001],
+          f"con HP vivos a 20/100 el CLR 1 despacha su unica skill SESSION; "
+          f"despachadas: {ctx.session_skills_tracker[8001] or 'ninguna'}")
+    check(adv.current_hp >= 100,
+          f"y la ventana restaura current_hp al salir; quedo en {adv.current_hp}")
+
+
+def _recursos_como_el_runner(clase, nivel):
+    """Hand-copy of runner.py:43-56.
+
+    ponytail: a hand-copy, because the runner seeds resources inline inside
+    `generate_session_script` and there is no helper to call. Ceiling: a class whose seeding
+    changes there and not here makes this probe measure a party the engine never builds --
+    silent drift, in the one file whose job is catching drift. Upgrade: extract the runner's
+    seeding into a function and call it from both, the day a class's resources change.
+ `_precondicion` plants every resource at 99, which
+    measures POSSIBILITY; this measures the real start of a session."""
+    if clase in ['WIZ', 'SOR', 'WLK', 'CLR', 'DRD', 'BRD']:
+        return {'mana': nivel * 3}
+    if clase == 'PAL':
+        return {'mana': nivel * 2, 'sanacion': nivel * 5}
+    if clase == 'MNK':
+        return {'ki': nivel * 2}
+    if clase == 'BBN':
+        return {'furia': 2 + nivel // 3}
+    return {'stamina': nivel * 2}
+
+
+def _pares_sin_despacho(hp_vivo, segundos=(1200, 2400, 3400)):
+    """Drive the real dispatcher once per (class, level) and collect the pairs it leaves idle.
+
+    Goes through `_session_skill_eval` rather than scoring skills by hand, because the thing
+    under test is the dispatcher, not the skills. `current_hp` is the session-start snapshot at
+    full health; `hp_vivo` is what the engine is simulating.
+
+    Seconds are swept and not pinned: six SESSION skills gate on
+    `current_second <= session_duration / 2`, so a single 1800 against a 3600-second session
+    sits exactly on the excluded side of that boundary and reports 84 dry pairs where 1801
+    reports 43.
+    """
+    from types import SimpleNamespace
+    from posada.models import Adventurer, AdventurerClass
+    from posada.engine.states.exploring import _session_skill_eval
+
+    secos = []
+    for clase in AdventurerClass.values:
+        for nivel in range(1, 11):
+            advs = [Adventurer(id=8100 + i, name=f"S{i}", adv_class=c, race='HUM',
+                               level=nivel, max_hp=100, current_hp=100, base_str=14,
+                               base_dex=14, base_con=14, base_int=14, base_wis=14,
+                               base_cha=14, base_luk=10,
+                               class_resources=_recursos_como_el_runner(c, nivel))
+                    for i, c in enumerate([clase, 'FTR', 'CLR'])]
+            ctx = SimpleNamespace(
+                temp_hp={a.id: hp_vivo for a in advs},
+                session_skills_tracker={a.id: set() for a in advs},
+                adv_status_tracker={a.id: set() for a in advs},
+                script=[], current_second=0, total_seconds=3600)
+            for seg in segundos:
+                ctx.current_second = seg
+                _session_skill_eval(ctx, advs)
+            if not ctx.session_skills_tracker[advs[0].id]:
+                secos.append(f"{clase}{nivel}")
+    return secos
+
+
+def test_un_grupo_herido_despierta_las_skills_condicionadas_a_hp():
+    """The harm this fix removes, measured through the dispatcher itself.
+
+    A party is wounded by combat, which lives in `ctx.temp_hp`; `current_hp` stays at the
+    session-start snapshot and only ever goes UP, because heals write it and damage does not.
+    So the 68 skills conditioning on `caster.current_hp` are progressively silenced over a
+    session and never re-armed. Measured 2026-08-23 over the whole grid, live value at 20/100
+    against a snapshot of 100/100:
+
+        without the dispatch window:  43 of 130 pairs dispatch NOTHING
+        with it:                       6 of 130
+
+    Both numbers measured by running this same function against the tree with and without
+    `hp_vivos`, not derived.
+
+    The threshold is 12 because the remaining pairs are a balance question, not a dispatch one:
+    they have no SESSION skill that can clear the floor at any HP. That list is Alonso's.
+    """
+    secos = _pares_sin_despacho(hp_vivo=20)
+    check(len(secos) <= 12,
+          f"con el grupo herido, 12 pares (clase, nivel) o menos se quedan sin despachar; "
+          f"son {len(secos)}: {' '.join(secos)}")
+
+
 if __name__ == '__main__':
     test_vocabulario_es_coherente()
     test_ningun_nombre_fuera_del_vocabulario()
@@ -711,4 +885,7 @@ if __name__ == '__main__':
     test_ninguna_session_lee_enemies()
     test_cada_clase_nivel_1_puede_actuar()
     test_ninguna_skill_nueva_es_inalcanzable()
+    test_la_ventana_de_hp_devuelve_lo_que_pidio_prestado()
+    test_el_despachador_de_sesion_entrega_hp_vivos()
+    test_un_grupo_herido_despierta_las_skills_condicionadas_a_hp()
     print(f"\n{_checks} comprobaciones OK.")
