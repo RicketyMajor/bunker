@@ -1,166 +1,149 @@
 <div align="center">
   <h1>BUNKER</h1>
-  <p><b>Centro de Operaciones de Vida en la Terminal</b></p>
-  <p>Gestión de Inventario • Productividad RPG • Estudio de Ajedrez • Sistema Kanban</p>
+  <p><b>Inventario de una colección física, en la terminal</b></p>
+  <p>Biblioteca • Videoclub • Disquera</p>
 </div>
 
 ---
 
-**Bunker** es un ecosistema completo de microservicios diseñado para mejorar tu productividad y catalogar tus colecciones físicas desde la comodidad (y velocidad) de tu terminal. A través de una Interfaz de Usuario Textual (TUI) rica y asíncrona, conectada a un cerebro backend impulsado por Django, Bunker te permite catalogar colecciones físicas, organizar tu tiempo mediante metodologías RPG, analizar partidas de ajedrez y mucho más.
+**Bunker** cataloga una colección física de libros, películas y discos desde la terminal. Una
+Interfaz de Usuario Textual (TUI) asíncrona sobre una API Django + PostgreSQL en Docker, con una
+bandada de scrapers que vigilan novedades y un acompañante móvil offline para capturar sin estar
+delante del portátil.
 
-> **[PLACEHOLDER IMAGEN: DEMO GENERAL]**
-> *(Captura sugerida: Un GIF navegando por las distintas pestañas de Bunker: Gremio, Kanban, Ajedrez, Libros, mostrando la fluidez de Textual).*
+> **Hasta el 2026-08-27 Bunker llevaba además un motor RPG de productividad y un laboratorio de
+> ajedrez.** Son dos repositorios aparte desde entonces —`~/dev/posada` y `~/dev/ajedrez`— con su
+> propia base de datos y su propio puerto. Este repositorio no puede alcanzarlos, y eso es
+> deliberado.
 
 ---
 
-## Arquitectura Global del Sistema
-
-Bunker no es un simple script, es una arquitectura orientada a servicios que separa la lógica de negocio, la recolección asíncrona de datos y la visualización.
+## Arquitectura
 
 ```mermaid
 graph TD
-    subgraph "Capa de Presentación (Frontend)"
+    subgraph "Presentación"
         TUI[Terminal UI<br/>Textual + Typer]
-        Scanner[Mobile QR Scanner<br/>vía SSH Tunnel]
+        MOVIL[Transmisor de Campo<br/>PWA + APK Android]
     end
 
-    subgraph "Capa Lógica (Backend Core)"
-        API[Django REST API<br/>Gunicorn/WSGI]
+    subgraph "Backend"
+        API[Django REST API]
         DB[(PostgreSQL)]
         API <--> DB
     end
 
-    subgraph "Capa de Recolección (Scrapers y Oráculos)"
-        Node[Scraper Engine<br/>Node.js + Puppeteer]
-        TMDB[API Externa<br/>TMDB / OMDB]
-        Books[Scrapers Editoriales<br/>Planeta, Ivrea, etc.]
+    subgraph "Recolección"
+        Node[Scrapers<br/>Node.js + Puppeteer]
+        TMDB[APIs externas<br/>TMDB / Discogs]
     end
 
     TUI <--> |HTTP/REST JSON| API
-    Scanner -.-> |POST Data| API
-    Node -.-> |Inserta novedades| DB
-    Node --> Books
+    MOVIL -.-> |cola offline, vuelca al reconectar| API
+    Node -.-> |novedades| DB
     API --> TMDB
 ```
 
+Los tres contenedores escuchan **sólo en `127.0.0.1`**: el acceso desde fuera va por
+`tailscale serve`, que es lo que hace que la API no necesite autenticar 50 endpoints uno a uno.
+
 ---
 
-## Stack Tecnológico
+## Stack
 
 | Componente | Tecnologías |
 | :--- | :--- |
-| **Backend / API** | Python 3.12, Django, Django REST Framework |
+| **Backend / API** | Python 3.12, Django 6, Django REST Framework |
 | **Base de Datos** | PostgreSQL (Dockerizado) |
-| **Interfaz de Terminal**| Textual (Framework TUI asíncrono), Typer, Plotext (para gráficos ASCII) |
-| **Workers / Scrapers** | Node.js, Puppeteer (Web Scraping Headless) |
-| **Infraestructura** | Docker, Docker Compose, Bash Scripting |
+| **Interfaz de Terminal** | Textual, Typer, Plotext (gráficos ASCII) |
+| **Móvil** | PWA con esbuild + APK Android (Kotlin, WorkManager) |
+| **Workers / Scrapers** | Node.js, Puppeteer |
+| **Infraestructura** | Docker, Docker Compose, Tailscale |
 
 ---
 
-## Módulos Principales
+## Módulos
 
-### 1. La Posada (Motor RPG y Productividad)
-El corazón de Bunker. Un sistema de productividad gamificado diseñado para premiar la constancia y castigar la pereza. Cada acción en Bunker impacta el progreso de tu "Gremio".
+### 1. Biblioteca, Videoclub y Disquera (inventario físico)
 
-```mermaid
-flowchart LR
-    A[Sesión Deep Work] -->|Otorga XP y Oro| B(Gremio de Aventureros)
-    C[Tareas Kanban] -->|Completar| B
-    D[Eventos Calendario] -->|Asistir| B
-    B -->|Sube Nivel| E{Desbloquea Mejoras}
-```
+Gestión para coleccionistas del formato físico: libros, Blu-rays, 4K, DVDs, vinilos, CDs y casetes.
 
-- **Gestión de Gremio:** Recluta avatares, mejora sus estadísticas (Fuerza, Inteligencia, etc.) en sesiones de trabajo y administra el prestigio del Gremio.
-- **Sala de Enfoque (Timer):** Un reloj Pomodoro / Deep Work que genera eventos narrativos estilo MUD mientras trabajas.
-- **Kanban y Calendario:** Tableros dinámicos (hasta 4 columnas personalizables) y agenda interactiva. Mover tareas a la columna final otorga prestigio automáticamente.
-- **Tracker de Hábitos (Gráficos Infinitos):** Mide cualquier métrica (horas de lectura, sueño, visitas al gimnasio) renderizando gráficos de líneas y barras 100% en ASCII dentro de la terminal.
+- **Inventario y préstamos.** Control exacto de lo que tienes, a quién se lo prestaste y qué te
+  falta (*wishlists*).
+- **Metadatos automáticos.** TMDB para cine, Discogs para música, APIs de libros para portadas,
+  sinopsis y autores.
+- **Escáner móvil.** Levanta un túnel y dibuja un QR en la terminal; lo escaneas y usas la cámara
+  del teléfono como lector de códigos de barras (ISBN/UPC).
+- **Registro anual.** Lo que terminaste, mes a mes, con gráficos en ASCII dentro de la terminal.
 
-> **[PLACEHOLDER IMAGEN: LA POSADA - GRÁFICOS]**
-> *(Captura sugerida: La pestaña "Rutinas" mostrando un gráfico de Plotext dibujado con caracteres braille, junto con la lista de hábitos diarios).*
+### 2. Transmisor de Campo (captura offline)
 
-> **[PLACEHOLDER IMAGEN: LA POSADA - KANBAN]**
-> *(Captura sugerida: La pestaña "Kanban" mostrando las columnas de tareas y el calendario de eventos en la parte inferior).*
+Un acompañante móvil que **funciona sin red**. La cola vive en SQLite nativo y la vuelca
+`WorkManager` con la aplicación cerrada; el respaldo sobrevive a una desinstalación. En `/panel/`
+la misma superficie sirve para consultar en vez de capturar.
 
----
+### 3. El Oráculo (scrapers de novedades)
 
-### 2. Estudio de Ajedrez (Chess Study)
-Herramienta analítica para el jugador que busca mejorar, integrada sin salir de la terminal.
+Tres demonios de Node.js en segundo plano. Vigilan editoriales y sellos (Buscalibre, Planeta, Ivrea,
+Discogs…) y anotan en la base cuando algo de tu lista entra en stock o preventa.
 
-```mermaid
-flowchart TD
-    A[Importar PGN] --> B[Visualizador ASCII]
-    B --> C[Motor Stockfish]
-    C --> D[Barra de Evaluación]
-    B --> E[Árbol de Variantes]
-    E --> F[Notas Persistentes]
-```
+### 4. Bunker Core
 
-- **Motor Interno:** Juega y analiza posiciones gracias a la integración en tiempo real con Stockfish.
-- **Árbol de Variantes Infinito:** Guarda líneas principales y bifurcaciones (sub-variantes) de tus partidas para explorar diferentes posibilidades estratégicas.
-- **Toma de Notas Contextual:** Escribe recordatorios persistentes para posiciones específicas en el tablero.
-
-> **[PLACEHOLDER IMAGEN: ESTUDIO DE AJEDREZ]**
-> *(Captura sugerida: El tablero de ajedrez renderizado en ASCII, la barra de evaluación de Stockfish calculando ventaja, y el árbol de variantes a la derecha).*
+La capa transversal: el BFF del panel, el parte diario, la revisión semanal, el health check y el
+respaldo.
 
 ---
 
-### 3. Biblioteca y Bóveda (Inventario Físico)
-Gestión para coleccionistas del formato físico (Libros, Blu-rays, 4K, DVDs).
+## Instalación
 
-- **Tracking Absoluto:** Control exacto de tu inventario, registro de préstamos a amigos y *Wishlists*.
-- **Integración de Metadatos:** Conexión directa a The Movie Database (TMDB) y APIs de libros para autocompletar portadas, sinopsis y directores.
-- **Escáner Móvil Asíncrono:** Levanta un túnel de red que renderiza un código QR en tu terminal. Lo escaneas con tu móvil y usas la cámara del celular como lector de códigos de barras (ISBN/UPC) para ingresar ítems a Bunker en tiempo real.
+Backend en Docker, cliente de terminal nativo.
 
-> **[PLACEHOLDER IMAGEN: INVENTARIO]**
-> *(Captura sugerida: La Data Table de películas o libros, mostrando filtros y metadatos detallados).*
+### Requisitos
 
-> **[PLACEHOLDER IMAGEN: ESCÁNER QR]**
-> *(Captura sugerida: El modal en la terminal mostrando un código QR gigante en blanco y negro).*
+- Python 3.10+ · [Docker](https://docs.docker.com/get-docker/) y Docker Compose
+- Clave gratuita de [TMDB](https://developer.themoviedb.org/docs/getting-started)
 
----
+### Paso 1 — Clonar y configurar el entorno
 
-### 4. El Oráculo (Scraper de Novedades)
-Un demonio de Node.js que vive en segundo plano. Monitorea sitios de editoriales (Buscalibre, Planeta, Ivrea, etc.) y te notifica automáticamente en tu base de datos cuando un libro o manga de tu lista de deseos está en stock o en preventa.
-
----
-
-## Guía de Instalación y Despliegue
-
-Bunker está diseñado para instalarse en cualquier entorno UNIX (Linux/macOS). El backend se ejecuta herméticamente en Docker, mientras que el cliente de terminal (TUI) corre nativamente para máxima fluidez.
-
-### Requisitos Previos
-- [Python 3.10+](https://www.python.org/downloads/)
-- [Docker](https://docs.docker.com/get-docker/) y [Docker Compose](https://docs.docker.com/compose/install/)
-- Clave API gratuita de [TMDB](https://developer.themoviedb.org/docs/getting-started)
-
-### Paso 1: Clonar y Configurar
-Descarga el código y prepara tus variables de entorno.
 ```bash
 git clone https://github.com/RicketyMajor/bunker.git
 cd bunker
-touch .env
+cp .env.example .env
 ```
-Añade dentro del `.env` tu clave de API de TMDB:
+
+**Edita `.env` antes de seguir. Tres variables no tienen valor por defecto y el arranque falla
+en voz alta sin ellas** — a propósito: las que había antes están publicadas en este repositorio.
+
 ```ini
-TMDB_API_KEY=tu_clave_aqui
+DJANGO_SECRET_KEY=     # genérala, ver el comentario en .env.example
+POSTGRES_PASSWORD=     # la tuya; vacía hace fallar a docker compose, que es lo que se quiere
+TMDB_API_KEY=          # tu clave
 ```
 
-### Paso 2: Levantar el Servidor (Backend)
-Bunker utiliza Docker para levantar PostgreSQL y el servidor Django sin ensuciar tu sistema operativo.
+Genera la `SECRET_KEY` con:
+
 ```bash
-docker-compose up -d --build
+python -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(50)))"
 ```
-*Verifica que los contenedores estén corriendo:* `docker ps`.
 
-### Paso 3: Migraciones y Creación de Usuario
-Prepara las tablas de la base de datos y crea tu usuario administrador:
+### Paso 2 — Levantar el backend
+
 ```bash
-docker-compose exec web python manage.py migrate
-docker-compose exec web python manage.py createsuperuser
+docker compose up -d --build
+docker ps
 ```
 
-### Paso 4: Instalar el Cliente de Terminal (TUI)
-Para no romper las dependencias de tu sistema (PEP 668), Bunker TUI se instala en un entorno virtual aislado `.venv`. Hemos preparado un script que automatiza todo:
+### Paso 3 — Migraciones y usuario
+
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser
+```
+
+### Paso 4 — Instalar la TUI
+
+Se instala en un `.venv` aislado para no romper las dependencias del sistema (PEP 668):
+
 ```bash
 chmod +x install.sh
 ./install.sh
@@ -168,21 +151,31 @@ chmod +x install.sh
 
 ---
 
-## 🎮 Uso del Sistema
-
-La herramienta de línea de comandos principal de Bunker se denomina `bunker`. 
-Para usarla, **siempre debes activar primero el entorno virtual**:
+## Uso
 
 ```bash
-# Estando en el directorio del proyecto
 source .venv/bin/activate
+bunker enter     # la TUI
+bunker doctor    # 12 checks + API + Transmisor + Android + migraciones
 ```
 
-### Comandos Principales
+`bunker doctor` es la compuerta: si sale verde, la pila está sana. Córrelo antes de dar por buena
+cualquier sesión de trabajo.
 
-- **`bunker enter`**: Lanza la interfaz gráfica de terminal (TUI). Es el comando principal que usarás el 99% del tiempo para acceder a La Posada, el Ajedrez, etc.
+*(Alias sugerido en tu `.bashrc`)*:
 
-*(Tip: Puedes crear un alias en tu `.bashrc` o `.zshrc` para entrar a Bunker desde cualquier parte)*:
 ```bash
 alias bunker-os="cd ~/ruta/a/bunker && source .venv/bin/activate && bunker enter"
 ```
+
+---
+
+## Respaldo
+
+Dos mecanismos independientes, a propósito:
+
+- Un `cron` dentro de la imagen, a las **00:00**, que vuelca al volumen `bunker_backups_data`.
+- Un timer de systemd en el host, a las **00:30** (`scripts/respaldo_pilas.sh`), que vuelca las
+  **tres** pilas a `~/dev/respaldos/` y rota las 7 últimas.
+
+Un volumen podado y un disco muerto son accidentes distintos.
