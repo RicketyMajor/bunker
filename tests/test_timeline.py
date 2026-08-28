@@ -9,15 +9,27 @@ in zeros — `MovieViewingSession` and `SolvedPuzzle` are empty, `ListeningEntry
 so a check that read what is already there would pass just as happily against a function that
 returns `[]`.
 
-**The gap test runs on `chess` on purpose.** It is the only module whose sources are entirely
-empty (`SolvedPuzzle`: 0 rows, verified 2026-08-19), so the middle period can be asserted to be
-*exactly* zero. On `books` the same assertion would be answered by live reading sessions —
-there are rows in July 2026 — and "at least one period came out empty" is a claim a six-month
-window satisfies whether or not the gap filling works at all.
+**The gap test EMPTIES its module first.** It used to run on `chess`, whose table happened to
+hold 0 rows — but "empty by accident" is not "empty by construction", and both zero-row modules
+left in the 2026-08-27 split. It now deletes every `MusicAnnualRecord` inside the rollback, so
+the middle period is exactly zero because this file made it so. On `books` the same assertion
+would be answered by live reading sessions, and "at least one period came out empty" is a claim
+a six-month window satisfies whether or not the gap filling works at all.
+
+**Two checks left with the split and were NOT reproduced**, because no surviving module has the
+shape they needed. Both are recorded in `context/general/state-of-the-project.md`:
+
+  · The TIMEZONE check drove `DeepWorkSession.start_time`, and all four remaining sources
+    (`AnnualRecord.date_finished`, `ReadingSession.date`, `MovieAnnualRecord.date_watched`,
+    `MusicAnnualRecord.date_listened`) are **DateField**, which `TruncMonth` does not convert.
+    Faking it on a DateField would assert nothing.
+  · The COUNT-vs-AMOUNT check needed a module whose SINGLE source is both the counting source
+    and the amount source — the shape that made posada report `count: 0` on 35 real sessions.
+    `books` has two sources and the other two are count-only, so nothing here can reach it.
 """
 
 import os
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import timedelta
 
 import django
 
@@ -30,10 +42,8 @@ from django.utils import timezone  # noqa: E402
 
 from bunker_core.timeline import WINDOW_MAX, serie  # noqa: E402
 from catalog.models import Author, Book, ReadingSession  # noqa: E402
-from chess_study.models import SolvedPuzzle  # noqa: E402
-from disquera.models import ListeningEntry  # noqa: E402
+from disquera.models import ListeningEntry, MusicAnnualRecord  # noqa: E402
 from movies.models import MovieViewingSession  # noqa: E402
-from posada.models import DeepWorkSession  # noqa: E402
 
 _checks = 0
 
@@ -45,20 +55,17 @@ def check(condicion, etiqueta):
     print(f"  ok  {etiqueta}")
 
 
-def _puzzle_en(dia, tz, n=1):
-    """SolvedPuzzle.solved_at es auto_now_add: create() lo pisa, hay que update() después."""
+def _disco_en(dia, n=1):
+    """`n` albums filed on `dia`. `MusicAnnualRecord` is count-only, which is what makes it the
+    right subject for the gap test: its `amount` must be 0 in every period, gap or not."""
     for i in range(n):
-        p = SolvedPuzzle.objects.create(puzzle_id=f"prueba-{dia}-{i}", rating=1500)
-        SolvedPuzzle.objects.filter(pk=p.pk).update(
-            solved_at=timezone.make_aware(datetime.combine(dia, datetime.min.time()) +
-                                          timedelta(hours=12), tz))
+        MusicAnnualRecord.objects.create(title=f"Disco {dia} {i}", date_listened=dia)
 
 
 def run_tests():
     # `localdate()`, no `date.today()`: el contenedor corre en UTC y el proyecto es
     # America/Santiago, así que después de las 20:00 `date.today()` ya es mañana.
     hoy = timezone.localdate()
-    tz = timezone.get_current_timezone()
 
     with transaction.atomic():
         # --- 1. Forma de la serie. ---
@@ -79,72 +86,27 @@ def run_tests():
               "count y amount son enteros en todos los periodos, nunca None")
 
         # --- 2. El agujero. Es lo que se rompe, no la agregación. ---
-        #     chess parte de cero filas, así que el mes de en medio se puede exigir EXACTO.
+        #     Se VACÍA la tabla primero, dentro del rollback: el mes de en medio es cero
+        #     porque este check lo hizo cero, no porque la tabla estuviera vacía de casualidad.
+        #     Los dos módulos que sí estaban vacíos se fueron el 2026-08-27.
+        MusicAnnualRecord.objects.all().delete()
         primero = hoy.replace(day=1)
         mes_1 = (primero - timedelta(days=1)).replace(day=1)          # mes pasado
         mes_2 = (mes_1 - timedelta(days=1)).replace(day=1)            # hace dos meses
-        _puzzle_en(hoy, tz, 2)
-        _puzzle_en(mes_2, tz, 3)
+        _disco_en(hoy, 2)
+        _disco_en(mes_2, 3)
 
-        s = {p['period']: p for p in serie('chess', 'monthly', 6)}
-        check(s[hoy.strftime('%Y-%m')]['count'] == 2, "el mes en curso cuenta sus dos puzzles")
+        s = {p['period']: p for p in serie('music', 'monthly', 6)}
+        mes = hoy.strftime('%Y-%m')
+        check(s[mes]['count'] == 2, "el mes en curso cuenta sus dos discos")
         check(s[mes_2.strftime('%Y-%m')]['count'] == 3, "hace dos meses cuenta sus tres")
         hueco = s.get(mes_1.strftime('%Y-%m'))
         check(hueco is not None, "el mes sin actividad NO se omite de la serie")
         check(hueco['count'] == 0 and hueco['amount'] == 0,
               "el mes sin actividad vuelve en ceros explícitos")
-        check(s[hoy.strftime('%Y-%m')]['amount'] == 0,
-              "chess no tiene 'amount': es 0, no None")
+        check(s[mes]['amount'] == 0, "music no tiene 'amount': es 0, no None")
 
-        # --- 3. Zona horaria. Solo muerde en los dos modelos DateTimeField. ---
-        #     La sesión se pone el ÚLTIMO día del mes pasado a las 23:30 locales, que en UTC
-        #     ya es el día 1 del mes en curso. Truncar en UTC la archivaría en este mes;
-        #     truncar en America/Santiago la deja en el pasado, que es donde ocurrió. Puesta
-        #     un día cualquiera —como decía el plan— la aserción es cierta con o sin zona
-        #     horaria, y pasaría 29 de cada 30 días sin medir nada.
-        #     Probarlo contra ReadingSession.date tampoco probaría nada: ese campo es un
-        #     DateField ya escrito con localdate().
-        fin_mes_pasado = primero - timedelta(days=1)
-        tarde = timezone.make_aware(datetime.combine(fin_mes_pasado, datetime.min.time()) +
-                                    timedelta(hours=23, minutes=30), tz)
-        check(tarde.astimezone(dt_timezone.utc).month != tarde.month,
-              f"el caso de prueba cruza el mes en UTC: local {tarde:%Y-%m-%d %H:%M} → "
-              f"UTC {tarde.astimezone(dt_timezone.utc):%Y-%m-%d %H:%M}")
-        antes = {p['period']: p['amount'] for p in serie('posada', 'monthly', 3)}
-        DeepWorkSession.objects.create(start_time=tarde, duration_minutes=45,
-                                       category="Prueba", completed=True)
-        despues = {p['period']: p['amount'] for p in serie('posada', 'monthly', 3)}
-        mes, pasado = hoy.strftime('%Y-%m'), mes_1.strftime('%Y-%m')
-        check(despues[pasado] - antes[pasado] == 45,
-              "una sesión a las 23:30 del último día del mes suma en ESE mes")
-        check(despues[mes] - antes[mes] == 0,
-              "y no se cuela en el mes siguiente, que es donde la pondría UTC")
-
-        # --- 3b. `count` y `amount` son papeles distintos, y un módulo puede tener los dos.
-        #     Esto es lo que faltaba: hasta 2026-08-19 la serie de posada devolvía `count: 0`
-        #     con 35 sesiones completadas en la base viva, porque el acumulador trataba
-        #     "tiene campo de monto" como "no es la fuente que cuenta". El bloque 3 de arriba
-        #     no podía verlo: lee `amount` y nunca `count`. El bloque 6 sí mira `count`, pero
-        #     sobre chess — el único módulo sin monto, justo donde la rama mala acertaba.
-        antes_c = {p['period']: p['count'] for p in serie('posada', 'monthly', 3)}
-        antes_a = {p['period']: p['amount'] for p in serie('posada', 'monthly', 3)}
-        DeepWorkSession.objects.create(start_time=timezone.now(), duration_minutes=90,
-                                       category="Prueba", completed=True)
-        despues_c = {p['period']: p['count'] for p in serie('posada', 'monthly', 3)}
-        despues_a = {p['period']: p['amount'] for p in serie('posada', 'monthly', 3)}
-        check(despues_c[mes] - antes_c[mes] == 1,
-              "posada CUENTA sus sesiones completadas, no solo suma minutos")
-        check(despues_a[mes] - antes_a[mes] == 90,
-              "y la misma sesión suma sus minutos en amount")
-
-        # Una sesión sin completar no entra en ninguno de los dos: el filtro sigue vivo.
-        DeepWorkSession.objects.create(start_time=timezone.now(), duration_minutes=77,
-                                       category="Prueba", completed=False)
-        sin_completar = {p['period']: p['count'] for p in serie('posada', 'monthly', 3)}
-        check(sin_completar[mes] == despues_c[mes],
-              "una sesión sin completar no suma al count de posada")
-
-        #     Movies y music son count-only por spec (corrección 2026-08-14): sus libros
+        # --- 3. Movies y music son count-only por spec (corrección 2026-08-14): sus libros
         #     mayores de minutos se vaciaron y no deben leerse. Una fila en cada uno tiene
         #     que ser invisible — antes reaparecía como `amount: 45` en la serie de música.
         ListeningEntry.objects.create(date=hoy, minutes_listened=45)
@@ -174,27 +136,24 @@ def run_tests():
               "una ventana que no es número cae al valor por defecto")
 
         # --- 6. Semanal: la clave es ISO y la ventana también se respeta. ---
-        sem = serie('chess', 'weekly', 4)
+        sem = serie('music', 'weekly', 4)
         check(len(sem) == 4, "una ventana semanal de 4 devuelve 4 semanas")
         check(all(len(p['period']) == 8 and '-W' in p['period'] for p in sem),
               f"la clave semanal es ISO 'AAAA-Wnn': {[p['period'] for p in sem]}")
-        check(sem[-1]['count'] == 2, "los puzzles de hoy caen en la semana en curso")
+        check(sem[-1]['count'] == 2, "los dos discos de hoy caen en la semana en curso")
 
         # --- 7. Presupuesto de consultas. books son DOS modelos, no uno. ---
         with CaptureQueriesContext(connection) as ctx:
             serie('books', 'monthly', 12)
         check(len(ctx) == 2,
               f"books = 2 consultas agrupadas (registros + páginas), no {len(ctx)}")
-        with CaptureQueriesContext(connection) as ctx:
-            serie('chess', 'monthly', 12)
-        check(len(ctx) == 1, f"chess = 1 consulta agrupada, no {len(ctx)}")
         for modulo in ('movies', 'music'):
             with CaptureQueriesContext(connection) as ctx:
                 serie(modulo, 'monthly', 12)
             check(len(ctx) == 1,
                   f"{modulo} = 1 consulta agrupada desde que no lee su libro mayor, no {len(ctx)}")
         with CaptureQueriesContext(connection) as ctx:
-            serie('posada', 'monthly', 60)
+            serie('music', 'monthly', 60)
         check(len(ctx) == 1,
               f"una ventana de 60 sigue siendo 1 consulta, no una por periodo: {len(ctx)}")
 

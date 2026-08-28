@@ -237,12 +237,8 @@
   <section class="card" id="leyendo"></section>
   <div class="grid">
     <button data-verb="terminar">TERMINÉ</button>
-    <button data-verb="habitos">HÁBITOS <span class="n" id="n-habitos"></span></button>
     <button data-verb="escanear">ESCANEAR</button>
     <button data-verb="wishlist">A LA LISTA</button>
-    <!-- Full width because it is the only verb here that has a state: the marker is how you
-         find out an expedition is still running without opening the sheet to check. -->
-    <button data-verb="sesion" style="grid-column:1/-1">EXPEDICIÓN <span class="n" id="n-sesion"></span></button>
   </div>
   <p id="instantanea" class="pos" style="text-align:center;margin:14px 0 0"></p>
 </main>
@@ -252,7 +248,6 @@
        forced with `?fuente=` without rebuilding the bundle. One request carries four blocks —
        one round trip is the offline-first shape, and each block still renders its own empty
        state through `vaciar`, so "the request worked but this block has nothing" is visible. -->
-  <section id="p-datos" data-fuente="/api/panel/" aria-busy="false"></section>
 
   <section id="p-serie-caja">
     <h2>ACTIVIDAD POR MES</h2>
@@ -322,20 +317,6 @@
           style="background:none;border:1px solid var(--bg-alt);color:var(--fg)">CANCELAR</button>
 </dialog>
 
-<dialog id="hoja-habitos" aria-labelledby="t-habitos">
-  <h2 id="t-habitos" style="margin:0 0 12px;font-size:19px">Hábitos de hoy</h2>
-  <!-- The warning lives at capture time on purpose. This is the one verb whose deferred
-       capture can be refused, and saying so here is cheaper than surprising you in
-       Despachos tomorrow. -->
-  <p style="color:var(--dim);font-size:14px;margin:0 0 12px">
-    Se marcan el mismo día. Uno capturado sin enlace y transmitido mañana no se aplica.</p>
-  <ul id="hb-lista" style="list-style:none;padding:0;margin:0 0 12px;max-height:44vh;overflow:auto"></ul>
-  <!-- autofocus on CERRAR: the first focusable element would otherwise be the first habit in
-       the list, and showModal() would arm it. There is no single primary action in a list,
-       so focus goes to the one control that cannot write anything. -->
-  <button class="act" id="hb-cerrar" autofocus
-          style="background:none;border:1px solid var(--bg-alt);color:var(--fg)">CERRAR</button>
-</dialog>
 
 <dialog id="hoja-escaner" aria-labelledby="t-escaner">
   <h2 id="t-escaner" style="margin:0 0 12px;font-size:19px">Escanear al Purgatorio</h2>
@@ -369,53 +350,6 @@
           style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
 </dialog>
 
-<dialog id="hoja-sesion" aria-labelledby="t-sesion">
-  <h2 id="t-sesion" style="margin:0 0 12px;font-size:19px">Expedición</h2>
-
-  <!-- Two panes, one dialog: an expedition is either being planned or being run, and the sheet
-       is the only place that shows either. Which one is displayed is decided by localStorage,
-       so a cold start in the middle of a session opens on the clock, not on an empty form. -->
-  <div id="se-config">
-    <label for="se-categoria" style="color:var(--dim);font-size:15px">¿En qué?</label>
-    <input id="se-categoria" type="text" autocomplete="off" placeholder="lectura, código, estudio…"
-           style="width:100%;font:inherit;font-size:19px;padding:14px;margin:6px 0 16px;
-                  background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
-
-    <label for="se-minutos" style="color:var(--dim);font-size:15px">Minutos</label>
-    <!-- The presets only fill the field below, so the duration has ONE source of truth and no
-         state of their own to communicate — which is why they carry no aria-pressed, unlike the
-         roster underneath, where being selected is a real fact about what gets sent. -->
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin:6px 0 8px">
-      <button type="button" data-min="25">25</button>
-      <button type="button" data-min="50">50</button>
-      <button type="button" data-min="90">90</button>
-    </div>
-    <input id="se-minutos" type="number" inputmode="numeric" min="1" max="480" step="1" value="25"
-           autocomplete="off"
-           style="width:100%;font:inherit;font-size:28px;text-align:center;padding:12px;
-                  background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
-
-    <p style="color:var(--dim);font-size:15px;margin:16px 0 6px">Partida</p>
-    <div class="grid" id="se-roster"></div>
-
-    <button class="act" id="se-empezar" style="margin-top:16px">EMPEZAR</button>
-  </div>
-
-  <div id="se-curso" style="display:none">
-    <p id="se-curso-categoria" class="title" style="margin:0;text-align:center"></p>
-    <p id="se-reloj" style="font-size:44px;text-align:center;margin:8px 0 0"
-       aria-live="off"></p>
-    <!-- The clock repaints every second and aria-live on it would make a screen reader read
-         the time out loud, for ever. The line that changes rarely is the one that announces. -->
-    <p id="se-restante" class="pos" aria-live="polite" style="text-align:center;margin:0 0 16px"></p>
-    <button class="act" id="se-archivar">ARCHIVAR</button>
-    <button class="act" id="se-rendirse"
-            style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">RENDIRSE</button>
-  </div>
-
-  <button class="act" id="se-cerrar"
-          style="background:none;border:1px solid var(--bg-alt);color:var(--dim);margin-top:8px">CERRAR</button>
-</dialog>
 
 <div id="toast" role="status"></div>
 

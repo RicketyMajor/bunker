@@ -34,8 +34,6 @@ const RUTAS = {
   terminar_libro: '/api/books/tracker/finish/',
   terminar_peli:  '/api/movies/tracker/finish/',
   terminar_disco: '/api/music/tracker/finish/',
-  habito:         '/posada/api/habits/complete/',
-  sesion:         '/posada/api/session/record/',
   escaneo_libro:  '/api/books/inbox/',
   escaneo_peli:   '/api/movies/inbox/',
   escaneo_disco:  '/api/music/inbox/',

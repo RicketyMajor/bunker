@@ -75,10 +75,10 @@ const restaurar = () => {
 
   await check('un 409 marca el item como rechazado, sin borrarlo', async () => {
     localStorage.removeItem(LLAVE);
-    Cola.encolar('habito', { habit_id: 1 });
+    Cola.encolar('paginas', { pages: 1 });
     await Cola.vaciar(async () => ({
       ok: false, status: 409,
-      json: async () => ({ message: 'No aplicado — los hábitos se marcan el mismo día.' }),
+      json: async () => ({ message: 'No aplicado — esa página ya se anotó.' }),
     }));
     assert(Cola.pendientes() === 1, 'borro un rechazo');
     assert(Cola.items()[0].error.includes('mismo día'), 'no guardo el mensaje real');
@@ -116,15 +116,15 @@ const restaurar = () => {
 
   await check('un rechazo del servidor no se confunde con falta de red', async () => {
     localStorage.removeItem(LLAVE);
-    Cola.encolar('habito', { habit_id: 1 });
+    Cola.encolar('paginas', { pages: 1 });
     const r409 = await Cola.vaciar(async () => ({
-      ok: false, status: 409, json: async () => ({ message: 'no toca hoy' }),
+      ok: false, status: 409, json: async () => ({ message: 'ya anotada' }),
     }));
     assert(r409.alcanzoElServidor === true,
       'un 409 se reporto como si no hubiera enlace: el chip diria SIN ENLACE conectado');
 
     localStorage.removeItem(LLAVE);
-    Cola.encolar('habito', { habit_id: 1 });
+    Cola.encolar('paginas', { pages: 1 });
     const rRed = await Cola.vaciar(async () => { throw new Error('sin ruta'); });
     assert(rRed.alcanzoElServidor === false, 'reporto contacto con el servidor sin haberlo tenido');
   });
@@ -148,15 +148,18 @@ const restaurar = () => {
   // deleted is invisible to a one-way check, and that is precisely what the minutes removal
   // could have left. Sorted so the comparison does not depend on declaration order.
   //
-  // This list is now load-bearing twice over. `Transmisor.RUTAS` in the APK is the map that
-  // actually posts, and TransmisorTest asserts the SAME twelve names against it. Hard-coded on
+  // This list is load-bearing twice over. `Transmisor.RUTAS` in the APK is the map that
+  // actually posts, and TransmisorTest asserts the SAME ten names against it. Hard-coded on
   // both sides on purpose: two maps compared against each other agree perfectly while both are
   // wrong, and a route added to one side only is the failure that reaches the phone as a capture
-  // POSTed to `/undefined`. `sesion` has no sheet until Task 11 and belongs here regardless —
-  // the queue must know a verb before anything can enqueue it.
+  // POSTed to `/undefined`.
+  //
+  // TEN since the 2026-08-27 Posada split, not twelve: `habito` and `sesion` posted to
+  // `/posada/api/...`, and those endpoints are in another repository now. A capture still
+  // queued under either verb finds no route and is discarded by the branch checked below.
   await check('las rutas de la web son el conjunto exacto que el APK tambien declara', () => {
-    const esperados = ['escaneo_disco', 'escaneo_libro', 'escaneo_peli', 'habito', 'paginas',
-                       'sesion', 'terminar_disco', 'terminar_libro', 'terminar_peli',
+    const esperados = ['escaneo_disco', 'escaneo_libro', 'escaneo_peli', 'paginas',
+                       'terminar_disco', 'terminar_libro', 'terminar_peli',
                        'wishlist_disco', 'wishlist_libro', 'wishlist_peli'];
     const reales = Object.keys(Cola.RUTAS).sort();
     assert(reales.join(',') === esperados.join(','),
@@ -186,7 +189,7 @@ const restaurar = () => {
 
   await check('descartar borra a mano', () => {
     localStorage.removeItem(LLAVE);
-    Cola.encolar('habito', { habit_id: 1 });
+    Cola.encolar('paginas', { pages: 1 });
     Cola.descartar(Cola.items()[0].id);
     assert(Cola.pendientes() === 0, 'no borro');
   });

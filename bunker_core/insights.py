@@ -16,22 +16,7 @@ so the deferred import costs nothing worth measuring.
 from itertools import chain, zip_longest
 
 from django.db.models import Sum
-from django.db.models.functions import Coalesce
 from django.utils import timezone
-
-
-def _horas_min(total):
-    """Minutes as "2 h", "1 h 30 min" or "45 min".
-
-    One formatter rather than one per caller: the two that existed disagreed on whole hours
-    (`2 h` against `2 h 0 min`), so the same quantity read two ways in the same TUI.
-    """
-    horas, resto = divmod(total, 60)
-    if not horas:
-        return f"{resto} min"
-    if not resto:
-        return f"{horas} h"
-    return f"{horas} h {resto} min"
 
 
 def _periodo(dia, unidad):
@@ -98,44 +83,11 @@ def feedback_terminado(modulo, title, occurred_on):
     return f"«{title}». Van {van} {plural} {periodo}."
 
 
-def feedback_habito(habit, es_recaida):
-    """A habit marked. The streak is the fact; a relapse is not congratulated.
-
-    Called AFTER `habit.save()`, so `current_streak` is already the new value.
-    """
-    if es_recaida:
-        return f"Recaída en «{habit.name}». La racha vuelve a empezar."
-    if habit.current_streak <= 1:
-        return f"«{habit.name}» marcado. Día 1."
-    return f"«{habit.name}»: {habit.current_streak} días seguidos."
-
-
-def feedback_sesion(session, minutos_reales=None):
-    """A Deep Work session closed. The fact is that category's total for the session's month.
-
-    `duration_minutes` is the session's TARGET, and `process_session_completion` marks a
-    session completed even when it was abandoned (engine/sesion.py) without ever
-    adjusting it. So a caller that knows what was actually survived passes it in
-    `minutos_reales`; otherwise the target is the honest figure, because the session ran.
-
-    The month comes from `start_time`, not from today: a session started at 23:50 and closed
-    after midnight would otherwise be excluded from its own accumulated figure.
-    """
-    from posada.models import DeepWorkSession
-    dia = timezone.localdate(session.start_time)
-    # ponytail: no index on (category, start_time). Invisible at 53 rows; if Deep Work ever
-    # grows to thousands, index there before touching this function.
-    # Survived minutes when the row has them, the target when it does not. COALESCE rather
-    # than a Python fallback because this is one grouped query and must stay one: every row
-    # written before survived_minutes existed carries NULL, and NULL must read as "unknown,
-    # assume the target", never as zero — that would erase real work from the total.
-    total_mes = (DeepWorkSession.objects
-                 .filter(completed=True, category=session.category,
-                         start_time__year=dia.year, start_time__month=dia.month)
-                 .aggregate(t=Sum(Coalesce('survived_minutes', 'duration_minutes')))['t'] or 0)
-    minutos = session.duration_minutes if minutos_reales is None else minutos_reales
-    return (f"{minutos} min de {session.category}. "
-            f"{_horas_min(total_mes)} {_periodo(dia, 'mes')}.")
+# `feedback_habito` and `feedback_sesion` lived here until the 2026-08-27 split. Posada was
+# their only caller and they read only Posada's models, so they moved to `posada/feedback.py`.
+# `_horas_min` went with them and was DELETED here: `feedback_sesion` was its only caller, so
+# after the move it was dead. `_periodo` stayed — `feedback_paginas` and `feedback_terminado`
+# still use it — and was copied, not moved.
 
 
 # --- Conclusiones: reglas puras sobre una serie. Cada una afirma algo o se calla. -------------
@@ -173,9 +125,6 @@ _ETIQUETAS = {
     'books': {'monto': 'páginas', 'monto_1': 'página',
               'obra': 'libros terminados', 'obra_1': 'libro terminado',
               'actividad': 'lectura'},
-    'posada': {'monto': 'minutos de Deep Work', 'monto_1': 'minuto de Deep Work',
-               'obra': 'sesiones completadas', 'obra_1': 'sesión completada',
-               'actividad': 'Deep Work'},
     'movies': {'monto': None, 'monto_1': None,
                'obra': 'películas vistas', 'obra_1': 'película vista',
                'actividad': 'películas'},
@@ -303,9 +252,13 @@ def conclusiones():
     """Entre 0 y 3 frases. El silencio es una respuesta válida, y al principio la habitual.
 
     ONE SENTENCE PER MODULE BEFORE A SECOND FROM ANY. Taken in dict order, books fired all
-    three rules and posada — 35 completed sessions — never got a word in. Which module speaks
-    first was an accident of insertion order; a round trip makes the cap of three cover three
-    parts of the Bunker instead of one.
+    three rules and the module after it never got a word in. Which module speaks first was an
+    accident of insertion order; a round trip makes the cap of three cover three parts of the
+    Bunker instead of one.
+
+    `music` is NOT in `_ETIQUETAS` and never has been, so the Disquera has never produced a
+    sentence here. That predates the 2026-08-27 split and is recorded in
+    `context/general/state-of-the-project.md`; adding it is a nouns question, not a plumbing one.
     """
     import calendar
     from bunker_core.timeline import serie

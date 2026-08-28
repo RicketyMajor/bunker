@@ -11,22 +11,18 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.http import JsonResponse
 from django.db.models import Sum
-from django.db.models.functions import Coalesce, TruncDate
 from django.utils.timezone import localdate
 from datetime import timedelta
 from catalog.models import Book, ReadingSession, AnnualRecord as BookAnnualRecord
 from movies.models import Movie, MovieAnnualRecord
 from disquera.models import Album, MusicAnnualRecord
-from posada.models import GuildProfile, Adventurer, DeepWorkSession, DailyHabit, KanbanTask, CalendarEvent, JournalEntry
-from chess_study.models import ChessRoom, ChessVariation, SolvedPuzzle
-from posada.achievements import evaluate_achievements
 
 logger = logging.getLogger(__name__)
 
 # Las apps que entran en la capsula del tiempo. `bunker_core` entro el 2026-08-19, cuando
 # BunkerState le dio su primer modelo: sin el, un restore devuelve la fecha de ultima entrada
 # vacia y el briefing vuelve a anunciar todos los logros como nuevos.
-BACKUP_APPS = ('catalog', 'movies', 'disquera', 'posada', 'chess_study', 'bunker_core')
+BACKUP_APPS = ('catalog', 'movies', 'disquera', 'bunker_core')
 # Donde escribe el cron nocturno (volumen bunker_backups_data).
 BACKUP_DIR = '/app/backups'
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -53,11 +49,16 @@ def _reject_if_bad_token(request):
 
 
 def global_dashboard_view(request):
-    """BFF: Agrega datos de TODOS los módulos de forma hiper-robusta y granular."""
+    """BFF: Agrega los datos de los tres módulos de inventario, bloque a bloque.
+
+    Cada bloque va en su propio `try`: un módulo que falle deja su hueco vacío en vez de
+    tumbar el panel entero. Hasta el 2026-08-27 agregaba cinco módulos; posada y ajedrez se
+    fueron a sus propios repositorios y con ellos los logros, que los evaluaba `posada`.
+    """
     today = localdate()
 
     data = {
-        "posada": {}, "books": {}, "movies": {}, "music": {}, "chess": {}, "feed": []
+        "books": {}, "movies": {}, "music": {}, "feed": []
     }
     feed = []
 
@@ -132,127 +133,11 @@ def global_dashboard_view(request):
     except Exception as e:
         feed.append(f"[red]Error Disquera:[/] {str(e)[:40]}")
 
-    # 4. AJEDREZ
-    try:
-        data["chess"]["rooms"] = ChessRoom.objects.count()
-        data["chess"]["variations"] = ChessVariation.objects.count()
-        data["chess"]["puzzles"] = SolvedPuzzle.objects.count()
-    except Exception:
-        logger.warning("Fallo el bloque Ajedrez del dashboard", exc_info=True)
-
-    # 5. POSADA (MÉTRICAS BLINDADAS)
-    posada_data = {}
-    
-    try:
-        guild, _ = GuildProfile.objects.get_or_create(id=1)
-        posada_data["guild"] = {
-            "prestige_level": guild.prestige_level,
-            "prestige": guild.prestige,
-            "prestige_meta": guild.prestige_meta,
-            "net_worth": getattr(guild, 'net_worth_in_talents', getattr(guild, 'talento', 0))
-        }
-    except Exception as e:
-        feed.append(f"[red]Error Gremio:[/] {str(e)[:30]}")
-        
-    try:
-        # Una sola consulta agrupada por dia cubre el sparkline de 7 dias y el total de hoy;
-        # antes eran 8 agregaciones, una por iteracion del bucle.
-        semana = (DeepWorkSession.objects
-                  .filter(completed=True, start_time__date__gte=today - timedelta(days=6))
-                  .annotate(dia=TruncDate('start_time'))
-                  .values('dia')
-                  # Same COALESCE as insights.feedback_sesion: survived when the row has it,
-                  # the target when it does not. Without it the toast says "5 min" and this
-                  # sparkline says 50 for the same abandoned session, in the same TUI.
-                  .annotate(total=Sum(Coalesce('survived_minutes', 'duration_minutes'))))
-        minutos_por_dia = {row['dia']: row['total'] or 0 for row in semana}
-
-        posada_data["dw_minutes_today"] = minutos_por_dia.get(today, 0)
-        posada_data["dw_history"] = [
-            minutos_por_dia.get(today - timedelta(days=6 - i), 0) for i in range(7)]
-        # Historico completo, no solo la semana: es lo que mide el logro "Mente de Acero".
-        posada_data["dw_sessions_total"] = DeepWorkSession.objects.filter(completed=True).count()
-
-    except Exception as e:
-        logger.warning("Fallo el bloque Deep Work del dashboard", exc_info=True)
-        feed.append(f"[red]Error DW:[/] {str(e)[:30]}")
-
-    try:
-        advs = Adventurer.objects.all()
-        posada_data["active_adventurers"] = list(advs.values_list('id', flat=True))
-        top_adv = advs.order_by('-level', '-experience').first()
-        posada_data["top_adventurer"] = {"name": top_adv.name, "level": top_adv.level} if top_adv else None
-    except Exception as e:
-        logger.warning("Fallo el bloque Aventureros del dashboard", exc_info=True)
-        feed.append(f"[red]Error Aventureros:[/] {str(e)[:30]}")
-
-    try:
-        habits = DailyHabit.objects.all()
-        posada_data["habits_total"] = habits.count()
-        # last_completed_date es lo que marca complete_habit, y es el mismo criterio que usa
-        # list_habits ("completed_today"). El bucle anterior probaba un metodo inexistente
-        # (is_completed_today) y caia en last_evaluated_date, que el cierre diario deja en
-        # AYER: el contador daba 0 aunque el usuario hubiera completado todo.
-        posada_data["habits_completed"] = habits.filter(last_completed_date=today).count()
-        top_habit = habits.order_by('-current_streak').first()
-        posada_data["top_streak"] = {"name": top_habit.name, "streak": top_habit.current_streak} if top_habit else None
-    except Exception as e:
-        logger.warning("Fallo el bloque Habitos del dashboard", exc_info=True)
-        feed.append(f"[red]Error Hábitos:[/] {str(e)[:30]}")
-
-    try:
-        posada_data["pending_tasks"] = KanbanTask.objects.exclude(column__title__icontains='hecho').exclude(column__title__icontains='done').count()
-    except Exception as e:
-        feed.append(f"[red]Error Kanban:[/] {str(e)[:30]}")
-
-    try:
-        # CalendarEvent.date es un DateField: el intento previo con start_date__date lanzaba
-        # FieldError en cada carga del dashboard y caia a este mismo query por el except.
-        posada_data["today_events"] = CalendarEvent.objects.filter(date=today).count()
-    except Exception as e:
-        logger.warning("Fallo el bloque Calendar del dashboard", exc_info=True)
-        feed.append(f"[red]Error Calendar:[/] {str(e)[:30]}")
-
-    data["posada"] = posada_data
-
-    # 6. LOGROS
-    # Reaprovecha contadores que los bloques de arriba ya calcularon; solo aporta la consulta
-    # al catalogo y, cuando de verdad se desbloquea algo, la escritura. Una metrica ausente
-    # (su modulo fallo) se omite: sin dato no se desbloquea nada.
-    try:
-        top_streak = posada_data.get("top_streak") or {}
-        contadores = {
-            "books_read": data["books"].get("read"),
-            # El logro cuenta lo VISTO/ESCUCHADO, que vive en el registro anual, no en el
-            # inventario: se ve mucho de lo que no se posee. data["movies"]["watched"] sigue
-            # siendo la metrica de inventario que pinta el TUI, y es correcta para eso.
-            "movies_watched": MovieAnnualRecord.objects.count(),
-            "albums_listened": MusicAnnualRecord.objects.count(),
-            "deep_work_sessions": posada_data.get("dw_sessions_total"),
-            "puzzles_solved": data["chess"].get("puzzles"),
-            "habit_streak": top_streak.get("streak"),
-        }
-        contadores = {k: v for k, v in contadores.items() if v is not None}
-
-        # El Renacentista pide >= 1 en los cinco modulos, que es justo el minimo de los cinco
-        # contadores. Expresarlo como una metrica mas evita que necesite su propia rama.
-        cinco = ("books_read", "movies_watched", "albums_listened",
-                 "deep_work_sessions", "puzzles_solved")
-        if all(m in contadores for m in cinco):
-            contadores["renacentista"] = min(contadores[m] for m in cinco)
-
-        data["achievements"] = evaluate_achievements(contadores)
-    except Exception:
-        logger.warning("Fallo la evaluacion de logros", exc_info=True)
-        data["achievements"] = []
+    # Los bloques 4 (Ajedrez), 5 (Posada) y 6 (Logros) estaban aquí hasta la separación del
+    # 2026-08-27. Los logros se fueron con ellos: `evaluate_achievements` es de posada y sus
+    # contadores contaban sesiones de Deep Work, puzzles y rachas de hábitos.
 
     # 7. TRÁFICO DE RED (FEED GLOBAL SEGURO)
-    try:
-        for dw in DeepWorkSession.objects.filter(completed=True).order_by('-start_time')[:3]:
-            feed.append(f"[cyan]⏱️  DW:[/] {dw.category} ({dw.duration_minutes}m)")
-    except Exception:
-        logger.warning("Fallo el feed de Deep Work", exc_info=True)
-
     # Ambos registros guardan su propio title (son historicos inmutables y su FK es SET_NULL),
     # asi que no hace falta ir al libro/pelicula para mostrarlo.
     try:
@@ -275,7 +160,7 @@ def global_dashboard_view(request):
 
 @csrf_exempt
 def backup_database(request):
-    """Genera una cápsula de tiempo (JSON) de la base de datos de los 5 módulos."""
+    """Genera una cápsula de tiempo (JSON) de la base de datos de los módulos de inventario."""
     if request.method != 'POST':
         return JsonResponse({"error": "Método no permitido."}, status=405)
 
@@ -468,8 +353,6 @@ def movil_estado(request):
 
     Spec: context/specs/transmisor-de-campo.md
     """
-    hoy = localdate()
-
     # The book to offer first: the one most recently logged, not the one closest to being
     # finished. Those are different criteria — the briefing wants the latter, the capture
     # sheet wants whatever is physically on the table right now.
@@ -491,25 +374,11 @@ def movil_estado(request):
             "page_count": ultima.book.page_count,
         }
 
-    # Only habits that are actually due today, and PENDING: `de_hoy` owns the "scheduled for
-    # today" rule (see `DailyHabit.de_hoy`), this view only drops the ones already done.
-    habitos = list(
-        DailyHabit.de_hoy(hoy)
-        .exclude(last_completed_date=hoy)
-        .values("id", "name", "difficulty", "is_bad_habit")
-    )
-
+    # `habitos_pendientes` and `aventureros` were here until the 2026-08-27 split. They fed the
+    # phone's habit and session sheets, and both sheets left with them: La Posada is its own
+    # repository and the Transmisor keeps only the nine inventory verbs.
     return JsonResponse({
         "leyendo": leyendo,
-        "habitos_pendientes": habitos,
-        # The timer sheet picks from this. `class_name` and not `adv_class`: the raw code is
-        # what a reader cannot decode, and the TUI's own table shipped "BBN" for every class
-        # because it read the wrong key. One name for this fact across every surface.
-        "aventureros": [
-            {"id": a.id, "name": a.name, "class_name": a.get_adv_class_display(),
-             "level": a.level}
-            for a in Adventurer.objects.all().order_by("name")
-        ],
         "libros": list(Book.objects.filter(is_read=False).values("id", "title")[:500]),
         "peliculas": list(Movie.objects.filter(is_watched=False).values("id", "title")[:500]),
         "albums": list(Album.objects.filter(is_listened=False).values("id", "title")[:500]),
@@ -549,58 +418,10 @@ def stats_timeline(request):
                      "window": len(datos), "series": datos})
 
 
-@api_view(['GET'])
-def panel_datos(_request):
-    """Everything the consultation panel shows, in ONE GET that writes nothing.
-
-    One round trip, not four, because the panel is one screen and the phone is often on a bad
-    link: four requests is four chances to half-render. Each block still resolves its own visible
-    state on the client — a missing key is a block's `vacio`, not a blank screen.
-
-    NOT `/api/briefing/` and NOT `/api/dashboard/`. The first persisted `PrestigeWeek` on the read
-    path until 2026-08-21, and this endpoint exists so the panel never depends on that staying
-    fixed by accident; the second pays prestige for past calendar events on every GET
-    (state-of-the-project.md §1). Both would have made a *consultation* screen mutate the game.
-    """
-    from posada.models import Achievement, PrestigeEntry
-    from posada.prestige import resumen_semana
-    from bunker_core.briefing import _clave_semana
-
-    hoy = localdate()
-
-    # The ledger's SUM, never `GuildProfile.prestige`. That field is a BALANCE toward the next
-    # level — `add_prestige()` subtracts `prestige_meta` on level-up — so it is not a total and
-    # never was. This is the whole reason `PrestigeEntry` exists.
-    total = PrestigeEntry.objects.aggregate(t=Sum('amount'))['t'] or 0
-
-    ultima = DeepWorkSession.objects.order_by('-start_time').first()
-
-    return Response({
-        "prestigio": {"total": total, "semana": resumen_semana(_clave_semana(hoy))},
-        # Today's habits, DONE ones included: the panel answers "how am I doing", and a list that
-        # hides what you already did answers a different question than `movil_estado`'s, which
-        # offers what is left to capture. Same rule underneath — `DailyHabit.de_hoy`.
-        "habitos": [
-            {"nombre": h.name, "hecho": h.last_completed_date == hoy,
-             "malo": h.is_bad_habit, "racha": h.current_streak}
-            for h in DailyHabit.de_hoy(hoy)
-        ],
-        "logros": [
-            {"nombre": a.name, "icono": a.icon, "fecha": a.unlocked_at.date().isoformat()}
-            for a in Achievement.objects.filter(unlocked_at__isnull=False)
-                                        .order_by('-unlocked_at')[:5]
-        ],
-        # Read straight off the persisted JSONField. This block CANNOT re-run the engine and so
-        # cannot pay anything — `event_log` is written when the session is filed and never
-        # regenerated. Verified in `posada/models.py`, not assumed.
-        "bitacora": {
-            "categoria": ultima.category,
-            "minutos": ultima.survived_minutes if ultima.survived_minutes is not None
-                       else ultima.duration_minutes,
-            "completada": ultima.completed,
-            "eventos": ultima.event_log or [],
-        } if ultima else None,
-    })
+# `panel_datos` and `/api/panel/` stood here until the 2026-08-27 split. All four of its blocks
+# — prestige, habits, achievements and the session log — read only Posada's models, so nothing
+# of it survived the amputation. `/panel/` itself stays: its second block reads
+# `/api/stats/timeline/`, which is books, movies and music.
 
 
 @api_view(['POST'])

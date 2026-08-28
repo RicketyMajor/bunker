@@ -22,19 +22,23 @@ from django.db import IntegrityError, transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.briefing import (  # noqa: E402
-    _clave_semana, _semana_actual, _semana_anterior, construir_briefing, marcar_visto,
+    _semana_actual, _semana_anterior, construir_briefing, marcar_visto,
 )
 from django.db import connection  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from movies.models import MovieAnnualRecord  # noqa: E402
 from bunker_core.models import BunkerState  # noqa: E402
 from catalog.models import Author, Book, ReadingSession  # noqa: E402
-from posada.models import Achievement, DailyHabit, GuildProfile  # noqa: E402
+
+# Medido, no supuesto: books cuesta 2 consultas agrupadas (AnnualRecord + ReadingSession) y
+# movies y music 1 cada uno. Si cambia, el número es la cuenta y el check dice cuál salió.
+COSTE_REVISION = 4
 
 _checks = 0
 
-CLAVES = ("ayer", "hoy", "habito_en_riesgo", "libro_mas_cerca", "logros_nuevos",
-          "conclusiones", "show_review", "review")
+# `hoy`, `habito_en_riesgo` y `logros_nuevos` eran tres claves más hasta el 2026-08-27:
+# las tres eran de la Posada (hábitos pendientes, racha en riesgo, logros desbloqueados).
+CLAVES = ("ayer", "libro_mas_cerca", "conclusiones", "show_review", "review")
 
 
 def check(condicion, etiqueta):
@@ -75,42 +79,15 @@ def run_tests():
         check(datos["libro_mas_cerca"] is None or datos["libro_mas_cerca"]["title"] != "Casi terminado",
               "un libro terminado sale de 'libro más cerca'")
 
-        # 4. El briefing NO paga prestigio. Esta es la que importa.
-        guild, _ = GuildProfile.objects.get_or_create(id=1)
-        prestigio_antes = guild.prestige
-        construir_briefing()
-        guild.refresh_from_db()
-        check(guild.prestige == prestigio_antes,
-              "construir el briefing no mueve el prestigio del gremio")
+        # El check «el briefing NO paga prestigio» vivía aquí y era el que más importaba.
+        # El prestigio se fue a La Posada el 2026-08-27, así que ya no hay nada que pagar; lo
+        # que sobrevive de esa propiedad es que `construir_briefing` no escribe NADA, y eso lo
+        # afirma `test_panel.test_el_panel_no_escribe_nada` censando todas las tablas.
 
-        # 5. Los logros nuevos se cuentan desde la última entrada, no desde siempre.
-        #    Con `last_entry_at` en nulo la lista va vacía: en la primera entrada de la vida
-        #    del modelo, "nuevos desde tu última entrada" no tiene desde cuándo contar, y
-        #    anunciar el historial completo es exactamente el ruido que esto evita.
+        # El bloque 5 comprobaba `logros_nuevos` contra `last_entry_at`. Los logros eran
+        # de la Posada y se fueron con ella el 2026-08-27; `last_entry_at` sigue vivo y lo
+        # ejercita el bloque 6, justo debajo.
         estado, _ = BunkerState.objects.get_or_create(id=1)
-        estado.last_entry_at = None
-        estado.save()
-        check(construir_briefing()["logros_nuevos"] == [],
-              "sin última entrada registrada, no hay logros 'nuevos'")
-
-        # El logro se crea aquí en vez de buscar uno vivo: hoy la base tiene ocho logros y
-        # CERO desbloqueados, así que un `if antiguo is not None` habría saltado estas dos
-        # comprobaciones en silencio y el check habría reportado verde sin medir nada.
-        desbloqueo = timezone.now() - timedelta(hours=1)
-        logro = Achievement.objects.create(
-            key="prueba_briefing", name="Logro de prueba", description="Sólo para el check",
-            metric="paginas_leidas", unlocked_at=desbloqueo)
-
-        estado.last_entry_at = timezone.now()
-        estado.save()
-        check(construir_briefing()["logros_nuevos"] == [],
-              "un logro desbloqueado antes de la última entrada no es nuevo")
-
-        estado.last_entry_at = desbloqueo - timedelta(seconds=1)
-        estado.save()
-        claves = [l["key"] for l in construir_briefing()["logros_nuevos"]]
-        check(logro.key in claves,
-              "un logro desbloqueado después de la última entrada sí es nuevo")
 
         # 6. `marcar_visto` es lo único que escribe, y sólo toca la semana si se lo piden.
         estado.last_review_week = ""
@@ -122,26 +99,13 @@ def run_tests():
               "marcar_visto sin revisión no marca la semana como vista")
         check(construir_briefing()["show_review"] is True,
               "con la semana sin marcar, la revisión se ofrece")
-        # `marcar_visto` es también, desde 2026-08-21, el ÚNICO sitio que persiste los
-        # snapshots de prestigio: la escritura salió de `resumen_semana` para que
-        # `GET /api/briefing/` fuese un GET seguro. Sin esta comprobación esa llamada se puede
-        # borrar y no se pone rojo nada — una escritura sin lector, que es exactamente el
-        # defecto que este proyecto lleva encontrando desde el handoff 022.
-        #
-        # Se borran las filas ANTES: la base viva tiene cero, así que sin el borrado esto
-        # afirmaría "hay filas" contra un estado que ya las tendría de un check anterior.
-        from posada.models import PrestigeWeek
-        PrestigeWeek.objects.all().delete()
+        # `marcar_visto` persistía además los dos snapshots de prestigio de la semana
+        # revisada. Esa escritura se fue con el ledger a La Posada el 2026-08-27; aquí queda
+        # sólo la contabilidad que este repositorio posee: cuándo se entró y qué semana se
+        # revisó.
         marcar_visto(True)
         estado.refresh_from_db()
         check(estado.last_review_week != "", "marcar_visto con revisión marca la semana")
-        hoy = timezone.localdate()
-        esperadas = {_clave_semana(hoy - timedelta(days=7)),
-                     _clave_semana(hoy - timedelta(days=14))}
-        guardadas = set(PrestigeWeek.objects.values_list('week_key', flat=True))
-        check(guardadas == esperadas,
-              f"marcar_visto persiste las dos semanas revisadas: esperaba {esperadas}, "
-              f"hay {guardadas}")
         check(len(estado.last_review_week) <= 8,
               f"la clave de semana cabe en el campo: {estado.last_review_week!r}")
         check(construir_briefing()["show_review"] is False,
@@ -156,34 +120,9 @@ def run_tests():
             creada = False
         check(not creada, "no se puede crear una segunda fila de BunkerState")
 
-        # 8. La regla `valid_days`, que ya tuvo un agujero una vez y hoy no tiene ni una
-        #    fila viva que la ejerza: la base no guarda ningún hábito, así que sin estas
-        #    filas la lista de pendientes sale vacía por falta de datos y no por la regla.
-        otro_dia = str((hoy.weekday() + 1) % 7)
-        hoy_toca = DailyHabit.objects.create(
-            name="Hábito de hoy", valid_days=str(hoy.weekday()), current_streak=5)
-        DailyHabit.objects.create(
-            name="Hábito de otro día", valid_days=otro_dia, current_streak=9)
-        hecho = DailyHabit.objects.create(
-            name="Hábito ya hecho", valid_days=str(hoy.weekday()), current_streak=3,
-            last_completed_date=hoy)
-
-        datos = construir_briefing()
-        nombres = [h["name"] for h in datos["hoy"]["habitos_pendientes"]]
-        check("Hábito de hoy" in nombres, "un hábito programado hoy está pendiente")
-        check("Hábito de otro día" not in nombres,
-              "un hábito que hoy no toca no cuenta como pendiente")
-        check("Hábito ya hecho" not in nombres,
-              "un hábito ya marcado hoy no cuenta como pendiente")
-        check(datos["habito_en_riesgo"]["name"] == "Hábito de hoy",
-              "el hábito en riesgo es el de racha más larga entre los que hoy tocan")
-
-        # Una racha de 0 no está en riesgo: no tiene nada que perder.
-        hoy_toca.current_streak = 0
-        hoy_toca.save()
-        hecho.delete()
-        check(construir_briefing()["habito_en_riesgo"] is None,
-              "una racha de 0 no está 'en riesgo'")
+        # El bloque 8 ejercitaba la regla `valid_days` de los hábitos, que ya tuvo un
+        # agujero una vez. Se fue entero con La Posada el 2026-08-27, junto con
+        # `hoy.habitos_pendientes` y `habito_en_riesgo`, que eran su superficie.
 
         # --- Revisión semanal: aparece una vez por semana ISO y se calla el resto. --------
         estado, _ = BunkerState.objects.get_or_create(id=1)
@@ -232,31 +171,27 @@ def run_tests():
               f"y la compara contra la anterior a esa: {review['anterior']!r}")
 
         # Lo que la revisión reporta tiene que ser lo de la semana revisada, no lo de hoy.
-        # Una sesión de HOY —semana en curso— no puede aparecer en ella.
-        from posada.models import DeepWorkSession
-        antes_dw = next(m for m in review["metricas"] if m["etiqueta"] == "Deep Work (min)")
-        DeepWorkSession.objects.create(start_time=timezone.now(), duration_minutes=999,
-                                       category="Prueba", completed=True)
+        # Una lectura de HOY —semana en curso— no puede aparecer en ella. Iba sobre los
+        # minutos de Deep Work hasta el 2026-08-27; `books` es el único módulo con monto que
+        # queda, así que la propiedad se comprueba con las páginas.
+        antes_pag = next(m for m in review["metricas"] if m["etiqueta"] == "Páginas")
+        ReadingSession.objects.create(date=timezone.localdate(), pages_read=999, book=cerca)
         estado.last_review_week = ""
         estado.save()
-        despues_dw = next(m for m in construir_briefing()["review"]["metricas"]
-                          if m["etiqueta"] == "Deep Work (min)")
-        check(despues_dw["actual"] == antes_dw["actual"],
-              f"999 minutos de HOY no entran en la revisión de la semana pasada: {despues_dw}")
-        check(len(review["metricas"]) == 7, f"siete métricas, no {len(review['metricas'])}")
-        check(any(m["etiqueta"] == "Logros" for m in review["metricas"]),
-              "la revisión incluye los logros desbloqueados, que la spec pide")
+        despues_pag = next(m for m in construir_briefing()["review"]["metricas"]
+                           if m["etiqueta"] == "Páginas")
+        check(despues_pag["actual"] == antes_pag["actual"],
+              f"999 páginas de HOY no entran en la revisión de la semana pasada: {despues_pag}")
+        check(len(review["metricas"]) == 4, f"cuatro métricas, no {len(review['metricas'])}")
         for m in review["metricas"]:
             check("actual" in m and "previa" in m,
                   f"la métrica '{m['etiqueta']}' se compara contra la semana previa")
             check(isinstance(m["actual"], int) and isinstance(m["previa"], int),
                   f"la métrica '{m['etiqueta']}' trae enteros, nunca None")
 
-        # Cinco módulos distintos, no seis llamadas: books sale dos veces en la lista y se
-        # consulta UNA. books cuesta 2 consultas (registros + páginas), los otros 1.
-        #
-        # Desde 2026-08-20 la revisión también reporta prestigio: +3 — las dos semanas y el
-        # desglose por fuente, una consulta cada uno.
+        # TRES módulos distintos, no cuatro llamadas: books sale dos veces en la lista de
+        # métricas y se consulta UNA. books cuesta 2 consultas (registros + páginas), los
+        # otros 1. Eran cinco módulos y +3 de prestigio y +1 de logros hasta el 2026-08-27.
         #
         # El calentamiento que había aquí SE FUE con la escritura, 2026-08-21. Existía porque
         # la primera revisión de una semana nueva costaba 17: `resumen_semana` construía los
@@ -273,9 +208,9 @@ def run_tests():
         with CaptureQueriesContext(connection) as sin_rev:
             construir_briefing()
         coste = len(con_rev) - len(sin_rev)
-        check(coste == 10,
-              f"la revisión cuesta 10 consultas (5 módulos + logros, books doble, "
-              f"+3 de prestigio), no {coste}")
+        check(coste == COSTE_REVISION,
+              f"la revisión cuesta {COSTE_REVISION} consultas (3 módulos, books doble), "
+              f"no {coste}")
 
         # Y el día que no toca no se paga: el payload es None, no un dict vacío.
         check(construir_briefing()["review"] is None,

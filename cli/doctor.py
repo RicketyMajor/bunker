@@ -31,22 +31,14 @@ console = Console()
 # `ModuleNotFoundError: No module named 'bunker_core'`. `-m` puts the CWD on sys.path, which is
 # what django.setup() needs. The label is the exact thing to type to run one by hand.
 CHECKS_IN_CONTAINER = (
-    "tests.test_posada_skills",
-    "tests.test_posada_estados",
-    "tests.test_posada_invariantes",
-    "tests.test_engine_split",
-    "tests.test_achievements",
     "tests.test_capture_dates",
     "tests.test_reading_progress",
     "tests.test_movil_estado",
     "tests.test_inbox_idempotente",
     "tests.test_insights",
-    "tests.test_guild_contract",
-    "tests.test_session_record",
     "tests.test_briefing",
     "tests.test_timeline",
     "tests.test_backup_apps",
-    "tests.test_prestige_ledger",
     "tests.test_panel",
     "tests.test_secretos",
 )

@@ -10,12 +10,12 @@ import * as Cola from './queue.js';
 // be invalidated only by the network; this copy is invalidated by our own captures, which is
 // what stops a finished book from being offered again while offline.
 const LLAVE_ESTADO = 'transmisor_estado';
-// `aventureros` belongs here for the same reason every other list does: this object is what a
-// cold start offline reads, and Correction 4 of Task 10 is the proof that a missing key is not
-// harmless — `estadoCacheado()` answers "{}", which is truthy, so the guard in cargarEstado()
-// hands VACIO straight to the sheets. Without the key the roster reads `undefined`.
+// Every list the sheets read belongs here, and a MISSING key is not harmless: a cold start
+// offline reads this object, `estadoCacheado()` answers "{}" — which is truthy — so the guard
+// in cargarEstado() hands VACIO straight to the sheets, and an absent key reads `undefined`.
+// `aventureros` and `habitos_pendientes` were two more until the 2026-08-27 Posada split.
 const VACIO = {
-  leyendo: null, habitos_pendientes: [], libros: [], peliculas: [], albums: [], aventureros: [],
+  leyendo: null, libros: [], peliculas: [], albums: [],
 };
 
 // Same bridge queue.js binds, bound the same way and for the same reason. Inside the APK the
@@ -42,15 +42,10 @@ let estado = cache ? cache.estado : { ...VACIO };
 let sincronizado = cache ? cache.sincronizado : null;
 let enLinea = false;
 
-// Every list in the snapshot is day-independent except this one: the server derives it from
-// today's weekday and today's completions. Kept past midnight it offers habits not scheduled
-// for the new day — which the server answers 409, leaving an item stuck in the queue — and
-// hides the ones that are. The inventories survive; only this list is dropped.
-let habitosCaducados = false;
-if (sincronizado && diaLocal(new Date(sincronizado)) !== diaLocal()) {
-  estado.habitos_pendientes = [];
-  habitosCaducados = true;
-}
+// `habitos_pendientes` was the one day-dependent list in the snapshot and it was dropped past
+// midnight for that reason. It left with the Posada split on 2026-08-27; every list that
+// remains is an inventory and none of them expire. `diaLocal` stays: `pintarInstantanea` uses
+// it to say how old the snapshot is.
 
 // Failing to persist must never cost a capture: the queue has its own key and is written
 // first everywhere in this file.
@@ -114,10 +109,6 @@ async function cargarEstado() {
     estado = sobre.estado && Object.keys(sobre.estado).length ? sobre.estado : { ...VACIO };
     sincronizado = sobre.sincronizado || null;
     enLinea = !!sobre.en_linea;
-    // The native side already empties habitos_pendientes when the snapshot is not from today
-    // (AssetStore.estadoCacheado). Mirroring the rule here is what keeps the empty list from
-    // reading as "Nada pendiente hoy." when the truth is that we do not know.
-    habitosCaducados = !!sincronizado && diaLocal(new Date(sincronizado)) !== diaLocal();
     pintarHome();
     refrescarChip();
     pintarInstantanea();
@@ -129,7 +120,6 @@ async function cargarEstado() {
     if (!r.ok) throw new Error(r.status);
     estado = await r.json();
     sincronizado = new Date().toISOString();
-    habitosCaducados = false;
     enLinea = true;
     guardarEstado();
   } catch (e) {
@@ -202,11 +192,7 @@ function pintarHome() {
       <p class="author">Elige uno y empieza a marcar la página.</p>
       <button class="act" data-verb="elegir-libro" style="margin-top:12px">ELEGIR LIBRO</button>`;
   }
-  $('#n-habitos').textContent = (estado.habitos_pendientes || []).length || '';
   pintarInstantanea();
-  // The expedition marker on the home button is owned by pintarSesion, so there is one rule
-  // for it rather than two that can disagree.
-  pintarSesion();
 }
 
 // Cached lists are worth trusting for a day and worth doubting after a week. Naming when the
@@ -354,43 +340,6 @@ function abrirHojaTerminar() {
 //
 // The empty line does not claim you finished anything: with no habits created at all —
 // which is this database today — "todos hechos" would be a lie about work never done.
-function pintarHB() {
-  const items = estado.habitos_pendientes || [];
-  $('#hb-lista').innerHTML = items.length
-    ? items.map((h) => `<li><button data-hb="${h.id}"
-         style="width:100%;text-align:left;min-height:56px;background:none;border:0;
-                border-bottom:1px solid var(--bg-alt);font:inherit;
-                color:${h.is_bad_habit ? 'var(--red)' : 'var(--fg)'}">${
-           h.is_bad_habit ? '⚠ ' : ''}${escapar(h.name)}<span style="color:var(--dim)">
-           · Rango ${escapar(h.difficulty)}</span></button></li>`).join('')
-    : `<li style="color:var(--dim)">${habitosCaducados
-         ? 'Sin enlace desde ayer: no se sabe qué hábitos tocan hoy.'
-         : 'Nada pendiente hoy.'}</li>`;
-}
-
-function alPulsarHabito(e) {
-  const boton = e.target.closest('[data-hb]');
-  if (!boton) return;
-  const h = (estado.habitos_pendientes || []).find((x) => String(x.id) === boton.dataset.hb);
-  if (!h) return;
-  // A relapse costs prestige and coins, and the phone has no undo — the model keeps one
-  // (previous_streak, last_prestige_reward) but only the TUI exposes it. Same two-step as
-  // DESCARTAR, and for the same reason: good and bad habits sit in adjacent rows here.
-  if (h.is_bad_habit && boton.dataset.confirmando !== 'si') {
-    boton.dataset.confirmando = 'si';
-    boton.textContent = `⚠ ¿SEGURO? RECAÍDA EN “${h.name}”`;
-    return;
-  }
-  Cola.encolar('habito', { habit_id: h.id });
-  toast(h.is_bad_habit ? `Recaída en “${h.name}” registrada.` : `“${h.name}” marcado.`);
-  estado.habitos_pendientes = estado.habitos_pendientes.filter((x) => x.id !== h.id);
-  guardarEstado();
-  pintarHB();
-  pintarHome();
-  refrescarChip();
-  transmitir();
-}
-
 // --- Escáner -------------------------------------------------------------------------
 // Native BarcodeDetector, not a library. Chrome on Android has shipped it since 83, which
 // is why the three templates this replaces pulled html5-qrcode from unpkg.com — and why
@@ -486,123 +435,6 @@ function cerrarEscaner() {
   transmitir();
 }
 
-// --- Expedición (la sesión de la Posada) ----------------------------------------------
-// The elapsed time is DERIVED from a stored instant, never accumulated by a setInterval:
-// Android suspends timers when the app leaves the foreground, so a counter that only ticks
-// while visible would report the time you WATCHED it, not the time you worked — and leaving
-// the app is the normal case here, not the exception.
-//
-// The session lives in localStorage and not through Puente, unlike every capture: the queue
-// moved to native storage because a worker with no WebView has to read it, and nothing but
-// this interface ever reads a session in progress. It becomes a capture only when it is filed.
-const LLAVE_SESION = 'transmisor_sesion';
-
-function sesionEnCurso() {
-  try { return JSON.parse(localStorage.getItem(LLAVE_SESION) || 'null'); }
-  catch (_) { return null; }
-}
-
-// Bounded at BOTH ends, because the server refuses `survived_seconds` outside
-// `0 .. duration_minutes * 60` with a 400 — deliberately, it does not clamp — and a rejected
-// dispatch is one no flush can clear and only DESCARTAR can remove.
-//
-// The ceiling is the phone left running overnight. The floor is the phone's clock moving
-// BACKWARDS, which NTP does routinely after a boot with a drifted clock: measured here at
-// -5 s before this guard existed. Both callers go through this one function — the payload
-// and the clock on screen — so the bound belongs here and not at the two call sites.
-const segundosSobrevividos = (s) => Math.max(0,
-  Math.min(Math.floor((Date.now() - s.inicio) / 1000), s.duration_minutes * 60));
-
-const reloj = (seg) => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${
-  String(Math.floor(seg % 60)).padStart(2, '0')}`;
-
-let sesionPartida = new Set();
-
-function pintarSesion() {
-  // Same guard as pintarInstantanea: this runs from pintarHome(), and the home card is
-  // rendered before anyone has proved the sheet is in the document.
-  const config = $('#se-config');
-  if (!config) return;
-  const s = sesionEnCurso();
-  config.style.display = s ? 'none' : 'block';
-  $('#se-curso').style.display = s ? 'block' : 'none';
-  $('#n-sesion').textContent = s ? '◐' : '';
-  if (!s) return;
-  const vividos = segundosSobrevividos(s);
-  const total = s.duration_minutes * 60;
-  // textContent, not innerHTML: the category is whatever was typed into a text field.
-  $('#se-curso-categoria').textContent = s.category;
-  $('#se-reloj').textContent = reloj(vividos);
-  $('#se-restante').textContent = vividos >= total
-    ? 'expedición cumplida'
-    : `faltan ${reloj(total - vividos)}`;
-}
-
-// The roster is a real multi-selection, so aria-pressed carries it — the border colour alone
-// would communicate state by colour, which this app's floor forbids.
-function pintarPartida() {
-  const aventureros = estado.aventureros || [];
-  $('#se-roster').innerHTML = aventureros.length
-    ? aventureros.map((a) => `<button type="button" data-av="${a.id}" class="asel"
-         aria-pressed="${sesionPartida.has(a.id)}" style="grid-column:1/-1">${escapar(a.name)}
-         <span style="color:var(--dim)">· ${escapar(a.class_name || '')} ${a.level || ''}</span>
-       </button>`).join('')
-    : `<p style="color:var(--dim);margin:0">La expedición va sin compañía.</p>`;
-  // The database this was written for holds one adventurer, and a sheet that refused to start
-  // without a party would be unusable on it. Nothing here blocks EMPEZAR.
-  document.querySelectorAll('.asel').forEach((b) => {
-    b.style.borderColor = b.getAttribute('aria-pressed') === 'true'
-      ? 'var(--yellow)' : 'var(--bg-alt)';
-  });
-}
-
-function abrirHojaSesion() {
-  if (!sesionEnCurso()) {
-    sesionPartida = new Set();
-    $('#se-categoria').value = '';
-    $('#se-minutos').value = '25';
-    pintarPartida();
-  }
-  // Disarmed on the way IN, which is where this app clears every two-step button: `close`
-  // does not fire on any dialog here (measured in Chrome 151), and a listener for it would
-  // be the dead safety net the Despachos sheet already removed once.
-  const rendirse = $('#se-rendirse');
-  delete rendirse.dataset.confirmando;
-  rendirse.textContent = 'RENDIRSE';
-  rendirse.style.color = 'var(--fg)';
-  rendirse.style.borderColor = 'var(--bg-alt)';
-  pintarSesion();
-  abrirHoja('hoja-sesion');
-}
-
-function archivarSesion(rendido) {
-  const s = sesionEnCurso();
-  if (!s) return;
-  Cola.encolar('sesion', {
-    client_uuid: s.client_uuid,
-    category: s.category,
-    duration_minutes: s.duration_minutes,
-    survived_seconds: segundosSobrevividos(s),
-    adventurer_ids: s.adventurer_ids,
-    surrendered: rendido,
-  });
-  // Cleared only AFTER encolar returns. The bridge throws when the native write fails, and
-  // that exception has to leave the session exactly where it was — erasing an hour of work
-  // to report a capture that was never stored is the one failure this app cannot have.
-  //
-  // `occurred_on` is not passed: Cola.encolar stamps it for both backends, at the moment of
-  // filing, which is the same instant and the same value this would compute.
-  localStorage.removeItem(LLAVE_SESION);
-  // Never what it earned. The loot is the engine's answer and it arrives in the notification
-  // or in the TUI; naming it here would be inventing it, offline, from a phone that cannot
-  // know. Same rule as the flush toast promising a request rather than a result.
-  toast(rendido ? 'Retirada archivada.' : 'Expedición archivada.');
-  $('#hoja-sesion').close();
-  pintarSesion();
-  refrescarChip();
-  transmitir();
-}
-
 // --- Wishlist ------------------------------------------------------------------------
 const WL = { libro: 'wishlist_libro', peli: 'wishlist_peli', disco: 'wishlist_disco' };
 let wlTipo = 'libro';
@@ -688,9 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const verbo = boton.dataset.verb;
     if (verbo === 'paginas' || verbo === 'elegir-libro') abrirHojaPaginas();
     else if (verbo === 'terminar') abrirHojaTerminar();
-    else if (verbo === 'habitos') { pintarHB(); abrirHoja('hoja-habitos'); }
     else if (verbo === 'escanear') abrirEscaner();
-    else if (verbo === 'sesion') abrirHojaSesion();
     else if (verbo === 'wishlist') {
       wlTipo = 'libro';
       marcarSel('.wsel', 'wl', wlTipo);
@@ -731,68 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
     transmitir();
   });
   $('#wl-cerrar').addEventListener('click', () => $('#hoja-wishlist').close());
-
-  // Expedición. Scoped to the sheet, like Terminar and Wishlist.
-  $('#hoja-sesion').addEventListener('click', (e) => {
-    const preset = e.target.closest('[data-min]');
-    if (preset) { $('#se-minutos').value = preset.dataset.min; return; }
-    const av = e.target.closest('[data-av]');
-    if (!av) return;
-    const id = parseInt(av.dataset.av, 10);
-    if (sesionPartida.has(id)) sesionPartida.delete(id); else sesionPartida.add(id);
-    pintarPartida();
-  });
-  $('#se-empezar').addEventListener('click', () => {
-    const categoria = $('#se-categoria').value.trim();
-    // Refused here rather than at the server: an empty category comes back 400, and a
-    // rejected dispatch sits in the queue until someone opens DESPACHOS and discards it
-    // by hand. The same bounds the endpoint enforces, enforced before the capture exists.
-    if (!categoria) { toast('Escribe una categoría.', 'error'); return; }
-    const minutos = parseInt($('#se-minutos').value, 10);
-    if (isNaN(minutos) || minutos < 1 || minutos > 480) {
-      toast('La duración va de 1 a 480 minutos.', 'error');
-      return;
-    }
-    localStorage.setItem(LLAVE_SESION, JSON.stringify({
-      // Issued at the START and stored with the session: it is what makes a re-sent dispatch
-      // idempotent on the server, so it must survive the app being killed mid-expedition.
-      client_uuid: crypto.randomUUID(),
-      category: categoria,
-      duration_minutes: minutos,
-      adventurer_ids: [...sesionPartida],
-      inicio: Date.now(),
-    }));
-    pintarSesion();
-    toast(`Expedición “${categoria}” en marcha.`);
-    $('#hoja-sesion').close();
-  });
-  $('#se-archivar').addEventListener('click', () => archivarSesion(false));
-  // Two steps, same as DESCARTAR and the relapse: surrendering is filed against the engine
-  // and the phone has no undo, and it sits directly under the button that means the opposite.
-  $('#se-rendirse').addEventListener('click', (e) => {
-    const b = e.currentTarget;
-    if (b.dataset.confirmando !== 'si') {
-      b.dataset.confirmando = 'si';
-      b.textContent = '¿SEGURO? RENDIRSE';
-      b.style.color = 'var(--red)';
-      b.style.borderColor = 'var(--red)';
-      return;
-    }
-    archivarSesion(true);
-  });
-  $('#se-cerrar').addEventListener('click', () => $('#hoja-sesion').close());
-  // One interval for the app's lifetime, and it REPAINTS rather than counts — the number it
-  // shows is recomputed from `inicio` on every tick, so a suspended WebView cannot make it
-  // wrong, only stale. That is also why it costs nothing in the background: Android stops
-  // it there, which is the same platform fact the whole design is built on.
-  setInterval(() => {
-    if ($('#hoja-sesion').open) pintarSesion();
-  }, 1000);
-
-  $('#hoja-habitos').addEventListener('click', alPulsarHabito);
-  $('#hb-cerrar').addEventListener('click', () => $('#hoja-habitos').close());
-  // Same as Despachos above: pintarHB() runs on the way in, which is what clears a
-  // half-armed relapse. No `close` listener, because `close` does not fire.
 
   // Scoped to the sheet rather than to document: the plan adds one document-level listener
   // per sheet, and five of them all running closest() on every tap in the app is noise.
@@ -864,11 +632,12 @@ document.addEventListener('DOMContentLoaded', () => {
   cargarEstado().then(transmitir);
 });
 
-// `segundosSobrevividos` is exported to be driven: it is the only arithmetic in this file that
-// can be wrong in a way the interface would not show, and app.js has no harness of its own.
+// `segundosSobrevividos` was exported here to be driven — the only arithmetic in this file that
+// could be wrong in a way the interface would not show. It went with the Expedición block in the
+// 2026-08-27 Posada split, and nothing that remains does arithmetic over time.
 //
 // `estado` was a getter (`get estado() { return estado; }`) while this file was an IIFE. A module
 // export of a `let` is a LIVE BINDING, so a plain export reproduces the getter exactly — readers
 // still see reassignments. This is the one line of the IIFE-to-module move that is not a pure
 // move, and it is why it is called out here rather than left to be rediscovered.
-export { toast, refrescarChip, abrirHoja, transmitir, cargarEstado, segundosSobrevividos, estado };
+export { toast, refrescarChip, abrirHoja, transmitir, cargarEstado, estado };

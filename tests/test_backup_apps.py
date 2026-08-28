@@ -51,7 +51,12 @@ def _apps_del_proyecto():
 
 def run_tests():
     propias = _apps_del_proyecto()
-    check(len(propias) >= 5, f"el registro ve las apps del proyecto: {propias}")
+    # Suelo anti-vacuidad, NO un inventario: si el registro devolviera una lista vacía el bucle
+    # de abajo no comprobaría nada y este fichero saldría verde sin mirar. Era `>= 5` con seis
+    # apps; son cuatro desde que posada y chess_study salieron el 2026-08-27. El número se baja
+    # a mano al partir una app, y esa es justamente la señal de que hay que revisar las dos
+    # listas de BACKUP_APPS.
+    check(len(propias) >= 4, f"el registro ve las apps del proyecto: {propias}")
 
     for label in propias:
         check(label in BACKUP_APPS,

@@ -3,7 +3,6 @@ from textual.widgets import Label, Button
 from textual.widgets import ProgressBar
 from datetime import datetime
 from textual.reactive import reactive
-from .posada_screens import ASCII_NUMS
 import httpx
 from textual.app import ComposeResult
 from textual.screen import Screen
@@ -15,6 +14,25 @@ from .movie_screens import MovieMainScreen
 from textual.widgets import ProgressBar
 from .modals import ConfirmModal, EvacuationModal, BriefingScreen
 from .constants import API_BACKUP, API_RESTORE
+
+
+
+# The launcher clock's digits. Lived in `posada_screens.py` until the 2026-08-27 split and was
+# imported from there at module level — which is why removing that module would have stopped the
+# whole TUI from starting. It has nothing to do with the Posada; it is glyphs.
+ASCII_NUMS = {
+    '0': ["███", "█ █", "█ █", "█ █", "███"],
+    '1': [" ██", "  █", "  █", "  █", "███"],
+    '2': ["███", "  █", "███", "█  ", "███"],
+    '3': ["███", "  █", "███", "  █", "███"],
+    '4': ["█ █", "█ █", "███", "  █", "  █"],
+    '5': ["███", "█  ", "███", "  █", "███"],
+    '6': ["███", "█  ", "███", "█ █", "███"],
+    '7': ["███", "  █", "  █", "  █", "  █"],
+    '8': ["███", "█ █", "███", "█ █", "███"],
+    '9': ["███", "█ █", "███", "  █", "███"],
+    ':': ["   ", " ▄ ", "   ", " ▀ ", "   "],
+}
 
 
 class WeeklyReviewScreen(Screen):
@@ -308,8 +326,6 @@ class BunkerLauncherScreen(Screen):
         ("1", "launch_lib", "Biblioteca"),
         ("2", "launch_movie", "Videoclub"),
         ("3", "launch_music", "Disquera"),
-        ("4", "launch_posada", "Posada"),
-        ("5", "launch_chess", "Ajedrez"),
         ("q", "app.quit", "Desconectar"),
     ]
 
@@ -347,37 +363,11 @@ class BunkerLauncherScreen(Screen):
         padding: 0 2;
     }
 
-    /* ── SYSTEM ROW: PRESTIGIO + RELOJ ── */
+    /* ── SYSTEM ROW: RELOJ ── */
     #system_row {
         height: 9;
         layout: horizontal;
         margin-bottom: 0;
-    }
-    #prestige_panel {
-        width: 1fr;
-        height: 100%;
-        border: tall $accent;
-        background: $surface;
-        padding: 0 2;
-        content-align: center middle;
-    }
-    #prestige_title {
-        text-style: bold;
-        color: $warning;
-        text-align: center;
-        width: 100%;
-    }
-    #prestige_gauge {
-        text-align: center;
-        width: 100%;
-        color: $success;
-        margin-top: 1;
-    }
-    #prestige_info {
-        text-align: center;
-        width: 100%;
-        color: $text-muted;
-        text-style: italic;
     }
 
     #clock_panel {
@@ -401,7 +391,7 @@ class BunkerLauncherScreen(Screen):
         text-style: bold;
     }
 
-    /* ── BODY: 4 PANELES ── */
+    /* ── BODY: 3 PANELES ── */
     #body_row {
         height: auto;
         min-height: 18;
@@ -419,7 +409,6 @@ class BunkerLauncherScreen(Screen):
     }
     #metrics_panel { border: tall $primary; margin-right: 1; }
     #collections_panel { border: tall $accent; margin-right: 1; }
-    #achievements_panel { border: tall $warning; margin-right: 1; }
     #feed_panel { border: tall $success; }
 
     .cyber_title {
@@ -526,12 +515,8 @@ class BunkerLauncherScreen(Screen):
                 yield Label("◈ INICIALIZANDO SISTEMAS... ◈", id="status_bar")
 
             # ── 2. SYSTEM ROW ──
+            # El panel del Gremio estaba a la izquierda del reloj hasta el 2026-08-27.
             with Horizontal(id="system_row"):
-                with Vertical(id="prestige_panel"):
-                    yield Label("⚜  GREMIO  ─  NIVEL --", id="prestige_title")
-                    yield Label("[dim]░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/dim] 0%", id="prestige_gauge")
-                    yield Label("Esperando telemetría...", id="prestige_info")
-
                 with Vertical(id="clock_panel"):
                     yield Label("", id="ascii_clock")
                     yield Label("", id="clock_date")
@@ -542,15 +527,9 @@ class BunkerLauncherScreen(Screen):
                 with Vertical(id="metrics_panel", classes="cyber_panel"):
                     yield Label("◈ MÉTRICAS DEL SISTEMA ◈", classes="cyber_title")
                     yield Label("────────────────────────────", classes="cyber_separator")
-                    yield Label("  Actividad 7d │ [dim]--[/]", id="metric_sparkline", classes="metric_line")
-                    yield Label("  Aventureros  │ [dim]-- activos[/]", id="metric_advs", classes="metric_line")
-                    yield Label("  Héroe Líder  │ [dim]--[/]", id="metric_leader", classes="metric_line")
-                    yield Label("  Patrimonio   │ [dim]-- Talentos[/]", id="metric_wealth", classes="metric_line")
-                    yield Label("  Hábitos Hoy  │ [dim]--/--[/]", id="metric_habits", classes="metric_line")
-                    yield Label("  Racha Hábitos│ [dim]--[/]", id="metric_streak", classes="metric_line")
+                    # Ocho de estas nueve líneas eran de la Posada — aventureros, patrimonio,
+                    # hábitos, kanban, calendario — y se fueron con ella el 2026-08-27.
                     yield Label("  Racha Lectura│ [dim]--[/]", id="metric_read_streak", classes="metric_line")
-                    yield Label("  Kanban Pend. │ [dim]-- tareas[/]", id="metric_kanban", classes="metric_line")
-                    yield Label("  Eventos Hoy  │ [dim]-- eventos[/]", id="metric_calendar", classes="metric_line")
 
                 # Panel Colecciones
                 with Vertical(id="collections_panel", classes="cyber_panel"):
@@ -572,13 +551,6 @@ class BunkerLauncherScreen(Screen):
                         yield Label("[dim]░░░░░░░░░░░░░░░░░░░░[/dim] 0%", id="bar_music", classes="col_bar")
                         yield Label("  --/-- escuch. • --h", id="stat_music", classes="col_stat")
 
-                # Panel Logros
-                with Vertical(id="achievements_panel", classes="cyber_panel"):
-                    yield Label("◈ SALA DE TROFEOS ◈", classes="cyber_title")
-                    yield Label("────────────────────────────", classes="cyber_separator")
-                    for i in range(10):
-                        yield Label("", id=f"logro_{i}", classes="metric_line")
-
                 # Panel Feed
                 with Vertical(id="feed_panel", classes="cyber_panel"):
                     yield Label("◈ TRÁFICO DE RED ◈", classes="cyber_title")
@@ -591,8 +563,6 @@ class BunkerLauncherScreen(Screen):
                 yield Button("[ 1 ] BIBLIOTECA", id="btn_lib", classes="mod_btn")
                 yield Button("[ 2 ] VIDEOCLUB", id="btn_movie", classes="mod_btn")
                 yield Button("[ 3 ] DISQUERA", id="btn_music", classes="mod_btn")
-                yield Button("[ 4 ] POSADA", id="btn_posada", classes="mod_btn")
-                yield Button("[ 5 ] AJEDREZ", id="btn_chess", classes="mod_btn")
                 yield Button("BACKUP", id="btn_evac", classes="mod_btn_warn")
                 yield Button("SALIR", id="btn_quit", classes="mod_btn_danger")
 
@@ -606,10 +576,6 @@ class BunkerLauncherScreen(Screen):
 
     def tick_clock(self) -> None:
         from datetime import datetime
-        try:
-            from .posada_screens import ASCII_NUMS
-        except ImportError:
-            return
 
         now = datetime.now()
         self._clock_blink = not self._clock_blink
@@ -635,46 +601,6 @@ class BunkerLauncherScreen(Screen):
         except Exception:
             pass
 
-    def create_sparkline(self, data: list) -> str:
-        """Genera un minigráfico ASCII basado en una serie temporal."""
-        if not data or max(data) == 0:
-            return "[dim]▁▁▁▁▁▁▁[/dim] (0m)"
-        bars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-        max_val = max(data)
-        sparkline = ""
-        for val in data:
-            idx = int((val / max_val) * 7) if max_val > 0 else 0
-            sparkline += bars[idx]
-        return f"[#00ff41]{sparkline}[/] ({data[-1]}m)"
-
-    def create_gauge(self, current: int, total: int, width: int = 20) -> str:
-        """Genera una barra ASCII: ████████░░░░░░░░░░░░ 42%"""
-        if total == 0:
-            return f"[dim]{'░' * width}[/dim] 0%"
-        pct = min(current / total, 1.0)
-        filled = int(pct * width)
-        empty = width - filled
-        pct_val = int(pct * 100)
-        # Color by percentage
-        if pct_val >= 70:
-            color = "#00ff41"
-        elif pct_val >= 30:
-            color = "#ffb000"
-        else:
-            color = "#ff4444"
-        return f"[{color}]{'█' * filled}[/][dim]{'░' * empty}[/dim] {pct_val}%"
-
-    def create_prestige_gauge(self, current: int, total: int, width: int = 30) -> str:
-        """Gauge especial para prestigio con gradiente."""
-        if total == 0:
-            return f"[dim]{'░' * width}[/dim] 0%"
-        pct = min(current / total, 1.0)
-        filled = int(pct * width)
-        empty = width - filled
-        pct_val = int(pct * 100)
-        return f"[#ffb000]{'█' * filled}[/][dim]{'░' * empty}[/dim] [bold #ffb000]{pct_val}%[/]"
-
-    @work(thread=True)
     def fetch_dashboard(self) -> None:
         try:
             from .constants import API_DASHBOARD
@@ -751,15 +677,9 @@ class BunkerLauncherScreen(Screen):
 
         if not self._boot_done:
             self._boot_done = True
-            posada = data.get("posada", {})
-            te = posada.get("today_events") or 0
-            hc = posada.get("habits_completed") or 0
-            ht = posada.get("habits_total") or 0
+            # Las dos alertas de arranque — eventos de calendario y hábitos pendientes — eran
+            # de la Posada. El inventario no tiene nada urgente que decir al entrar.
             msgs = []
-            if te > 0:
-                msgs.append(f"Tienes {te} evento(s) HOY.")
-            if hc < ht:
-                msgs.append(f"Faltan {ht - hc} hábito(s) por completar.")
             
             if msgs:
                 msg_body = "\n".join(msgs)
@@ -782,77 +702,14 @@ class BunkerLauncherScreen(Screen):
             sb = self.query_one("#status_bar", Label)
             sb.update("[#00ff41]◈ EN VIVO[/] [#555555]│[/] [#00e5ff]SISTEMA: ONLINE[/] [#555555]│[/] [#00ff41]NÚCLEO: ESTABLE[/] [#555555]│[/] [#8b5cf6]TELEMETRÍA: OK[/]")
 
-            # ── PRESTIGIO ──
-            posada = data.get("posada") or {}
-            guild = posada.get("guild") or {}
-            lvl = guild.get("prestige_level", 1)
-            pres = guild.get("prestige", 0)
-            meta = guild.get("prestige_meta", 100)
-
-            self.query_one("#prestige_title", Label).update(
-                f"[#ffb000]⚜  GREMIO  ─  NIVEL {lvl}[/]  [#555555]│[/]  [#c0c0c0]{pres}[/][#555555]/{meta} pts[/]"
-            )
-            gauge = self.create_prestige_gauge(pres, meta)
-            self.query_one("#prestige_gauge", Label).update(gauge)
-            self.query_one("#prestige_info", Label).update(
-                f"[#555555]Siguiente nivel: {meta - pres} pts restantes[/]"
-            )
-
             # ── MÉTRICAS ──
-            dw_history = posada.get("dw_history", [])
-            sparkline_str = self.create_sparkline(dw_history)
-            self.query_one("#metric_sparkline", Label).update(
-                f"  [#8b5cf6]⏱[/]  Actividad 7d [#555555]│[/] {sparkline_str}"
-            )
-
-            advs = posada.get("active_adventurers") or []
-            self.query_one("#metric_advs", Label).update(
-                f"  [#00e5ff]⊕[/]  Aventureros  [#555555]│[/] [bold #00e5ff]{len(advs)}[/] desplegados"
-            )
-
-            top = posada.get("top_adventurer") or {}
-            top_name = top.get("name", "Nadie")
-            top_lvl = top.get("level", 0)
-            self.query_one("#metric_leader", Label).update(
-                f"  [#ffb000]★[/]  Héroe Líder  [#555555]│[/] [bold #ffb000]{top_name}[/] [dim](Nv.{top_lvl})[/]"
-            )
-
-            nw = guild.get("net_worth") or 0
-            self.query_one("#metric_wealth", Label).update(
-                f"  [#ffd700]◆[/]  Patrimonio   [#555555]│[/] [bold #ffd700]{nw}[/] Talentos"
-            )
-
-            hc = posada.get("habits_completed") or 0
-            ht = posada.get("habits_total") or 0
-            habit_gauge = self.create_gauge(hc, ht, width=10)
-            self.query_one("#metric_habits", Label).update(
-                f"  [#00ff41]✓[/]  Hábitos Hoy  [#555555]│[/] {habit_gauge} [dim]{hc}/{ht}[/]"
-            )
-
-            streak = posada.get("top_streak") or {}
-            str_name = streak.get("name", "Ninguna")
-            str_val = streak.get("streak", 0)
-            flame = "[#ff4444]▲[/]" if str_val > 5 else "[#ffb000]▲[/]"
-            self.query_one("#metric_streak", Label).update(
-                f"  {flame}  Racha Hábitos[#555555]│[/] [bold]{str_name}[/] [dim]({str_val}d)[/]"
-            )
-
+            # El bloque PRESTIGIO y ocho de las nueve métricas eran de la Posada. La racha de
+            # lectura es la única que no lo era, y es lo que queda.
             b = data.get("books") or {}
             b_streak = b.get("streak", 0)
             read_icon = "[#00ff41]▤[/]" if b_streak > 0 else "[#555555]▤[/]"
             self.query_one("#metric_read_streak", Label).update(
                 f"  {read_icon}  Racha Lectura[#555555]│[/] [bold #00ff41]{b_streak}[/] [dim]días[/]"
-            )
-
-            pt = posada.get("pending_tasks") or 0
-            self.query_one("#metric_kanban", Label).update(
-                f"  [#00e5ff]▦[/]  Kanban Pend. [#555555]│[/] [bold]{pt}[/] tareas"
-            )
-
-            te = posada.get("today_events") or 0
-            ev_color = "#ff00ff" if te > 0 else "#555555"
-            self.query_one("#metric_calendar", Label).update(
-                f"  [{ev_color}]◉[/]  Eventos Hoy  [#555555]│[/] [{ev_color}]{te} programados[/]"
             )
 
             # ── COLECCIONES ──
@@ -889,29 +746,6 @@ class BunkerLauncherScreen(Screen):
                 f"  [dim]{mu_listened}/{mu_total} escuchados • {mu_hours}h est.[/]"
             )
 
-            # ── LOGROS ──
-            logros = data.get("achievements") or []
-            for i in range(10):
-                lbl = self.query_one(f"#logro_{i}", Label)
-                if i >= len(logros):
-                    lbl.update("")
-                    continue
-                lg = logros[i]
-                nombre = lg.get("name", "")[:18]
-                if lg.get("unlocked_at"):
-                    fecha = lg["unlocked_at"][:10]
-                    lbl.update(f"  {lg.get('icon', '🏆')} [#ffb000]{nombre}[/] [#555555]│ {fecha}[/]")
-                else:
-                    prog = lg.get("progress") or 0
-                    lbl.update(f"  [dim]{lg.get('icon', '🏆')} {nombre} │ {prog}/{lg.get('threshold', 0)}[/]")
-
-            # Solo la respuesta que desbloquea trae just_unlocked, asi que la alerta suena una vez.
-            for lg in logros:
-                if lg.get("just_unlocked"):
-                    self.app.notify(
-                        f"{lg.get('icon', '🏆')} {lg.get('name')}",
-                        title="¡LOGRO DESBLOQUEADO!", severity="information", timeout=10.0)
-
             # ── FEED ──
             feed = data.get("feed") or []
             from datetime import datetime
@@ -935,8 +769,6 @@ class BunkerLauncherScreen(Screen):
         if event.button.id == "btn_lib": self.action_launch_lib()
         elif event.button.id == "btn_movie": self.action_launch_movie()
         elif event.button.id == "btn_music": self.action_launch_music()
-        elif event.button.id == "btn_posada": self.action_launch_posada()
-        elif event.button.id == "btn_chess": self.action_launch_chess()
         elif event.button.id == "btn_evac": self.app.notify("Mantenimiento.", severity="warning")
         elif event.button.id == "btn_quit": self.app.exit()
 
@@ -951,14 +783,6 @@ class BunkerLauncherScreen(Screen):
     def action_launch_music(self) -> None:
         from .music_screens import MusicMainScreen
         self.app.push_screen(MusicMainScreen())
-
-    def action_launch_posada(self) -> None:
-        from .posada_screens import PosadaMainScreen
-        self.app.push_screen(PosadaMainScreen())
-
-    def action_launch_chess(self) -> None:
-        from .chess_screens import ChessMainScreen
-        self.app.push_screen(ChessMainScreen())
 
     # ── FUNCIONES DE SEGURIDAD ──
     @work(thread=True)

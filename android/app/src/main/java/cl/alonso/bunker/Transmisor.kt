@@ -87,14 +87,16 @@ class Transmisor(
         // reads tidier and does not hold.
         private val CANDADO = Any()
 
-        // Must stay identical to RUTAS in queue.js. Task 10 asserts that they are.
+        // Must stay identical to RUTAS in queue.js. `TransmisorTest` asserts that they are.
+        // "habito" and "sesion" were removed on 2026-08-27 with the Posada split: their two
+        // sheets left the Transmisor and their endpoints left this server. A queued capture
+        // with either verb now finds no route and is DISCARDED by the loop above, which is the
+        // correct outcome — it can never be accepted.
         val RUTAS = mapOf(
             "paginas" to "/api/books/tracker/pages/",
             "terminar_libro" to "/api/books/tracker/finish/",
             "terminar_peli" to "/api/movies/tracker/finish/",
             "terminar_disco" to "/api/music/tracker/finish/",
-            "habito" to "/posada/api/habits/complete/",
-            "sesion" to "/posada/api/session/record/",
             "escaneo_libro" to "/api/books/inbox/",
             "escaneo_peli" to "/api/movies/inbox/",
             "escaneo_disco" to "/api/music/inbox/",

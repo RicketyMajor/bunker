@@ -41,21 +41,21 @@ class TransmisorTest {
         // signal must not overwrite it with "sin enlace" — that erases the only thing that tells
         // Alonso why the item is in the Purgatorio.
         val s = store()
-        s.encolar("habito", """{"habit_id":3}""")
-        Transmisor(s) { _, _ -> Respuesta(409, """{"message":"Los hábitos se marcan el mismo día."}""") }.vaciar()
+        s.encolar("paginas", """{"pages":3}""")
+        Transmisor(s) { _, _ -> Respuesta(409, """{"message":"Esa página ya se anotó hoy."}""") }.vaciar()
         Transmisor(s) { _, _ -> throw java.io.IOException("sin ruta") }.vaciar()
-        assertEquals("Los hábitos se marcan el mismo día.", s.items()[0].error)
+        assertEquals("Esa página ya se anotó hoy.", s.items()[0].error)
     }
 
     @Test
     fun `un 4xx conserva la captura con el motivo real`() {
         val s = store()
-        s.encolar("habito", """{"habit_id":3}""")
+        s.encolar("paginas", """{"pages":3}""")
         val r = Transmisor(s) { _, _ ->
-            Respuesta(409, """{"message":"Los hábitos se marcan el mismo día."}""")
+            Respuesta(409, """{"message":"Esa página ya se anotó hoy."}""")
         }.vaciar()
         assertEquals(1, s.pendientes())
-        assertEquals("Los hábitos se marcan el mismo día.", s.items()[0].error)
+        assertEquals("Esa página ya se anotó hoy.", s.items()[0].error)
         assertTrue("un 409 SI alcanzo el servidor", r.alcanzoElServidor)
     }
 
@@ -117,10 +117,10 @@ class TransmisorTest {
         // `vaciar` deletes without asking, `encolar` must never have accepted.
         val s = store()
         try {
-            s.encolar("habitos", """{"habit_id":3}""") // the plural is the typo that costs a capture
+            s.encolar("paginass", """{"pages":3}""") // the typo that costs a capture
             throw AssertionError("encolar acepto un verbo sin ruta")
         } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains("habitos"))
+            assertTrue(e.message!!.contains("paginass"))
         }
         assertEquals(0, s.pendientes())
     }
@@ -145,12 +145,12 @@ class TransmisorTest {
         val s = store()
         s.encolar("paginas", """{"pages":1}""")
         val r = Transmisor(s) { _, _ ->
-            s.encolar("habito", """{"habit_id":9}""")
+            s.encolar("wishlist_libro", """{"title":"Dune"}""")
             Respuesta(201, "{}")
         }.vaciar()
         assertEquals(1, r.enviados)
         assertEquals(1, s.pendientes())
-        assertEquals("habito", s.items()[0].verbo)
+        assertEquals("wishlist_libro", s.items()[0].verbo)
     }
 
     @Test
@@ -166,13 +166,16 @@ class TransmisorTest {
 
     @Test
     fun `las rutas cubren todos los verbos que la cola acepta`() {
-        // Beyond the plan. Task 10 asserts RUTAS equals queue.js's map; this asserts the twelve
-        // keys are the twelve the plan names, so a typo in a key is caught here and not as a
-        // silent `retirados++` that deletes the capture on the phone.
-        assertEquals(12, Transmisor.RUTAS.size)
+        // The selftest asserts RUTAS equals queue.js's map; this asserts the ten keys are the
+        // ten the Transmisor names, so a typo in a key is caught here and not as a silent
+        // `retirados++` that deletes the capture on the phone.
+        //
+        // Ten and not twelve since the 2026-08-27 split: "habito" and "sesion" left with La
+        // Posada, and this repository can no longer reach the endpoints they posted to.
+        assertEquals(10, Transmisor.RUTAS.size)
         assertEquals(
             listOf(
-                "escaneo_disco", "escaneo_libro", "escaneo_peli", "habito", "paginas", "sesion",
+                "escaneo_disco", "escaneo_libro", "escaneo_peli", "paginas",
                 "terminar_disco", "terminar_libro", "terminar_peli",
                 "wishlist_disco", "wishlist_libro", "wishlist_peli",
             ),

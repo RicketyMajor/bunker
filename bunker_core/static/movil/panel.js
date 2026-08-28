@@ -13,12 +13,16 @@ import { pedir, vaciar } from './estado.js';
 // · The chart is ONE series in ONE hue, no legend (the title names it), no gridlines, no axes,
 //   two direct labels. A second series here would need a categorical palette this one cannot pass.
 
-const MODULOS = ['posada', 'books', 'movies', 'music', 'chess'];
+// 'posada' and 'chess' left with the 2026-08-27 split, and `/api/stats/timeline/` 400s on a
+// module it does not know — which is why this list is validated against, not trusted.
+const MODULOS = ['books', 'movies', 'music'];
 
 export function montar() {
   if (!location.pathname.startsWith('/panel')) return;
   document.body.dataset.superficie = 'panel';
-  cargarDatos();
+  // `cargarDatos()` and its four blocks — prestige, habits, achievements, the session log —
+  // stood here until the 2026-08-27 split. All four read `/api/panel/`, which was entirely
+  // Posada and left with it. The series below is books, movies and music, and it stays.
   // Deep-link: el módulo sale de la URL si viene, y si no del primero. Se valida contra la
   // lista antes de usarlo — la URL es de quien la escribe, y el endpoint 400ea lo desconocido.
   const pedido = new URLSearchParams(location.search).get('modulo');
@@ -26,136 +30,6 @@ export function montar() {
   montarModulos(inicial);
   cargarSerie(inicial);
 }
-
-// ---------------------------------------------------------------- bloque 1-4: /api/panel/
-
-async function cargarDatos() {
-  const destino = document.getElementById('p-datos');
-  if (!destino) return;
-  const datos = await pedir(override('datos') || destino.dataset.fuente, destino,
-                            { vacio: (d) => !d || !d.prestigio });
-  if (!datos) return;
-  destino.innerHTML = '';
-  destino.append(bloquePrestigio(datos.prestigio), bloqueHabitos(datos.habitos),
-                 bloqueLogros(datos.logros), bloqueBitacora(datos.bitacora));
-}
-
-function seccion(titulo) {
-  const nodo = document.createElement('div');
-  nodo.className = 'p-bloque';
-  const h = document.createElement('h2');
-  h.textContent = titulo;
-  nodo.append(h);
-  return nodo;
-}
-
-function bloquePrestigio({ total, semana }) {
-  const nodo = seccion('PRESTIGIO');
-  const cifra = document.createElement('p');
-  cifra.className = 'p-cifra';
-  cifra.textContent = total.toLocaleString('es-CL');
-  // The week's net as a SIGNED delta beside the figure: a total with no direction answers
-  // "how much" but not "how am I doing", which is the question this screen exists for.
-  const delta = document.createElement('span');
-  const neto = semana ? semana.net : 0;
-  delta.className = 'p-delta';
-  delta.dataset.signo = neto > 0 ? 'sube' : neto < 0 ? 'baja' : 'igual';
-  delta.textContent = `${neto > 0 ? '+' : ''}${neto} esta semana`;
-  cifra.append(delta);
-  nodo.append(cifra);
-  return nodo;
-}
-
-function bloqueHabitos(habitos) {
-  const nodo = seccion('HOY');
-  if (!habitos || habitos.length === 0) {
-    const p = document.createElement('p');
-    vaciar(p, 'Hoy no toca ningún hábito.');
-    nodo.append(p);
-    return nodo;
-  }
-  const lista = document.createElement('ul');
-  lista.className = 'p-lista';
-  for (const h of habitos) {
-    const li = document.createElement('li');
-    // A bad habit marked done is a RELAPSE, so it is not the same fact as a good one done —
-    // §1 records "a relapse is notified in green" as a real defect. Three glyphs, three words.
-    const recaida = h.malo && h.hecho;
-    li.dataset.marca = recaida ? 'recaida' : h.hecho ? 'hecho' : 'pendiente';
-    const marca = document.createElement('span');
-    marca.className = 'p-marca';
-    marca.textContent = recaida ? '[!]' : h.hecho ? '[✓]' : '[ ]';
-    const nombre = document.createElement('span');
-    nombre.textContent = h.nombre;
-    const meta = document.createElement('span');
-    meta.className = 'p-meta';
-    meta.textContent = recaida ? 'recaída' : h.hecho ? `racha ${h.racha}` : 'pendiente';
-    li.append(marca, nombre, meta);
-    lista.append(li);
-  }
-  nodo.append(lista);
-  return nodo;
-}
-
-function bloqueLogros(logros) {
-  const nodo = seccion('LOGROS');
-  if (!logros || logros.length === 0) {
-    const p = document.createElement('p');
-    vaciar(p, 'Ninguno desbloqueado todavía.');
-    nodo.append(p);
-    return nodo;
-  }
-  const lista = document.createElement('ul');
-  lista.className = 'p-lista';
-  for (const l of logros) {
-    const li = document.createElement('li');
-    const icono = document.createElement('span');
-    icono.className = 'p-marca';
-    icono.textContent = l.icono;
-    const nombre = document.createElement('span');
-    nombre.textContent = l.nombre;
-    const meta = document.createElement('span');
-    meta.className = 'p-meta';
-      // `Intl`, no el ISO crudo: "2026-08-22" es un formato de transporte, no de lectura.
-    meta.textContent = new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'short' })
-      .format(new Date(l.fecha + 'T00:00:00'));
-    li.append(icono, nombre, meta);
-    lista.append(li);
-  }
-  nodo.append(lista);
-  return nodo;
-}
-
-function bloqueBitacora(bitacora) {
-  const nodo = seccion('ÚLTIMA EXPEDICIÓN');
-  if (!bitacora) {
-    const p = document.createElement('p');
-    vaciar(p, 'Sin expediciones registradas.');
-    nodo.append(p);
-    return nodo;
-  }
-  const cabecera = document.createElement('p');
-  cabecera.className = 'p-meta';
-  cabecera.textContent = `${bitacora.categoria} · ${bitacora.minutos}\u00a0min · ` +
-                         (bitacora.completada ? 'completada' : 'abandonada');
-  const log = document.createElement('ul');
-  log.className = 'p-log';
-  if (bitacora.eventos.length === 0) {
-    const p = document.createElement('p');
-    vaciar(p, 'Esa expedición no dejó bitácora.');
-    nodo.append(cabecera, p);
-    return nodo;
-  }
-  for (const evento of bitacora.eventos) {
-    const li = document.createElement('li');
-    li.textContent = evento;
-    log.append(li);
-  }
-  nodo.append(cabecera, log);
-  return nodo;
-}
-
-// ---------------------------------------------------------------- bloque 5: la serie
 
 function montarModulos(inicial) {
   const fila = document.getElementById('p-modulos');

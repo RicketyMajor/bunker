@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from bunker_core.views import (global_dashboard_view, backup_database, list_backups,
                                restore_database, health_check, movil_estado, movil_assets,
-                               movil_app, movil_sw, movil_manifest, movil_selftest, panel_datos,
+                               movil_app, movil_sw, movil_manifest, movil_selftest,
                                briefing, briefing_seen, stats_timeline)
 
 urlpatterns = [
@@ -14,8 +14,6 @@ urlpatterns = [
     path('api/briefing/', briefing, name='briefing'),
     path('api/briefing/seen/', briefing_seen, name='briefing_seen'),
     path('api/stats/timeline/', stats_timeline, name='stats_timeline'),
-    # Todo lo que muestra el panel, en un GET que no escribe. Ver `panel_datos`.
-    path('api/panel/', panel_datos, name='panel_datos'),
     path('api/movil/estado/', movil_estado, name='movil_estado'),
     path('api/movil/assets/', movil_assets, name='movil_assets'),
 
@@ -34,10 +32,11 @@ urlpatterns = [
     # The consultation surface. Same view and same template as `/movil/` — see its docstring.
     # A real Django route, which is what `bunker-responde.md`'s criterion asks for by its own
     # wording, and it works in a plain browser with no APK involved.
+    #
+    # Since the 2026-08-27 split it shows ONE block: the historical series over books, movies
+    # and music. `/api/panel/` and its four Posada blocks left with La Posada.
     path('panel/', movil_app, name='panel'),
-    path('posada/', include('posada.urls')),
     path('api/music/', include('disquera.urls')),
-    path('api/chess/', include('chess_study.urls')),
 
     # --- RUTAS DEL PROTOCOLO DE EVACUACIÓN ---
     path('api/backup/', backup_database, name='backup'),

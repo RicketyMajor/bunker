@@ -1,6 +1,6 @@
 """What Bunker says when you walk in.
 
-Everything here reads models directly. It deliberately does NOT call `/posada/api/habits/`
+Everything here reads models directly. It deliberately does NOT call
 or `/api/dashboard/`: both pay prestige for past calendar events on every GET, so proxying
 them would make opening Bunker a payment. See state-of-the-project.md §1.
 """
@@ -52,7 +52,6 @@ def construir_briefing():
     from bunker_core.models import BunkerState
     from catalog.models import ReadingSession
     from movies.models import MovieAnnualRecord
-    from posada.models import Achievement, DailyHabit, DeepWorkSession
 
     estado, _ = BunkerState.objects.get_or_create(id=1)
 
@@ -63,27 +62,6 @@ def construir_briefing():
     # that a film watched last night could not move. The spec's own correction says it: a
     # film watched is the fact, its runtime is a property of the film.
     cine_ayer = MovieAnnualRecord.objects.filter(date_watched=ayer).count()
-    deep_ayer = (DeepWorkSession.objects
-                 .filter(completed=True, start_time__date=ayer)
-                 .aggregate(t=Sum('duration_minutes'))['t'] or 0)
-    habitos_ayer = DailyHabit.objects.filter(last_completed_date=ayer).count()
-
-    # Same `valid_days` rule the penalty engine uses and the one `movil_estado` already
-    # applies. A habit not scheduled today is not pending today.
-    pendientes = list(DailyHabit.objects
-                      .filter(valid_days__contains=str(hoy.weekday()))
-                      .exclude(last_completed_date=hoy)
-                      .values('id', 'name', 'difficulty')[:20])
-
-    # At risk: the longest live streak that has not been marked today. A streak of 0 has
-    # nothing to lose, so it is not "at risk" — it is just unstarted.
-    en_riesgo = (DailyHabit.objects
-                 .filter(valid_days__contains=str(hoy.weekday()), current_streak__gt=0,
-                         is_bad_habit=False)
-                 .exclude(last_completed_date=hoy)
-                 .order_by('-current_streak')
-                 .values('id', 'name', 'current_streak')
-                 .first())
 
     # Closest to finishing: fewest pages left, not furthest along. A book at 580/608 beats
     # one at 40/300 even though the second is a smaller fraction of nothing.
@@ -102,24 +80,14 @@ def construir_briefing():
     ]
     libro_cerca = min(candidatos, key=lambda c: c['restantes']) if candidatos else None
 
-    logros = []
-    if estado.last_entry_at:
-        logros = list(Achievement.objects
-                      .filter(unlocked_at__gt=estado.last_entry_at)
-                      .values('key', 'name', 'icon'))
-
     # The review is built ONLY when it is going to be shown: on six days out of seven this
     # block is skipped entirely and the briefing does not pay for it.
     mostrar_revision = estado.last_review_week != _semana_actual()
     revision = _revision() if mostrar_revision else None
 
     return {
-        "ayer": {"paginas": paginas_ayer, "peliculas": cine_ayer,
-                 "minutos_deep_work": deep_ayer, "habitos": habitos_ayer},
-        "hoy": {"habitos_pendientes": pendientes},
-        "habito_en_riesgo": en_riesgo,
+        "ayer": {"paginas": paginas_ayer, "peliculas": cine_ayer},
         "libro_mas_cerca": libro_cerca,
-        "logros_nuevos": logros,
         "conclusiones": conclusiones(),
         "show_review": mostrar_revision,
         "review": revision,
@@ -129,23 +97,14 @@ def construir_briefing():
 def marcar_visto(con_revision):
     """Records the entry. This is the ONLY thing here that writes, and it is a POST.
 
-    Since 2026-08-21 it also persists the prestige snapshots. They used to be written by
-    `resumen_semana` on the READ path, which made `GET /api/briefing/` an unsafe GET and broke
-    the read-only criterion of `specs/movil-v3.md` before that panel existed. This is where
-    the write belongs: the endpoint that is a POST because it writes.
-
-    The weeks snapshotted are the two the review actually reported — `hoy - 7` and `hoy - 14`,
-    the same pair `_prestigio_por_semana` builds — and NOT `_semana_actual()`, which is the
-    different piece of bookkeeping below: "shown once this week".
+    It also persisted the prestige snapshots until the 2026-08-27 split. That write moved to
+    La Posada with the ledger; what remains here is the bookkeeping this repository owns —
+    when the briefing was last shown, and for which week the review was shown.
     """
     from bunker_core.models import BunkerState
     estado, _ = BunkerState.objects.get_or_create(id=1)
     estado.last_entry_at = timezone.now()
     if con_revision:
-        from posada.prestige import snapshot_semana
-        hoy = timezone.localdate()
-        snapshot_semana(_clave_semana(hoy - timedelta(days=7)))
-        snapshot_semana(_clave_semana(hoy - timedelta(days=14)))
         estado.last_review_week = _semana_actual()
     estado.save()
     return estado
@@ -155,69 +114,14 @@ def marcar_visto(con_revision):
 # pages and works are two different facts about the same week.
 _METRICAS_REVISION = (("Páginas", 'books', 'amount'),
                       ("Libros", 'books', 'count'),
-                      ("Deep Work (min)", 'posada', 'amount'),
                       ("Películas", 'movies', 'count'),
-                      ("Discos", 'music', 'count'),
-                      ("Puzzles", 'chess', 'count'))
+                      ("Discos", 'music', 'count'))
 
 
-def _logros_por_semana():
-    """Achievements unlocked in the two LAST COMPLETE weeks, newest first. One grouped query,
-    same idiom as `timeline.py` — `unlocked_at` is a DateTimeField, so `TruncWeek` needs the
-    timezone the project actually runs in, not the container's UTC."""
-    from django.db.models import Count
-    from django.db.models.functions import TruncWeek
-    from posada.models import Achievement
-    hoy = timezone.localdate()
-    lunes = hoy - timedelta(days=hoy.weekday())
-    revisada, comparada = lunes - timedelta(days=7), lunes - timedelta(days=14)
-    filas = (Achievement.objects
-             .filter(unlocked_at__date__gte=comparada, unlocked_at__date__lt=lunes)
-             .annotate(semana=TruncWeek('unlocked_at'))
-             .values('semana').annotate(n=Count('id')))
-    por_semana = {f['semana'].date() if hasattr(f['semana'], 'date') else f['semana']: f['n']
-                  for f in filas}
-    return por_semana.get(revisada, 0), por_semana.get(comparada, 0)
-
-
-def _desglose(week_key):
-    """That week's entries grouped by source, largest first, zeros omitted.
-
-    One grouped query. A source whose entries net to exactly zero in the week — a habit
-    completed and then undone — carries no information and is dropped rather than rendered
-    as a `0` line the reader has to interpret.
-    """
-    from django.db.models import Sum
-
-    from posada.models import PrestigeEntry
-    from posada.prestige import _rango_semana
-
-    lunes, siguiente = _rango_semana(week_key)
-    etiquetas = dict(PrestigeEntry.FUENTES)
-    filas = (PrestigeEntry.objects
-             .filter(occurred_at__date__gte=lunes, occurred_at__date__lt=siguiente)
-             .values('source').annotate(monto=Sum('amount')).order_by('-monto'))
-    return [{"fuente": f['source'],
-             "etiqueta": etiquetas.get(f['source'], f['source']),
-             "monto": f['monto']}
-            for f in filas if f['monto']]
-
-
-def _prestigio_por_semana():
-    """Prestige for the two LAST COMPLETE weeks, plus the reviewed week's breakdown by source.
-
-    Same window as `_logros_por_semana()` directly above — that function already gets the
-    Monday boundary and the timezone right, and inventing a second way to ask the same
-    question is how two numbers start disagreeing. The keys come from `_clave_semana`, the
-    one producer of the format, and the summing lives in `posada.prestige.resumen_semana`,
-    the one producer of the number.
-    """
-    from posada.prestige import resumen_semana
-
-    hoy = timezone.localdate()
-    revisada = _clave_semana(hoy - timedelta(days=7))
-    comparada = _clave_semana(hoy - timedelta(days=14))
-    return resumen_semana(revisada), resumen_semana(comparada), _desglose(revisada)
+# `_logros_por_semana`, `_desglose` and `_prestigio_por_semana` stood here until the 2026-08-27
+# split. All three read ONLY Posada's models, so they were domain code living in the Bunker's
+# briefing; they moved to `posada/prestige.py` as `desglose_semana` and `prestigio_por_semana`,
+# next to `_rango_semana`, whose inverse `_clave_semana` went with them.
 
 
 def _revision():
@@ -233,17 +137,18 @@ def _revision():
     The week being REVIEWED and the week being RECORDED are different: `marcar_visto` still
     writes `_semana_actual()`, because that is the bookkeeping for "shown once this week".
 
-    Six metrics over FIVE distinct modules — the plan says four, but the list names books,
-    posada, movies, music and chess. Each module is fetched ONCE: calling `serie()` per metric
-    would run books twice for no reason. Looping over the same module is the same waste as
-    looping over periods, wearing a different hat.
+    Four metrics over THREE distinct modules: books twice (pages and works are two different
+    facts about the same week), movies and music once each. Each module is fetched ONCE —
+    calling `serie()` per metric would run books twice for no reason. Looping over the same
+    module is the same waste as looping over periods, wearing a different hat.
+
+    It was six metrics over five modules until the 2026-08-27 split, when posada and chess left
+    and prestige and achievements went with them.
     """
     from bunker_core.timeline import serie
     series = {modulo: serie(modulo, 'weekly', 3)
               for modulo in {m[1] for m in _METRICAS_REVISION}}
     hoy = timezone.localdate()
-    logros_actual, logros_previa = _logros_por_semana()
-    prest_actual, prest_previa, desglose = _prestigio_por_semana()
     return {
         "semana": _clave_semana(hoy - timedelta(days=7)),
         "anterior": _clave_semana(hoy - timedelta(days=14)),
@@ -253,13 +158,5 @@ def _revision():
         "metricas": [{"etiqueta": etiqueta,
                       "actual": series[modulo][-2][campo],
                       "previa": series[modulo][-3][campo]}
-                     for etiqueta, modulo, campo in _METRICAS_REVISION]
-                    + [{"etiqueta": "Logros", "actual": logros_actual,
-                        "previa": logros_previa}],
-        # Prestige is NOT a metric row: a row is one number against last week's, and the
-        # whole point of the ledger is that a week has two — what was earned and what was
-        # lost. A net of +40 that hides "avoided three vices, missed two habits" is the
-        # question the review is supposed to answer, not the answer.
-        "prestigio": {"actual": prest_actual, "previa": prest_previa,
-                      "por_fuente": desglose},
+                     for etiqueta, modulo, campo in _METRICAS_REVISION],
     }

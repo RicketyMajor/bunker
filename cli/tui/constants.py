@@ -51,13 +51,3 @@ API_BACKUP = f"{BASE_URL}/api/backup/"
 API_RESTORE = f"{BASE_URL}/api/restore/"
 
 # --- RUTAS DEL AJEDREZ ---
-API_CHESS_ROOMS = f"{BASE_URL}/api/chess/rooms/"
-API_CHESS_NOTES = f"{BASE_URL}/api/chess/notes/"
-API_CHESS_PARSE = f"{BASE_URL}/api/chess/parse-pgn/"
-API_CHESS_DIRS = f"{BASE_URL}/api/chess/directories/"
-API_CHESS_EVALUATE = f"{BASE_URL}/api/chess/evaluate/"
-API_CHESS_VALIDATE = f"{BASE_URL}/api/chess/validate-move/"
-API_CHESS_VARIATIONS = f"{BASE_URL}/api/chess/variations/"
-API_CHESS_FINISH_ANALYSIS = f"{BASE_URL}/api/chess/rooms/{{}}/finish_analysis/"
-API_CHESS_DAILY_PUZZLE = f"{BASE_URL}/api/chess/puzzles/daily/"
-API_CHESS_SOLVE_PUZZLE = f"{BASE_URL}/api/chess/puzzles/solve/"

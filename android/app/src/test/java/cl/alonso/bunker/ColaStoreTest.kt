@@ -27,16 +27,16 @@ class ColaStoreTest {
     fun `descartar borra solo el senalado`() {
         val s = store()
         s.encolar("paginas", """{"pages":1}""")
-        s.encolar("habito", """{"habit_id":3}""")
+        s.encolar("wishlist_libro", """{"title":"Dune"}""")
         s.descartar(s.items()[0].id)
         assertEquals(1, s.pendientes())
-        assertEquals("habito", s.items()[0].verbo)
+        assertEquals("wishlist_libro", s.items()[0].verbo)
     }
 
     @Test
     fun `marcar un error conserva la captura`() {
         val s = store()
-        s.encolar("habito", """{"habit_id":3}""")
+        s.encolar("paginas", """{"pages":3}""")
         s.marcarError(s.items()[0].id, "HTTP 409")
         assertEquals(1, s.pendientes())
         assertEquals("HTTP 409", s.items()[0].error)

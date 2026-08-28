@@ -3,11 +3,13 @@
 One grouped query per SOURCE MODEL, never a loop over periods — the dashboard made that
 mistake once (seven aggregations in a `for`) and it was collapsed on 2026-07-26.
 
-Three of the five modules need two queries, not one: their counts and their amounts live in
-different tables. Books count `AnnualRecord` but sum pages from `ReadingSession`; movies and
-music are the same shape. Only posada and chess are single-model. The spec says "one query
-per module"; the tables say otherwise, and the constraint that matters — no loop over
-periods — is unaffected.
+Books need two queries, not one: its count and its amount live in different tables — it counts
+`AnnualRecord` and sums pages from `ReadingSession`. Movies and music are count-only. The spec
+says "one query per module"; the tables say otherwise, and the constraint that matters — no loop
+over periods — is unaffected.
+
+`posada` and `chess` were two more sources here until the 2026-08-27 split; they are separate
+repositories now and this file has no way to reach them.
 
 Gap filling happens in Python over the result: a period with no activity returns zeros, it
 is never omitted.
@@ -18,7 +20,7 @@ from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth, TruncWeek
 from django.utils import timezone
 
-MODULOS = ('books', 'movies', 'music', 'posada', 'chess')
+MODULOS = ('books', 'movies', 'music')
 PERIODOS = ('monthly', 'weekly')
 WINDOW_DEFECTO = 12
 # 60 months is five years; 60 weeks is over a year. Past that the series stops being a
@@ -30,15 +32,14 @@ def _fuentes(module):
     """(model, date_field, amount_field, filtro) per source. Imported lazily: this module is
     inside the project package that owns settings.py."""
     from catalog.models import AnnualRecord, ReadingSession
-    from chess_study.models import SolvedPuzzle
     from disquera.models import MusicAnnualRecord
     from movies.models import MovieAnnualRecord
-    from posada.models import DeepWorkSession
 
     # THE FIRST SOURCE IS THE ONE THE MODULE COUNTS. Any source carrying an amount field
     # adds to the total, including the first. Having an amount is NOT the same as not being
-    # the counting source — that conflation is what made posada report `count: 0` on 35
-    # completed sessions, because its single source has both roles.
+    # the counting source — that conflation once made a single-source module report `count: 0`
+    # on 35 real rows, because its one source filled both roles. The module it happened to was
+    # posada, which left in the 2026-08-27 split; the rule it taught did not.
     #
     # Movies and music read ONE table each: `MovieViewingSession` and `ListeningEntry` were
     # emptied on 2026-08-14 (0 and 1 rows) and the spec makes both modules count-only with
@@ -49,8 +50,6 @@ def _fuentes(module):
                   (ReadingSession, 'date', 'pages_read', {})],
         'movies': [(MovieAnnualRecord, 'date_watched', None, {})],
         'music': [(MusicAnnualRecord, 'date_listened', None, {})],
-        'posada': [(DeepWorkSession, 'start_time', 'duration_minutes', {'completed': True})],
-        'chess': [(SolvedPuzzle, 'solved_at', None, {})],
     }[module]
 
 
@@ -129,7 +128,9 @@ def serie(module, period='monthly', window=WINDOW_DEFECTO):
                    .order_by('periodo'))
         for fila in filas:
             clave = _clave(_normalizar(fila['periodo']), period)
-            # Not `if/else`: posada's single source is both the count and the total.
+            # Not `if/else`: a module with ONE source needs it to be both the count and the
+            # total. `books` is the only two-source module left, and its first source is the
+            # counting one.
             if indice == 0:
                 conteos[clave] = conteos.get(clave, 0) + fila['n']
             if campo_monto:

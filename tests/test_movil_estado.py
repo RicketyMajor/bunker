@@ -2,10 +2,12 @@
 
 Run: docker compose exec web python -m tests.test_movil_estado
 
-Two things can break here without anything else noticing. The payload's five keys are a
-contract: Tasks 14-18 render exactly those names, so a rename is a blank screen on the
-phone, not an error. And `habitos_pendientes` has to mean *due today* — a habit offered on
-a day it is not scheduled for pays prestige for a day the penalty engine never scored.
+The payload's keys are a contract: the capture sheets render exactly those names, so a rename
+is a blank screen on the phone, not an error.
+
+`habitos_pendientes` and `aventureros` were two more keys, and the three checks that asserted
+"due today" for habits were the reason this file existed. Both left with the 2026-08-27 Posada
+split, along with the two sheets that read them.
 
 Every check runs inside a transaction that is rolled back, so it is safe against live data.
 """
@@ -26,7 +28,6 @@ from django.utils import timezone  # noqa: E402
 
 from bunker_core.views import movil_estado  # noqa: E402
 from catalog.models import Author, Book, ReadingSession  # noqa: E402
-from posada.models import DailyHabit  # noqa: E402
 
 HOY = timezone.localdate()
 FABRICA = RequestFactory()
@@ -51,54 +52,12 @@ def rollback(fn):
 
 def test_payload_shape_is_the_contract():
     datos = pedir()
-    esperadas = {"leyendo", "habitos_pendientes", "libros", "peliculas", "albums",
-                 "aventureros"}
+    esperadas = {"leyendo", "libros", "peliculas", "albums"}
     assert set(datos) == esperadas, f"claves {sorted(datos)}, se esperaba {sorted(esperadas)}"
-    for clave in ("habitos_pendientes", "libros", "peliculas", "albums", "aventureros"):
+    for clave in ("libros", "peliculas", "albums"):
         assert isinstance(datos[clave], list), f"{clave} no es una lista"
     assert datos["leyendo"] is None or isinstance(datos["leyendo"], dict)
-    print("OK · las seis claves que renderizan las hojas de captura y el temporizador")
-
-
-def test_habit_due_today_is_offered():
-    def cuerpo():
-        h = DailyHabit.objects.create(
-            name="Habito de hoy", difficulty="B", valid_days="0,1,2,3,4,5,6")
-        ids = [x["id"] for x in pedir()["habitos_pendientes"]]
-        assert h.id in ids, "un habito valido hoy y sin marcar no fue ofrecido"
-    rollback(cuerpo)
-    print("OK · un habito valido hoy y sin marcar aparece")
-
-
-def test_habit_already_done_today_is_not_offered():
-    def cuerpo():
-        h = DailyHabit.objects.create(
-            name="Habito ya marcado", difficulty="B", valid_days="0,1,2,3,4,5,6",
-            last_completed_date=HOY)
-        ids = [x["id"] for x in pedir()["habitos_pendientes"]]
-        assert h.id not in ids, "un habito ya marcado hoy se ofrecio de nuevo"
-    rollback(cuerpo)
-    print("OK · un habito ya marcado hoy desaparece")
-
-
-def test_habit_not_scheduled_today_is_not_offered():
-    """The deviation from the plan: the plan filtered only by last_completed_date.
-
-    Neither the TUI nor complete_habit reads valid_days, but the penalty engine does
-    (legacy.py:481). Offering an out-of-schedule habit is free prestige.
-    """
-    otros_dias = ",".join(str(d) for d in range(7) if d != HOY.weekday())
-
-    def cuerpo():
-        fuera = DailyHabit.objects.create(
-            name="Habito de otro dia", difficulty="B", valid_days=otros_dias)
-        dentro = DailyHabit.objects.create(
-            name="Habito de hoy", difficulty="B", valid_days=str(HOY.weekday()))
-        ids = [x["id"] for x in pedir()["habitos_pendientes"]]
-        assert fuera.id not in ids, "se ofrecio un habito que hoy no toca"
-        assert dentro.id in ids, "se escondio un habito que hoy si toca"
-    rollback(cuerpo)
-    print(f"OK · hoy es weekday {HOY.weekday()}: solo se ofrece lo que toca")
+    print("OK · las cuatro claves que renderizan las hojas de captura")
 
 
 def test_leyendo_is_the_most_recent_session_with_a_position():
@@ -162,21 +121,6 @@ def test_query_budget():
         pedir()
     assert len(ctx) <= 6, f"{len(ctx)} consultas: se convirtio en un segundo dashboard"
     print(f"OK · {len(ctx)} consultas, dentro del presupuesto de 6")
-
-
-def test_el_estado_trae_la_nomina():
-    """The timer sheet picks an adventurer from this, so the roster travels with the snapshot."""
-    from posada.models import AdventurerClass
-    datos = pedir()
-    assert "aventureros" in datos, "el estado no trae la nomina"
-    for a in datos["aventureros"]:
-        assert {"id", "name", "class_name", "level"} <= set(a), f"aventurero incompleto: {a}"
-        # Not `!= a.get("adv_class")`: that key is not in the payload, so the comparison is
-        # against None and the check could never go red. The raw 3-letter code is the thing
-        # that must not arrive — the TUI shipped "BBN" for every class by reading it.
-        assert a["class_name"] not in AdventurerClass.values, \
-            f"esta mandando el codigo crudo: {a['class_name']!r}"
-    print(f"OK · el estado trae {len(datos['aventureros'])} aventurero(s) con clase legible")
 
 
 def test_el_manifiesto_sigue_el_contenido():
@@ -245,11 +189,15 @@ def test_panel_es_una_ruta_real_con_su_marca():
     html = respuesta.content.decode()
 
     assert 'id="panel"' in html, "/panel/ no trae el <main id=\"panel\">"
-    assert 'id="p-datos"' in html, "/panel/ no trae ningun bloque que montar"
+    # `p-datos` y su `data-fuente="/api/panel/"` eran el otro bloque de esta pagina y se
+    # fueron el 2026-08-27: los cuatro que montaba — prestigio, habitos, logros, bitacora —
+    # eran enteramente de la Posada. La serie es lo que queda, y es de inventario.
+    assert 'id="p-datos"' not in html, (
+        "/panel/ volvio a traer p-datos, y /api/panel/ ya no existe: montaria sobre un 404")
     assert 'id="p-serie"' in html, "/panel/ perdio el bloque de la serie"
     assert '<h2>ACTIVIDAD POR MES</h2>' in html, (
         "el bloque de la serie perdio su h2; h1 -> h3 salta un nivel de encabezado")
-    assert 'data-fuente="/api/panel/"' in html, (
+    assert 'data-fuente="/api/stats/timeline/"' in html, (
         "el bloque perdio su data-fuente; `pedir` recibiria undefined")
     assert 'body[data-superficie="panel"] #home' in html, (
         "sin el conmutador de superficie el panel se pinta ENCIMA de la captura")
@@ -260,7 +208,7 @@ def test_panel_es_una_ruta_real_con_su_marca():
 
     # La misma vista para las tres rutas: un segundo template es la segunda pagina que
     # mantener sincronizada, que es lo que mato al panel original.
-    assert Client().get('/movil/').content.decode().count('id="p-datos"') == 1, (
+    assert Client().get('/movil/').content.decode().count('id="p-serie"') == 1, (
         "/movil/ y /panel/ dejaron de ser el mismo template")
     print("OK · /panel/ existe, monta y sus cinco estados tienen regla propia")
 
@@ -268,12 +216,8 @@ def test_panel_es_una_ruta_real_con_su_marca():
 if __name__ == "__main__":
     PRUEBAS = [
         test_payload_shape_is_the_contract,
-        test_habit_due_today_is_offered,
-        test_habit_already_done_today_is_not_offered,
-        test_habit_not_scheduled_today_is_not_offered,
         test_leyendo_is_the_most_recent_session_with_a_position,
         test_a_finished_book_stops_being_the_one_you_are_reading,
-        test_el_estado_trae_la_nomina,
         test_el_manifiesto_sigue_el_contenido,
         test_query_budget,
         test_panel_es_una_ruta_real_con_su_marca,

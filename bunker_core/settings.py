@@ -128,9 +128,7 @@ INSTALLED_APPS = [
     'catalog',
     'rest_framework',
     'movies',
-    'posada',
     'disquera',
-    'chess_study',
 ]
 
 MIDDLEWARE = [

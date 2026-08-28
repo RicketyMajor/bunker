@@ -16,7 +16,7 @@ nothing.
 """
 
 import os
-from datetime import date, datetime, time
+from datetime import date
 
 import django
 
@@ -27,13 +27,12 @@ from django.db import transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.insights import (  # noqa: E402
-    _ETIQUETAS, REGLAS, _horas_min, conclusiones, feedback_habito, feedback_paginas,
-    feedback_sesion, feedback_terminado, regla_tendencia_monto,
+    _ETIQUETAS, REGLAS, conclusiones, feedback_paginas,
+    feedback_terminado, regla_tendencia_monto,
 )
 from catalog.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
 from disquera.models import MusicAnnualRecord  # noqa: E402
 from movies.models import MovieAnnualRecord  # noqa: E402
-from posada.models import DailyHabit, DeepWorkSession  # noqa: E402
 
 _checks = 0
 
@@ -123,80 +122,9 @@ def run_tests():
         check(isinstance(t_raro, str) and "Algo" in t_raro,
               "un módulo desconocido cae en la confirmación simple")
 
-        # --- _horas_min ---
-        # Checked directly rather than through a caller. Its whole-hour branch used to be
-        # reached only by feedback_minutos, so deleting the minute ledger would have deleted
-        # the only check on it — and that is the exact branch where the two formatters this
-        # function replaced disagreed, one saying "2 h" and the other "2 h 0 min".
-        # feedback_sesion is now its only caller and never exercises the boundary on purpose.
-        check(_horas_min(0) == "0 min", f"0 → {_horas_min(0)!r}")
-        check(_horas_min(45) == "45 min", f"45 → {_horas_min(45)!r}")
-        check(_horas_min(120) == "2 h", f"120 → {_horas_min(120)!r}, se esperaba '2 h'")
-        check(_horas_min(150) == "2 h 30 min", f"150 → {_horas_min(150)!r}")
-
-        # --- feedback_habito ---
-        habito = DailyHabit.objects.create(name="Hábito de prueba", difficulty='C',
-                                           current_streak=7, last_completed_date=hoy)
-        t = feedback_habito(habito, es_recaida=False)
-        check("7" in t, "hábito bueno nombra la racha")
-
-        malo = DailyHabit.objects.create(name="Recaída de prueba", difficulty='S',
-                                         is_bad_habit=True, current_streak=0)
-        t_malo = feedback_habito(malo, es_recaida=True)
-        check(isinstance(t_malo, str) and t_malo.strip(), "recaída devuelve texto")
-        # The rule is not "never say the word streak" — the relapse text mentions it exactly
-        # to say that it broke. The rule is "do not congratulate".
-        check("días seguidos" not in t_malo,
-              "una recaída no felicita por una racha")
-
-        # A streak of 1: one data point is not a trend.
-        nuevo = DailyHabit.objects.create(name="Primer día", difficulty='B', current_streak=1)
-        t_nuevo = feedback_habito(nuevo, es_recaida=False)
-        check(isinstance(t_nuevo, str) and t_nuevo.strip(), "racha de 1 devuelve texto")
-        check("días seguidos" not in t_nuevo,
-              "el primer día no se anuncia como una racha de días")
-
-        # --- feedback_sesion ---
-        # A category of its own, so the monthly total is exactly what this check wrote.
-        sesion = DeepWorkSession.objects.create(duration_minutes=50,
-                                                category="Categoria de prueba", completed=True)
-        t = feedback_sesion(sesion)
-        check(isinstance(t, str) and t.strip(), "sesión devuelve texto")
-        # `and`, not `or`: the category is in the string by construction, so an `or` here
-        # short-circuits every failure and the check can never go red. That is what let the
-        # target-vs-survived bug through.
-        check("50 min" in t and "Categoria de prueba" in t,
-              "sesión nombra los minutos Y la categoría")
-        check("este mes" in t, "una sesión de hoy habla de este mes")
-
-        # Surrendering marks the session `completed` all the same (legacy.py:765) and nobody
-        # adjusts `duration_minutes`, which is the TARGET duration. Without this, abandoning
-        # a 50-minute session after 5 answers "50 min": the feedback inventing.
-        t_rendida = feedback_sesion(sesion, minutos_reales=5)
-        check("5 min de" in t_rendida, "una sesión abandonada reporta lo sobrevivido")
-        check(not t_rendida.startswith("50"), "no reporta la duración objetivo como cumplida")
-
-        # The leading figure was already honest; the ACCUMULATED one was not. An abandoned
-        # session must not inflate the month. Two sessions in an empty month, in a category
-        # of its own: one honest 50, one surrendered at 5 of 50. The total is 55, never 100.
-        DeepWorkSession.objects.create(
-            category="Mes vacío", duration_minutes=50, completed=True, survived_minutes=50,
-            start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(12, 0))))
-        abandonada = DeepWorkSession.objects.create(
-            category="Mes vacío", duration_minutes=50, completed=True, survived_minutes=5,
-            start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(13, 0))))
-        t_mes = feedback_sesion(abandonada, 5)
-        check("55 min" in t_mes, f"el total del mes suma objetivos, no lo sobrevivido: {t_mes!r}")
-        check("1 h 40" not in t_mes, f"contó 100 minutos: {t_mes!r}")
-
-        # A row written before the column existed carries NULL, and NULL must read as
-        # "unknown, assume the target" — never as zero, which would erase real work from
-        # the accumulated figure. 53 rows in this database are exactly that.
-        DeepWorkSession.objects.create(
-            category="Mes vacío", duration_minutes=30, completed=True, survived_minutes=None,
-            start_time=timezone.make_aware(datetime.combine(MES_VACIO, time(14, 0))))
-        t_null = feedback_sesion(abandonada, 5)
-        check("1 h 25" in t_null, f"una fila sin survived_minutes cuenta como 0: {t_null!r}")
+        # Los bloques `_horas_min`, `feedback_habito` y `feedback_sesion` estaban aquí. Los
+        # tres se fueron a `posada/feedback.py` el 2026-08-27; `_horas_min` era además dead
+        # code en este repositorio en cuanto `feedback_sesion` dejó de llamarlo.
 
         # --- Conclusiones: las dos propiedades que definen la función. -------------------
         #     El resto es redacción. Cada regla se llama con etiquetas reales porque una
@@ -229,12 +157,14 @@ def run_tests():
         check(regla_tendencia_monto(tres, _ETIQUETAS['movies']) is None,
               "una regla de monto sobre un módulo sin monto se calla")
 
-        # Singular: la base viva produjo "1 minutos de Deep Work" en la primera corrida.
+        # Singular: la base viva produjo "1 minutos de Deep Work" en la primera corrida, con
+        # las etiquetas de posada. Ese módulo se fue el 2026-08-27 y `books` es el único que
+        # queda con monto, así que la propiedad se comprueba con «1 página».
         uno = [{"period": "2026-06", "count": 1, "amount": 10},
                {"period": "2026-07", "count": 1, "amount": 10},
                {"period": "2026-08", "count": 1, "amount": 1}]
-        frase = regla_tendencia_monto(uno, _ETIQUETAS['posada'])
-        check(frase and "1 minuto de" in frase, f"una unidad va en singular: {frase!r}")
+        frase = regla_tendencia_monto(uno, _ETIQUETAS['books'])
+        check(frase and "1 página" in frase, f"una unidad va en singular: {frase!r}")
 
         # El periodo en curso está INCOMPLETO y aquellos contra los que se mide, no. Crudo,
         # "12 páginas contra una media de 300" el 2 de septiembre es cierto y sistemáticamente
