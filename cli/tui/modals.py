@@ -279,7 +279,15 @@ class ConfirmModal(ModalScreen[bool]):
 
 
 class BriefingScreen(ModalScreen[None]):
-    """Lo primero que ves al entrar: ayer, hoy, y lo que está en riesgo."""
+    """Lo primero que ves al entrar: lo que quedó registrado ayer y lo que está por terminar.
+
+    Pintaba cinco cosas más hasta el 2026-08-27 —minutos de Deep Work, hábitos marcados,
+    hábitos pendientes hoy, la racha en riesgo y los logros desbloqueados—: las cinco eran de
+    la Posada, que salió a su propio repositorio. `construir_briefing` dejó de emitirlas ese
+    día y aquí siguieron leyéndose con `.get()`, así que no reventaban: sólo desaparecían.
+    El bloque de `hoy` era la excepción, y pintaba «Hoy: nada pendiente.» para siempre.
+    Lo que puede leerse aquí lo fija `test_briefing._comprobar_claves_del_briefing`.
+    """
 
     BINDINGS = [("escape", "dismiss_briefing", "Cerrar"), ("enter", "dismiss_briefing", "Cerrar")]
 
@@ -296,36 +304,17 @@ class BriefingScreen(ModalScreen[None]):
             lineas = []
             if ayer.get("paginas"):
                 lineas.append(f"Ayer leíste {ayer['paginas']} páginas.")
-            if ayer.get("minutos_deep_work"):
-                lineas.append(f"{ayer['minutos_deep_work']} min de Deep Work.")
             if ayer.get("peliculas"):
                 n = ayer["peliculas"]
                 lineas.append(f"{n} película{'s' if n != 1 else ''} vista{'s' if n != 1 else ''}.")
-            if ayer.get("habitos"):
-                lineas.append(f"{ayer['habitos']} hábitos marcados.")
             if not lineas:
                 lineas.append("Ayer no quedó registrado nada.")
             yield Label("\n".join(lineas), id="briefing_ayer")
-
-            pendientes = d.get("hoy", {}).get("habitos_pendientes", [])
-            yield Label(
-                f"Hoy: {len(pendientes)} hábitos pendientes." if pendientes
-                else "Hoy: nada pendiente.",
-                id="briefing_hoy")
-
-            riesgo = d.get("habito_en_riesgo")
-            if riesgo:
-                yield Label(
-                    f"⚠ «{riesgo['name']}» lleva {riesgo['current_streak']} días. No la rompas.",
-                    id="briefing_riesgo")
 
             libro = d.get("libro_mas_cerca")
             if libro:
                 yield Label(f"📖 A {libro['restantes']} páginas de terminar «{libro['title']}».",
                             id="briefing_libro")
-
-            for logro in d.get("logros_nuevos", []):
-                yield Label(f"{logro['icon']} Desbloqueado: {logro['name']}")
 
             for frase in d.get("conclusiones", []):
                 yield Label(f"› {frase}", classes="briefing_conclusion")

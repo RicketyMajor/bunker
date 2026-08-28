@@ -78,7 +78,14 @@ class LoansTab(TabPane):
 
 
 class TrackerTab(TabPane):
-    """Pestaña 4: Hábitos y lectura."""
+    """Pestaña 4: el Registro Anual de lectura.
+
+    Se llamó "Hábitos" hasta el 2026-08-27. Nunca contuvo hábitos de la Posada: lee
+    `ReadingSession` y `AnnualRecord`. Los métodos `action_delete_habit`/`process_delete_habit`
+    conservan su nombre a propósito.
+    ponytail: renombrarlos toca cadenas de BINDINGS en tres ficheros para cero cambio de
+    comportamiento; hazlo el día que se toque uno de esos BINDINGS por otro motivo.
+    """
     BINDINGS = [
         ("p", "screen.log_pages", "Anotar Páginas"),
         ("f", "screen.finish_book", "Registrar Terminado"),
@@ -108,7 +115,7 @@ class WishlistTab(TabPane):
 
 
 class MovieTrackerTab(TabPane):
-    """Pestaña de Hábitos para el Videoclub."""
+    """Pestaña de Registro para el Videoclub."""
     BINDINGS = [
         ("f", "screen.finish_movie", "Registrar Película Vista"),
         ("x", "screen.delete_habit", "Revertir Registro"),

@@ -48,6 +48,109 @@ def check(condicion, etiqueta):
     print(f"  ok  {etiqueta}")
 
 
+def _claves_leidas(clase):
+    """Las claves literales que una pantalla lee, agrupadas por la variable de la que cuelgan.
+
+    Devuelve `{'d': {...}, 'self.datos': {...}, 'ayer': {...}}`. Reconoce las DOS formas —
+    `x.get("k")` y `x["k"]`— y las dos raíces posibles: una variable local (`d`, `ayer`) y un
+    atributo de la instancia (`self.datos`, `self.review`). Rastrear sólo la local dejaba pasar
+    verde una lectura escrita como `self.datos.get(...)`, comprobado ejecutando.
+    """
+    import ast
+
+    def raiz(nodo):
+        if isinstance(nodo, ast.Name):
+            return nodo.id
+        if (isinstance(nodo, ast.Attribute) and isinstance(nodo.value, ast.Name)
+                and nodo.value.id == 'self'):
+            return f'self.{nodo.attr}'
+        return None
+
+    leidas = {}
+    for nodo in ast.walk(clase):
+        origen = clave = None
+        if (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Attribute)
+                and nodo.func.attr == 'get' and nodo.args
+                and isinstance(nodo.args[0], ast.Constant)
+                and isinstance(nodo.args[0].value, str)):
+            origen, clave = raiz(nodo.func.value), nodo.args[0].value
+        elif (isinstance(nodo, ast.Subscript) and isinstance(nodo.slice, ast.Constant)
+                and isinstance(nodo.slice.value, str)):
+            origen, clave = raiz(nodo.value), nodo.slice.value
+        if origen:
+            leidas.setdefault(origen, set()).add(clave)
+    return leidas
+
+
+def _comprobar_pantalla(fichero, nombre_clase, ambitos):
+    """Lo que una pantalla LEE tiene que estar en lo que el productor EMITE.
+
+    `ambitos` es una lista de `(etiqueta, raíces, dict vivo)`. Las `raíces` de un mismo ámbito
+    son ALIAS —`d` y `self.datos` son el mismo payload—, así que la vacuidad se exige sobre su
+    UNIÓN: pedirla raíz por raíz pone en rojo a una pantalla que sólo usa una de las dos formas.
+
+    Una raíz que la pantalla usa y no está aquí no se comprueba, y eso es deliberado: `libro`,
+    `m` o `fuente` son elementos de una lista, no el payload. **Techo declarado:** un
+    `libro['restantes']` que el productor renombre revienta con `KeyError` dentro de `compose`,
+    ruidosamente, y este check no lo ve. Lo que cubre es la muerte SILENCIOSA, que es la que
+    nadie encuentra.
+    """
+    import ast
+    from django.conf import settings
+
+    ruta = settings.BASE_DIR / fichero
+    # Una ruta que no existe aporta cero claves EN SILENCIO, y un `<=` sobre el vacío es
+    # cierto: sin esto el check saldría verde sin haber leído nada.
+    check(ruta.is_file(), f"{nombre_clase} está donde se le busca: {ruta}")
+
+    arbol = ast.parse(ruta.read_text(encoding='utf-8'))
+    clase = next((n for n in ast.walk(arbol)
+                  if isinstance(n, ast.ClassDef) and n.name == nombre_clase), None)
+    check(clase is not None, f"{nombre_clase} sigue llamándose así en {fichero}")
+
+    leidas = _claves_leidas(clase)
+    for etiqueta, raices, vivo in ambitos:
+        union = set().union(*(leidas.get(r, set()) for r in raices))
+        # Vacuidad: si el barrido no matchea nada, el `<=` de abajo es cierto sobre la nada. El
+        # umbral no se clava en el número de hoy a propósito — hacerlo convierte cualquier
+        # cambio legítimo del payload en un rojo con el mensaje equivocado.
+        check(union, f"el barrido encontró claves de '{etiqueta}' en {nombre_clase}: {union}")
+        sobran = union - set(vivo)
+        check(not sobran,
+              f"{nombre_clase} no lee claves de '{etiqueta}' que ya no se emiten: {sobran}")
+
+
+def _comprobar_claves_del_briefing(datos):
+    """Las DOS pantallas que comen del briefing, contra lo que el briefing emite.
+
+    La separación del 2026-08-27 quitó claves del productor y actualizó `CLAVES` aquí arriba,
+    pero nadie barrió a los consumidores. `BriefingScreen` siguió leyendo `minutos_deep_work`,
+    `habitos`, `hoy.habitos_pendientes`, `habito_en_riesgo` y `logros_nuevos`; `WeeklyReviewScreen`
+    siguió leyendo `prestigio` y pintando once líneas con él. Todas con `.get()`, todas muertas
+    EN SILENCIO —salvo el `Label` de `hoy`, incondicional, que pintó «Hoy: nada pendiente.»
+    durante meses—. Ningún check lo vio porque todos miraban al productor.
+
+    **Las dos pantallas, no una.** Arreglar sólo la que se encontró primero es lo que dejó viva
+    la segunda: `WeeklyReviewScreen` sobrevivió a la sesión que arregló `BriefingScreen` y la
+    encontró `/code-review` al día siguiente.
+
+    Lee el ÁRBOL DE SINTAXIS, no una lista escrita a mano: dos listas comparadas entre sí
+    concuerdan perfectamente mientras las dos están mal. Misma forma que
+    `test_bundle._comprobar_shell_del_sw`, que lee las etiquetas `{% static %}` de app.html.
+    """
+    from bunker_core.briefing import _revision
+
+    _comprobar_pantalla('cli/tui/modals.py', 'BriefingScreen', [
+        ('el briefing', ('d', 'self.datos'), datos),
+        ("ayer", ('ayer',), datos['ayer']),
+    ])
+    # `datos['review']` es None seis días de cada siete, así que se pregunta al productor
+    # directamente en vez de esperar a que toque revisión.
+    _comprobar_pantalla('cli/tui/screens.py', 'WeeklyReviewScreen', [
+        ('la revisión', ('review', 'self.review'), _revision()),
+    ])
+
+
 def run_tests():
     hoy = timezone.localdate()
 
@@ -58,6 +161,10 @@ def run_tests():
             check(clave in datos, f"el briefing trae la clave '{clave}'")
         check(isinstance(datos["conclusiones"], list), "conclusiones es una lista")
         check(isinstance(datos["ayer"]["paginas"], int), "ayer.paginas es un entero, no None")
+
+        # 1b. Y lo que la pantalla LEE existe en lo que el productor EMITE. Ver el docstring
+        #     de `_comprobar_claves_del_briefing`: esta es la mitad que faltaba el 2026-08-27.
+        _comprobar_claves_del_briefing(datos)
 
         # 2. Un libro a 28 páginas del final es el más cerca.
         autor, _ = Author.objects.get_or_create(name="Autor de prueba")

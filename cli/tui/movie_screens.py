@@ -145,7 +145,7 @@ class MovieMainScreen(Screen):
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
         Binding("3", "switch_tab('tab_prestamos')", "Préstamos", show=False),
         Binding("4", "switch_tab('tab_tracker')",
-                "Hábitos", show=False),
+                "Registro", show=False),
         Binding("5", "switch_tab('tab_wishlist')", "Tablón", show=False),
     ]
 
@@ -186,7 +186,7 @@ class MovieMainScreen(Screen):
             yield MovieInventoryTab("▤ Inventario", id="tab_cartelera")
             yield MovieInboxTab("◈ Inbox", id="tab_inbox")
             yield MovieLoansTab("⇋ Préstamos", id="tab_prestamos")
-            yield MovieTrackerTab("∑ Hábitos", id="tab_tracker")
+            yield MovieTrackerTab("∑ Registro", id="tab_tracker")
             yield MovieWishlistTab("★ Tablón", id="tab_wishlist")
         yield Input(id="search_bar", placeholder="Búsqueda global (Título o Director)...")
         yield Footer()
@@ -287,7 +287,7 @@ class MovieMainScreen(Screen):
         except Exception:
             pass
 
-        # Cargar Hábitos y Registro Anual de Películas
+        # Cargar el Registro Anual de Películas y sus métricas
         try:
             tracker = httpx.get(API_MOVIE_TRACKER, timeout=5.0).json()
             annual = httpx.get(API_MOVIE_TRACKER_ANNUAL, timeout=5.0).json()
@@ -828,7 +828,7 @@ class MovieMainScreen(Screen):
                 f"¿Revertir el visionado de '{title}'? La película volverá a aparecer como pendiente."), handle_confirm)
         except Exception:
             self.app.notify(
-                "Selecciona un registro en la tabla de hábitos.", severity="warning")
+                "Selecciona un registro en la tabla primero.", severity="warning")
 
     @work(thread=True)
     def process_delete_habit(self, record_id: str) -> None:
@@ -839,7 +839,7 @@ class MovieMainScreen(Screen):
             if resp.status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Registro de visionado eliminado.", title="Historial Limpio")
-                # Recarga para ver los cambios en Inventario y Hábitos
+                # Recarga para ver los cambios en Inventario y Registro
                 self.app.call_from_thread(self.load_movies)
             else:
                 self.app.call_from_thread(

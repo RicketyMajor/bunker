@@ -1,6 +1,15 @@
 # cron runs with PATH=/usr/bin:/bin, but python:3.12-slim keeps the interpreter in
 # /usr/local/bin. Without this line backup.sh fails with "python: command not found".
 PATH=/usr/local/bin:/usr/bin:/bin
-# Correr a las 00:00 todos los días
+# Correr a las 00:00 todos los días.
+#
+# ponytail: since 2026-08-27 this is the SECOND mechanism dumping the Bunker. The host-side
+# `respaldo-pilas.timer` covers all three stacks at 00:30 and is the one place to change. This
+# one is kept, not deleted, because it is genuinely independent — it writes into the
+# `bunker_backups_data` volume while the timer writes to the host filesystem, so a pruned volume
+# and a dead disk are two different accidents. Ceiling: two writers means two app lists that can
+# drift (this one is inlined in backup.sh, the other in respaldo_pilas.sh). Upgrade: drop this
+# cron and its `backup.sh` the next time the image is rebuilt for another reason — the rebuild is
+# the cost, not the edit.
 0 0 * * * root /app/scripts/backup.sh >> /var/log/cron.log 2>&1
 # Linea vacia requerida por cron

@@ -106,7 +106,7 @@ class MusicMainScreen(Screen):
         Binding("1", "switch_tab('tab_disquera')", "1-5 Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
         Binding("3", "switch_tab('tab_prestamos')", "Préstamos", show=False),
-        Binding("4", "switch_tab('tab_tracker')", "Hábitos", show=False),
+        Binding("4", "switch_tab('tab_tracker')", "Registro", show=False),
         Binding("5", "switch_tab('tab_wishlist')", "Tablón", show=False),
     ]
 
@@ -146,7 +146,7 @@ class MusicMainScreen(Screen):
             yield MusicInventoryTab("▤ Colección", id="tab_disquera")
             yield MusicInboxTab("◈ Inbox", id="tab_inbox")
             yield MusicLoansTab("⇋ Préstamos", id="tab_prestamos")
-            yield MusicTrackerTab("∑ Hábitos", id="tab_tracker")
+            yield MusicTrackerTab("∑ Registro", id="tab_tracker")
             yield MusicWishlistTab("★ Tablón", id="tab_wishlist")
 
         yield Input(id="search_bar", placeholder="Búsqueda instantánea (Título o Artista)...")
@@ -715,7 +715,7 @@ class MusicMainScreen(Screen):
                 f"¿Revertir la escucha de '{title}'? El álbum volverá a aparecer como pendiente."), handle_confirm)
         except Exception:
             self.app.notify(
-                "Selecciona un registro en la tabla de hábitos.", severity="warning")
+                "Selecciona un registro en la tabla primero.", severity="warning")
 
     @work(thread=True)
     def process_delete_habit(self, record_id: str) -> None:

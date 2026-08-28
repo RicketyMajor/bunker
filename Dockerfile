@@ -10,9 +10,9 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar cron y el motor UCI. Debian deja el binario en /usr/games/stockfish,
-# que es exactamente la ruta por defecto de STOCKFISH_PATH en chess_study/views.py.
-RUN apt-get update && apt-get install -y cron stockfish && rm -rf /var/lib/apt/lists/*
+# Install cron, and nothing else. `stockfish` was installed here for `chess_study`, which
+# left for ~/dev/ajedrez on 2026-08-27 — the engine lives in that repository's image now.
+RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 
 # Copia el resto del código del proyecto al contenedor
 COPY . /app/

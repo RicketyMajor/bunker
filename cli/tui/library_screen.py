@@ -59,7 +59,7 @@ class LibraryMainScreen(Screen):
                 "1-5 Cambiar Pestañas", show=True),
         Binding("2", "switch_tab('tab_inbox')", "Inbox", show=False),
         Binding("3", "switch_tab('tab_loans')", "Préstamos", show=False),
-        Binding("4", "switch_tab('tab_tracker')", "Hábitos", show=False),
+        Binding("4", "switch_tab('tab_tracker')", "Registro", show=False),
         Binding("5", "switch_tab('tab_wishlist')", "Tablón", show=False),
     ]
 
@@ -70,7 +70,7 @@ class LibraryMainScreen(Screen):
             yield InventoryTab("▤ Inventario", id="tab_library")
             yield InboxTab("◈ Inbox", id="tab_inbox")
             yield LoansTab("⇋ Préstamos", id="tab_loans")
-            yield TrackerTab("∑ Hábitos", id="tab_tracker")
+            yield TrackerTab("∑ Registro", id="tab_tracker")
             yield WishlistTab("★ Tablón", id="tab_wishlist")
         yield Input(id="search_bar", placeholder="Búsqueda global (Título o Autor)...")
         yield Footer()
@@ -184,13 +184,11 @@ class LibraryMainScreen(Screen):
         except Exception:
             pass
 
-        try:
-            tracker = httpx.get(API_TRACKER, timeout=5.0).json()
-            if isinstance(tracker, dict):
-                self.app.call_from_thread(self.populate_tracker, tracker)
-        except Exception:
-            pass
-
+        # Aquí había una segunda petición a API_TRACKER que llamaba a `populate_tracker`
+        # con UN argumento cuando la firma pide dos (`stats`, `annual`, sin defecto). El
+        # `TypeError` caía en el `except Exception: pass` de abajo, así que cada recarga
+        # pagaba un viaje HTTP de más y se tragaba la excepción. El bloque correcto —con
+        # `annual`— está debajo, y es el que ha estado pintando la pestaña todo este tiempo.
         try:
             wishlist = httpx.get(API_WISHLIST, timeout=5.0).json()
             if isinstance(wishlist, list):
@@ -198,7 +196,7 @@ class LibraryMainScreen(Screen):
         except Exception:
             pass
 
-        # Cargar Hábitos y Registro Anual
+        # Cargar el Registro Anual y sus métricas
         try:
             tracker = httpx.get(API_TRACKER, timeout=5.0).json()
             annual = httpx.get(API_TRACKER_ANNUAL, timeout=5.0).json()

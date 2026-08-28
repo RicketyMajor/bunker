@@ -62,25 +62,11 @@ class WeeklyReviewScreen(Screen):
                 yield Label(f"[bold]{m['etiqueta']:<18}[/] {m['actual']:>6}   "
                             f"[dim](semana previa {m['previa']})[/]  [{color}]{signo}[/]")
 
-            # Dos números, nunca el neto. Un +40 que esconde "evité tres vicios, incumplí
-            # dos hábitos" es la pregunta que la revisión existe para responder, no la
-            # respuesta — y es la razón por la que la barrida nocturna dejó de netear.
-            prestigio = self.review.get("prestigio")
-            if prestigio:
-                actual, previa = prestigio["actual"], prestigio["previa"]
-                delta = actual["net"] - previa["net"]
-                color = "green" if delta > 0 else ("red" if delta < 0 else "dim")
-                signo = f"+{delta}" if delta > 0 else str(delta)
-                yield Label(f"[bold]{'Prestigio':<18}[/] "
-                            f"[green]+{actual['earned']}[/] [red]−{actual['lost']}[/]   "
-                            f"[dim](semana previa +{previa['earned']} −{previa['lost']})[/]"
-                            f"  [{color}]{signo}[/]")
-                for fuente in prestigio["por_fuente"]:
-                    monto = fuente["monto"]
-                    color_f = "green" if monto > 0 else "red"
-                    signo_f = f"+{monto}" if monto > 0 else str(monto)
-                    yield Label(f"  [dim]{fuente['etiqueta']:<22}[/] "
-                                f"[{color_f}]{signo_f:>6}[/]")
+            # Aquí iba el bloque de prestigio: dos números y nunca el neto, más el desglose
+            # por fuente. `_revision()` dejó de emitir `prestigio` el 2026-08-27 —el ledger se
+            # fue a La Posada— y el `.get()` lo mató en silencio, igual que las cinco claves de
+            # `BriefingScreen`. Ambas pantallas comen del mismo payload y el barrido del split
+            # sólo pasó por el productor.
 
             yield Button("Continuar", variant="success", id="btn_cerrar_review")
 
@@ -623,11 +609,12 @@ class BunkerLauncherScreen(Screen):
             if resp.status_code != 200:
                 return
             datos = resp.json()
-            # LAS DOS, no una u otra. El briefing es el ÚNICO que pinta `logros_nuevos`, y
-            # el POST de abajo adelanta `last_entry_at` pase lo que pase: mostrar sólo la
-            # revisión quemaba en silencio cualquier logro desbloqueado desde la última
-            # entrada, sin vuelta atrás y sin que nadie lo hubiera leído. Reproducido contra
-            # la base viva antes de arreglarlo.
+            # LAS DOS, no una u otra. La razón original era `logros_nuevos`: el briefing era
+            # el único que los pintaba y el POST de abajo adelanta `last_entry_at` pase lo que
+            # pase, así que mostrar sólo la revisión los quemaba en silencio. Los logros
+            # salieron con la Posada el 2026-08-27 y esa razón ya no existe. El orden se
+            # mantiene por la de al lado, que sigue viva: `marcar_visto` sólo debe marcar lo
+            # que se llegó a PINTAR, y para eso hay que pintar las dos antes del POST.
             #
             # El briefing va primero y la revisión encima, así que la revisión sigue siendo
             # lo que se ve al entrar —que es lo que pide la spec— y al cerrarla aparece el
