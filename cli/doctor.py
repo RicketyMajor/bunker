@@ -11,6 +11,7 @@ the HOST — because it needs the repo tree, `npx` or the venv rather than Djang
 goes inline further down instead, beside `tests.test_cli_imports` and `tests.test_bundle`.
 """
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -44,10 +45,13 @@ CHECKS_IN_CONTAINER = (
 )
 
 
-def _run(label, argv):
+def _run(label, argv, stdin_file=None):
+    """`stdin_file` feeds a script to an interpreter that cannot see it on disk — the scraper
+    containers bind-mount only `./scraper:/app`, so `tests/` never reaches them."""
     try:
+        entrada = stdin_file.read_text(encoding="utf-8") if stdin_file else None
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=180,
-                              cwd=project_root)
+                              cwd=project_root, input=entrada)
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
         console.print(f"  [red]✗[/red] {label}: {exc}")
         return False
@@ -134,6 +138,17 @@ def doctor():
     # here and is not installed in the container.
     if not _run("tests.test_bundle",
                 [sys.executable, "-m", "tests.test_bundle"]):
+        fallos += 1
+    # Node, and INSIDE `scraper-movies`: the two radars share one body since the three cuts, and
+    # the only thing the merge could silently change is which extra fields each one attaches
+    # before POSTing. `MovieWishlist` has `priority`/`added_by`; `MusicWishlist` has neither.
+    # It drives `barrer()` for real, so it needs `axios` — and `scraper/node_modules` is empty on
+    # the host (compose supplies it as an anonymous volume). Piped through stdin because the
+    # container bind-mounts `./scraper:/app` and never sees `tests/`.
+    _radar = pathlib.Path(__file__).resolve().parent.parent / "tests" / "test_radar.js"
+    if not _run("tests/test_radar.js",
+                ["docker", "compose", "exec", "-T", "scraper-movies", "node"],
+                stdin_file=_radar):
         fallos += 1
 
     if fallos:

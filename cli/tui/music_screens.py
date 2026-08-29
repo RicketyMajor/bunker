@@ -6,6 +6,7 @@ from textual.widgets import Header, Footer, Markdown, DataTable, Label, TabbedCo
 from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual import work
+from .coleccion_screen import ColeccionScreen
 
 # Importaciones locales
 from .constants import (
@@ -90,11 +91,18 @@ class MusicDetailsScreen(Screen):
         self.app.pop_screen()
 
 
-class MusicMainScreen(Screen):
+class MusicMainScreen(ColeccionScreen):
     """Controlador central de la Disquera (Búnker Musical)."""
 
     all_albums = []
     all_dirs = []
+
+    # Los cuatro que `ColeccionScreen` necesita para hablar de ESTA pantalla.
+    TABLA_PRINCIPAL = "#music_table"
+    CONTENEDOR_TABS = "#music_tabs"
+    TABLA_ANUAL = "#music_annual_table"
+    MSG_REVERTIR = ("¿Revertir la escucha de '{title}'? "
+                    "El álbum volverá a aparecer como pendiente.")
 
     BINDINGS = [
         ("escape", "go_back", "Volver al Launcher"),
@@ -309,9 +317,6 @@ class MusicMainScreen(Screen):
             )
 
     # --- NAVEGACIÓN Y MOTOR FUZZY ---
-    def action_switch_tab(self, tab_id: str) -> None:
-        self.query_one("#music_tabs", TabbedContent).active = tab_id
-
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         for widget in event.pane.query("*"):
             if isinstance(widget, DataTable):
@@ -326,16 +331,6 @@ class MusicMainScreen(Screen):
             self.action_process_barcode()
         elif event.control.id == "music_table":
             self.action_show_details()
-
-    def action_focus_search(self) -> None:
-        search_bar = self.query_one("#search_bar", Input)
-        if search_bar.has_class("-visible"):
-            search_bar.remove_class("-visible")
-            search_bar.value = ""
-            self.query_one("#music_table", DataTable).focus()
-        else:
-            search_bar.add_class("-visible")
-            search_bar.focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.control.id == "search_bar":
@@ -562,12 +557,6 @@ class MusicMainScreen(Screen):
                 dir_node.add_leaf(
                     f"[dim]{a['id']}[/dim] {short_title} [{status}]", data=f"music_{a['id']}")
 
-    def action_toggle_sidebar(self) -> None:
-        sidebar = self.query_one("#sidebar", Tree)
-        sidebar.toggle_class("-visible")
-        if sidebar.has_class("-visible"):
-            sidebar.focus()
-
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         if event.node.data is None or str(event.node.data).startswith("music_"):
             return
@@ -696,27 +685,6 @@ class MusicMainScreen(Screen):
             pass
 
     # --- REVERSIÓN DE HÁBITOS (DISQUERA) ---
-    def action_delete_habit(self) -> None:
-        if self.query_one("#music_tabs", TabbedContent).active != "tab_tracker":
-            return
-
-        table = self.query_one("#music_annual_table", DataTable)
-        try:
-            # Obtiene la ID y el título del álbum seleccionado
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key.value
-            title = table.get_row(row_key)[1]
-
-            def handle_confirm(confirm: bool) -> None:
-                if confirm:
-                    self.process_delete_habit(row_key)
-
-            self.app.push_screen(ConfirmModal(
-                f"¿Revertir la escucha de '{title}'? El álbum volverá a aparecer como pendiente."), handle_confirm)
-        except Exception:
-            self.app.notify(
-                "Selecciona un registro en la tabla primero.", severity="warning")
-
     @work(thread=True)
     def process_delete_habit(self, record_id: str) -> None:
         try:

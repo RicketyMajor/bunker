@@ -8,6 +8,7 @@ from textual.containers import VerticalScroll, Vertical, Grid
 from textual.binding import Binding
 from textual_plotext import PlotextPlot
 from textual import work
+from .coleccion_screen import ColeccionScreen
 from .constants import API_MOVIES, API_MOVIE_INBOX, API_MOVIE_PROCESS, API_MOVIE_DIRS, API_MOVIE_SCAN, API_MOVIE_TRACKER, API_MOVIE_TRACKER_ANNUAL, API_MOVIE_TRACKER_HEATMAP, API_MOVIE_TRACKER_FINISH, API_MOVIE_TRACKER_ANNUAL_DEL, API_MOVIE_WATCHERS, API_MOVIE_WISHLIST, API_TIMELINE
 from .modals import AddMovieMenuModal, ScannerModal, LendModal, ConfirmModal, ManualMovieAddModal, DirModal, MoveToDirModal, DeleteDirModal, FinishMovieModal, SyncConsoleModal, WatcherModal, WatchersListModal, MovieFullEditModal, MovieTitleModal
 from .tabs import MovieWishlistTab, cargar_serie
@@ -119,8 +120,13 @@ class MovieDetailsScreen(Screen):
 
 
 class MovieTrackerTab(TabPane):
+    # `x` faltaba aqui y esta en las otras dos pestañas de Registro: en el Videoclub la tecla no
+    # hacia nada mientras revertia un registro en Biblioteca y Disquera. Habia DOS clases con
+    # este nombre — esta y una en `tabs.py` que no importaba nadie — y la muerta era la que si
+    # llevaba el binding. Borrada; esta es la viva, y ademas es la que trae heatmap y plot.
     BINDINGS = [
         ("f", "screen.finish_movie", "Registrar Cinta Vista"),
+        ("x", "screen.delete_habit", "Revertir Registro"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -131,9 +137,16 @@ class MovieTrackerTab(TabPane):
             yield DataTable(id="movie_annual_table")
 
 
-class MovieMainScreen(Screen):
+class MovieMainScreen(ColeccionScreen):
     all_movies = []
     all_dirs = []
+
+    # Los cuatro que `ColeccionScreen` necesita para hablar de ESTA pantalla.
+    TABLA_PRINCIPAL = "#movies_table"
+    CONTENEDOR_TABS = "#movie_tabs"
+    TABLA_ANUAL = "#movie_annual_table"
+    MSG_REVERTIR = ("¿Revertir el visionado de '{title}'? "
+                    "La película volverá a aparecer como pendiente.")
 
     BINDINGS = [
         ("escape", "go_back", "Volver al Launcher"),
@@ -224,16 +237,6 @@ class MovieMainScreen(Screen):
         self.title = "BUNKER"
         self.sub_title = "Módulo de Videoclub"
         self.load_movies()
-
-    def action_focus_search(self) -> None:
-        search_bar = self.query_one("#search_bar", Input)
-        if search_bar.has_class("-visible"):
-            search_bar.remove_class("-visible")
-            search_bar.value = ""
-            self.query_one("#movies_table", DataTable).focus()
-        else:
-            search_bar.add_class("-visible")
-            search_bar.focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Motor Fuzzy Reactivo para películas."""
@@ -400,9 +403,6 @@ class MovieMainScreen(Screen):
                 rec.get('date_watched', '')[:10],
                 key=str(rec.get('id'))
             )
-
-    def action_switch_tab(self, tab_id: str) -> None:
-        self.query_one("#movie_tabs", TabbedContent).active = tab_id
 
     def on_screen_resume(self, event: ScreenResume) -> None:
         """
@@ -662,12 +662,6 @@ class MovieMainScreen(Screen):
                 dir_node.add_leaf(
                     f"[dim]{m['id']}[/dim] {short_title} [{status}]", data=f"movie_{m['id']}")
 
-    def action_toggle_sidebar(self) -> None:
-        sidebar = self.query_one("#sidebar", Tree)
-        sidebar.toggle_class("-visible")
-        if sidebar.has_class("-visible"):
-            sidebar.focus()
-
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         if event.node.data is None:
             return
@@ -809,27 +803,6 @@ class MovieMainScreen(Screen):
                 self.app.notify, f"Error: {e}", severity="error")
 
     # --- REVERSIÓN DE HÁBITOS (VIDEOCLUB) ---
-    def action_delete_habit(self) -> None:
-        if self.query_one("#movie_tabs", TabbedContent).active != "tab_tracker":
-            return
-
-        table = self.query_one("#movie_annual_table", DataTable)
-        try:
-            # Se obtiene la ID y el título de la película seleccionada
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key.value
-            title = table.get_row(row_key)[1]
-
-            def handle_confirm(confirm: bool) -> None:
-                if confirm:
-                    self.process_delete_habit(row_key)
-
-            self.app.push_screen(ConfirmModal(
-                f"¿Revertir el visionado de '{title}'? La película volverá a aparecer como pendiente."), handle_confirm)
-        except Exception:
-            self.app.notify(
-                "Selecciona un registro en la tabla primero.", severity="warning")
-
     @work(thread=True)
     def process_delete_habit(self, record_id: str) -> None:
         try:

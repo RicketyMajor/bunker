@@ -181,13 +181,20 @@ class SyncConsoleModal(ModalScreen):
         base_dir = Path(__file__).resolve().parent.parent.parent
         compose_file = str(base_dir / "docker-compose.yml")
 
-        # Inyectamos Node directo con la bandera --manual
-        if self.service_name == "scraper-movies":
-            cmd = ["docker-compose", "-f", compose_file, "exec", "-T",
-                   "scraper-movies", "node", "movie_radar.js", "--manual"]
-        else:
-            cmd = ["docker-compose", "-f", compose_file, "exec", "-T",
-                   "scraper-books", "node", "book_radar.js", "--manual"]
+        # Inyectamos Node directo con la bandera --manual.
+        # Esto era un `if service == "scraper-movies" ... else scraper-books`, asi que la
+        # Disquera caia al `else` y escaneaba LIBROS, en una consola titulada `scraper-music`.
+        # Un mapa en vez de una rama: añadir un cuarto modulo es una linea, y ninguno puede
+        # volver a caer en el radar de otro por omision.
+        RADARES = {"scraper-books": "book_radar.js",
+                   "scraper-movies": "movie_radar.js",
+                   "scraper-music": "music_radar.js"}
+        guion = RADARES.get(self.service_name)
+        if guion is None:
+            log.write(f"[bold red]Sin radar conocido para {self.service_name}.[/bold red]")
+            return
+        cmd = ["docker-compose", "-f", compose_file, "exec", "-T",
+               self.service_name, "node", guion, "--manual"]
 
         try:
             import subprocess

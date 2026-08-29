@@ -2,7 +2,6 @@ import httpx
 import datetime
 import webbrowser
 from textual.app import ComposeResult
-from textual.screen import Screen
 from textual.widgets import Header, Footer, DataTable, Markdown, TabbedContent, Tree, Input
 from textual.binding import Binding
 from textual.events import ScreenResume
@@ -10,11 +9,18 @@ from .tabs import InventoryTab, InboxTab, LoansTab, TrackerTab, WishlistTab, car
 from textual import work
 from .constants import *
 from .screens import BookDetailsScreen
+from .coleccion_screen import ColeccionScreen
 from .modals import IsbnModal, FullEditModal, LendModal, DirModal, SyncConsoleModal, WatcherModal, LogPagesModal, ConfirmModal, AddMenuModal, ManualAddModal, ScannerModal, FinishBookModal, WatchersListModal, MoveToDirModal, DeleteDirModal, GenreStatsModal
 
 
-class LibraryMainScreen(Screen):
+class LibraryMainScreen(ColeccionScreen):
     all_books = []
+
+    # Los cuatro que `ColeccionScreen` necesita para hablar de ESTA pantalla.
+    TABLA_PRINCIPAL = "#books_table"
+    CONTENEDOR_TABS = "#main_tabs"
+    TABLA_ANUAL = "#annual_table"
+    MSG_REVERTIR = "¿Revertir la lectura de '{title}'? El libro volverá a estar pendiente."
 
     CSS = """
     DataTable { height: 1fr; margin: 1 2; }
@@ -76,9 +82,17 @@ class LibraryMainScreen(Screen):
         yield Footer()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        """Cambia el foco automáticamente al contenido de la pestaña activa para actualizar los Atajos del Footer."""
+        """Cambia el foco al contenido de la pestaña activa para actualizar los Atajos del Footer.
+
+        Filtra por `focusable`, no por tipo. La condicion era `isinstance(widget, (DataTable,
+        Markdown))` y ser MAS general es justo lo que la rompia: `TrackerTab` pone su `Markdown`
+        antes que la tabla, `Markdown.can_focus` es False, asi que `.focus()` no hacia nada, el
+        bucle cortaba en el `break` y la pestaña quedaba SIN FOCO. Sin foco no aplican las
+        BINDINGS del `TabPane`, y `x` (Revertir Registro) no llegaba nunca en la Biblioteca.
+        El Videoclub y la Disquera filtran solo por `DataTable` y por eso no lo sufrian.
+        """
         for widget in event.pane.query("*"):
-            if isinstance(widget, (DataTable, Markdown)):
+            if widget.focusable:
                 widget.focus()
                 break
 
@@ -114,16 +128,6 @@ class LibraryMainScreen(Screen):
         self.title = "BUNKER"
         self.sub_title = "Módulo de Biblioteca"
         self.load_all_data()
-
-    def action_focus_search(self) -> None:
-        search_bar = self.query_one("#search_bar", Input)
-        if search_bar.has_class("-visible"):
-            search_bar.remove_class("-visible")
-            search_bar.value = ""
-            self.query_one("#books_table", DataTable).focus()
-        else:
-            search_bar.add_class("-visible")
-            search_bar.focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Filtra en RAM mientras se escribe."""
@@ -312,9 +316,6 @@ class LibraryMainScreen(Screen):
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         event.control.sort(event.column_key)
 
-    def action_switch_tab(self, tab_id: str) -> None:
-        self.query_one("#main_tabs", TabbedContent).active = tab_id
-
     def action_show_details(self) -> None:
         if self.query_one("#main_tabs", TabbedContent).active != "tab_library":
             return
@@ -448,12 +449,6 @@ class LibraryMainScreen(Screen):
         except Exception:
             self.app.call_from_thread(
                 self.app.notify, "Error de red.", severity="error")
-
-    def action_toggle_sidebar(self) -> None:
-        sidebar = self.query_one("#sidebar", Tree)
-        sidebar.toggle_class("-visible")
-        if sidebar.has_class("-visible"):
-            sidebar.focus()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         if event.node.data is None:
@@ -948,27 +943,6 @@ class LibraryMainScreen(Screen):
                 self.app.notify, f"Error de red: {e}", severity="error")
 
     # --- REVERSIÓN DE HÁBITOS (ELIMINAR REGISTRO) ---
-    def action_delete_habit(self) -> None:
-        if self.query_one("#main_tabs", TabbedContent).active != "tab_tracker":
-            return
-
-        table = self.query_one("#annual_table", DataTable)
-        try:
-            # obtiene la ID y el título de la fila seleccionada
-            row_key = table.coordinate_to_cell_key(
-                table.cursor_coordinate).row_key.value
-            title = table.get_row(row_key)[1]
-
-            def handle_confirm(confirm: bool) -> None:
-                if confirm:
-                    self.process_delete_habit(row_key)
-
-            self.app.push_screen(ConfirmModal(
-                f"¿Revertir la lectura de '{title}'? El libro volverá a estar pendiente."), handle_confirm)
-        except Exception:
-            self.app.notify(
-                "Selecciona un registro en la tabla primero.", severity="warning")
-
     @work(thread=True)
     def process_delete_habit(self, record_id: str) -> None:
         try:

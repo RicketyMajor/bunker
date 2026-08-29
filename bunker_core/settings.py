@@ -79,8 +79,9 @@ if 'testserver' not in ALLOWED_HOSTS:
 # @api_view with SessionAuthentication + AllowAny and DRF only checks CSRF for a request it
 # authenticated by session — with nobody logged in, any Origin is accepted. This list becomes
 # load-bearing the moment a Django admin session exists in the phone's browser.
-# '*.lhr.life' is NOT vestigial: cli/main.py, cli/books.py and cli/tui/modals.py all open a
+# '*.lhr.life' is NOT vestigial: cli/main.py:210 and cli/tui/modals.py:440 both open a
 # localhost.run SSH tunnel, and that wildcard is what lets the scanner they serve POST back.
+# (A third opener lived in cli/books.py until the legacy CLI was deleted on 2026-08-29.)
 # It stays until those tunnels do.
 CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app',
                         'https://*.ngrok.io', 'https://*.lhr.life',
