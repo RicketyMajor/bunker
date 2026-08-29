@@ -3,10 +3,14 @@
 # Nightly dump of the THREE stacks this machine runs, driven by a systemd user timer.
 #
 # Why here, and why one script for three repositories: until 2026-08-27 the Bunker was the only
-# stack, and its backup was a cron INSIDE its web image (`bunker_crontab` + `backup.sh`, still
-# running, see below). The split left `~/dev/posada` and `~/dev/ajedrez` with 531 + 15 rows and
-# no recurring copy at all. Three copies of the same in-image cron is the expensive answer to
-# that; one host-side timer is one place to change and one place to check.
+# stack, and its backup was a cron INSIDE its web image (`bunker_crontab` + `backup.sh`). The
+# split left `~/dev/posada` and `~/dev/ajedrez` with 531 + 15 rows and no recurring copy at all.
+# Three copies of the same in-image cron is the expensive answer to that; one host-side timer is
+# one place to change and one place to check.
+#
+# 2026-08-29: THIS IS NOW THE ONLY MECHANISM. The in-image cron was deleted, because it never
+# caught up — it fired only on nights the laptop happened to be awake at 00:00 and went seven
+# nights in a row producing nothing. `Persistent=true` below is precisely that difference.
 #
 # It lives in the Bunker's repo because the Bunker is the only one of the three with a
 # `scripts/`, and a clone brings it. The absolute paths below are host-specific ON PURPOSE:

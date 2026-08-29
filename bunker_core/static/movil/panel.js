@@ -1,4 +1,4 @@
-import { pedir, vaciar } from './estado.js';
+import { pedir } from './estado.js';
 
 // The consultation surface: "¿cómo voy?", answered in under five seconds, one-handed, at night.
 //

@@ -2,9 +2,11 @@
 *.sqlite3
 __pycache__/
 .env
-# Capsulas de tiempo del backup manual. El patron cubre las variantes con sufijo:
-#  quedaba FUERA de la regla exacta y aparecia
-# como no rastreado, a un  de commitear 921 objetos de datos personales.
+# Capsulas de tiempo del backup manual. El patron cubre las variantes con sufijo, y esa es
+# la razon de que sea un patron: la regla era el nombre exacto `bunker_backup.json`, asi que
+# `bunker_backup.pre-separacion-2026-07-26.json` — creado el 2026-08-27 al preservar la capsula
+# vieja — quedaba FUERA de ella y aparecio ya EN EL INDICE, a un commit de publicar 921 objetos
+# de datos personales. Una regla por nombre exacto no cubre la variante que tu mismo creas.
 bunker_backup*.json
 wishlist_duplicados_*.json
 node_modules/

@@ -61,7 +61,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?falta en .env}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
-      # Sin esto el contenedor corre en UTC y el cron de las 00:00 dispara a las 20:00 locales.
+      # Sin esto el contenedor corre en UTC y `timezone.localdate()` cambia de dia a las
+      # 20:00 locales: una captura de la noche se anota en la fecha de manana.
       - TZ=America/Santiago
 
 # --- Microservicios Distribuidos Node.js ---

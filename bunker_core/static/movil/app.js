@@ -335,11 +335,6 @@ function abrirHojaTerminar() {
   abrirHoja('hoja-terminar');
 }
 
-// movil_estado sends `difficulty` as the raw model code (S/A/B/C). "Rango C" is the
-// vocabulary the model itself uses, and it costs one word instead of a lookup table.
-//
-// The empty line does not claim you finished anything: with no habits created at all —
-// which is this database today — "todos hechos" would be a lie about work never done.
 // --- Escáner -------------------------------------------------------------------------
 // Native BarcodeDetector, not a library. Chrome on Android has shipped it since 83, which
 // is why the three templates this replaces pulled html5-qrcode from unpkg.com — and why

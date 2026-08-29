@@ -10,25 +10,17 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install cron, and nothing else. `stockfish` was installed here for `chess_study`, which
-# left for ~/dev/ajedrez on 2026-08-27 — the engine lives in that repository's image now.
-RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+# No extra packages. `stockfish` was installed here for `chess_study`, which left for
+# ~/dev/ajedrez on 2026-08-27. `cron` followed it out on 2026-08-29, with `bunker_crontab`,
+# `scripts/backup.sh` and the `/etc/bunker.env` dump the CMD used to write for it — see the
+# backup section of README.md for why the host timer replaced it outright.
 
 # Copia el resto del código del proyecto al contenedor
 COPY . /app/
 
-# Configurar cron. Solo /etc/cron.d: ese formato acepta el campo de usuario ("root").
-# Instalarlo ademas con `crontab` lo interpretaba como crontab de usuario, donde el sexto
-# campo ya es el comando, y la tarea intentaba ejecutar el binario inexistente "root".
-COPY bunker_crontab /etc/cron.d/bunker-cron
-RUN chmod 0644 /etc/cron.d/bunker-cron
-RUN touch /var/log/cron.log
-
-# Dump the environment to /etc/bunker.env before starting cron: cron jobs do not inherit
-# compose's variables (only PID 1 receives them), and backup.sh needs the POSTGRES_* ones.
 # --insecure: with DEBUG=False runserver stops serving /static/, and the phone requests
 # {% static 'movil/dist/main.js' %}, which would 404. One flag instead of adding
 # whitenoise + collectstatic to a single-user service behind the tailnet.
 # ponytail: --insecure serves static files with no caching and no compression; the day the
 # panel feels slow on the phone is when whitenoise earns its place.
-CMD printenv | grep -E '^(POSTGRES_|TZ=)' > /etc/bunker.env && cron && python manage.py runserver --insecure 0.0.0.0:8000
+CMD ["python", "manage.py", "runserver", "--insecure", "0.0.0.0:8000"]

@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import logging
 import os
@@ -23,7 +24,10 @@ logger = logging.getLogger(__name__)
 # BunkerState le dio su primer modelo: sin el, un restore devuelve la fecha de ultima entrada
 # vacia y el briefing vuelve a anunciar todos los logros como nuevos.
 BACKUP_APPS = ('catalog', 'movies', 'disquera', 'bunker_core')
-# Donde escribe el cron nocturno (volumen bunker_backups_data).
+# Las capsulas automaticas historicas (volumen bunker_backups_data). NADIE ESCRIBE AQUI
+# desde el 2026-08-29: el cron de la imagen que las producia se borro por no dispararse
+# las noches con el portatil apagado — 7 seguidas la ultima vez. Se sigue leyendo para
+# que las capsulas ya escritas sean restaurables; el respaldo vivo es el timer del host.
 BACKUP_DIR = '/app/backups'
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Lo que escribe el backup manual de la TUI, y el destino por defecto de restore.
@@ -234,9 +238,21 @@ def restore_database(request):
         return JsonResponse({"error": f"No se encontró la cápsula '{os.path.basename(backup_path)}'."}, status=404)
 
     try:
-        call_command('loaddata', backup_path)
+        # ignorenonexistent: TODA capsula automatica anterior al 2026-08-27 nombra modelos de
+        # `posada` y `chess_study`, cuyas apps ya no estan instaladas. Sin la bandera loaddata
+        # lanza DeserializationError y este endpoint devuelve 500 — medido conduciendo la vista
+        # sobre una base desechable: 6 capsulas de 6, ninguna restaurable. Con ella entran las
+        # filas del Bunker y las ajenas se descartan.
+        #
+        # Descartar en silencio es exactamente el fallo que este endpoint existe para evitar, asi
+        # que el conteo de loaddata viaja en la respuesta: "Installed N object(s)" es la unica
+        # forma de que el usuario vea que una capsula de 955 objetos aporto 409.
+        salida = io.StringIO()
+        call_command('loaddata', backup_path, ignorenonexistent=True, verbosity=2, stdout=salida)
+        instalados = next((l for l in salida.getvalue().splitlines() if 'Installed' in l), '')
         return JsonResponse(
-            {"message": "Búnker restaurado a su estado original.", "restored_from": backup_path}, status=200)
+            {"message": f"Búnker restaurado a su estado original. {instalados}".strip(),
+             "restored_from": backup_path}, status=200)
     except Exception as e:
         logger.exception("Fallo restaurando desde %s", backup_path)
         return JsonResponse({"error": str(e)}, status=500)

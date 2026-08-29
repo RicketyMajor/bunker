@@ -238,23 +238,27 @@
   <div class="grid">
     <button data-verb="terminar">TERMINÉ</button>
     <button data-verb="escanear">ESCANEAR</button>
-    <button data-verb="wishlist">A LA LISTA</button>
+    <!-- grid-column: la rejilla es de dos columnas y quedan TRES verbos de los cinco
+         originales, asi que el ultimo se pintaba a media anchura con un hueco al lado.
+         Mismo remedio que las otras tres rejillas impares de este fichero. -->
+    <button data-verb="wishlist" style="grid-column:1/-1">A LA LISTA</button>
   </div>
   <p id="instantanea" class="pos" style="text-align:center;margin:14px 0 0"></p>
 </main>
 
 <main id="panel">
-  <!-- `data-fuente` is the block's endpoint: the URL lives in the markup so a state can be
-       forced with `?fuente=` without rebuilding the bundle. One request carries four blocks —
-       one round trip is the offline-first shape, and each block still renders its own empty
-       state through `vaciar`, so "the request worked but this block has nothing" is visible. -->
+  <!-- The block's endpoint is NOT in this markup. It used to be, as `data-fuente`, back when
+       one request carried four blocks and `pedir` read the URL from the attribute; both the
+       other blocks and that attribute are gone. `cargarSerie` builds the URL in panel.js, and
+       `?serie=/api/...` overrides it there. The guard moved with it: test_movil_estado now
+       resolves the URL panel.js builds against Django's router. -->
 
   <section id="p-serie-caja">
     <h2>ACTIVIDAD POR MES</h2>
     <!-- Filters in one row above the chart. `aria-pressed` and not a class, because which
          module is showing is a real fact about the screen, not decoration. -->
     <div id="p-modulos" role="group" aria-label="Módulo de la serie"></div>
-    <div id="p-serie" data-fuente="/api/stats/timeline/" aria-busy="false"></div>
+    <div id="p-serie" aria-busy="false"></div>
   </section>
 </main>
 

@@ -172,10 +172,15 @@ alias bunker-os="cd ~/ruta/a/bunker && source .venv/bin/activate && bunker enter
 
 ## Respaldo
 
-Dos mecanismos independientes, a propósito:
+Un timer de systemd en el host, a las **00:30** (`scripts/respaldo_pilas.sh`), que vuelca las
+**tres** pilas a `~/dev/respaldos/` y rota las 7 últimas.
 
-- Un `cron` dentro de la imagen, a las **00:00**, que vuelca al volumen `bunker_backups_data`.
-- Un timer de systemd en el host, a las **00:30** (`scripts/respaldo_pilas.sh`), que vuelca las
-  **tres** pilas a `~/dev/respaldos/` y rota las 7 últimas.
+Lleva `Persistent=true`, y ése es el punto: **se pone al día al arrancar** si la máquina estaba
+apagada a las 00:30. Hasta el 2026-08-29 había un segundo mecanismo —un `cron` dentro de la
+imagen, a las 00:00— presentado aquí como independiente. No lo era en la práctica: no se pone al
+día jamás, así que sólo disparaba las noches que el portátil velaba. **Produjo su última cápsula
+el 22 de agosto y pasó siete noches en blanco sin que nada lo dijera.** Borrado, con
+`bunker_crontab` y `scripts/backup.sh`.
 
-Un volumen podado y un disco muerto son accidentes distintos.
+Las cápsulas que dejó siguen en el volumen `bunker_backups_data` y se leen desde
+`GET /api/backups/`; `POST /api/restore/` las acepta.

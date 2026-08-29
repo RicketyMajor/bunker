@@ -4,7 +4,8 @@
 
 There are TWO lists of apps to dump and they are written by hand in two files:
 `BACKUP_APPS` in `bunker_core/views.py` (the API and the TUI's manual backup) and the
-`dumpdata` line in `scripts/backup.sh` (the nightly cron). Nothing connects them to the app
+`bunker` row of `scripts/respaldo_pilas.sh` (the host's nightly timer). Nothing connects
+them to the app
 registry, so a new app with models joins neither and the failure is silent: `dumpdata`
 succeeds, the file is written, and the rows are simply not in it.
 
@@ -62,18 +63,30 @@ def run_tests():
         check(label in BACKUP_APPS,
               f"'{label}' tiene modelos y está en BACKUP_APPS (bunker_core/views.py)")
 
-    # El cron nocturno lleva su propia lista escrita a mano en el shell.
-    guion = os.path.join(str(settings.BASE_DIR), 'scripts', 'backup.sh')
+    # El respaldo nocturno del host lleva su propia lista escrita a mano en el shell.
+    # Apuntaba a `scripts/backup.sh` hasta el 2026-08-29, cuando el cron de la imagen se borró
+    # por no dispararse jamás las noches con el portátil apagado. La deriva entre DOS listas a
+    # mano sigue existiendo — sólo cambió cuál es la segunda.
+    guion = os.path.join(str(settings.BASE_DIR), 'scripts', 'respaldo_pilas.sh')
     with open(guion, encoding='utf-8') as f:
-        linea = next((l for l in f if 'dumpdata' in l), '')
-    check(linea, f"scripts/backup.sh todavía tiene una línea dumpdata")
-    nombradas = set(re.findall(r'[a-z_]+', linea.split('dumpdata', 1)[1]))
+        linea = next((l for l in f if l.lstrip().startswith('"bunker:')), '')
+    check(linea, "scripts/respaldo_pilas.sh todavía tiene la fila de la pila `bunker`")
+    # La fila es "nombre:ruta:app app app". Las apps son el ÚLTIMO campo, y partir por ':' es
+    # lo único que las separa de la ruta — un `findall` sobre la línea entera recogería
+    # `home`, `alonso` y `dev` y daría verde por accidente.
+    nombradas = set(re.findall(r'[a-z_]+', linea.strip().strip('"').split(':')[-1]))
+    # El suelo es 2, NO las 4 de hoy. Con 4 este guardia se disparaba primero al quitar una
+    # app de la fila y daba un rojo con el mensaje equivocado ("no son apps de verdad") en vez
+    # de dejar que el bucle de abajo nombrara la app que falta. Lo que defiende es que el split
+    # por ':' casó ALGO, no cuántas apps hay.
+    check(len(nombradas) >= 2,
+          f"la fila de `bunker` nombra apps de verdad, no trozos de ruta: {sorted(nombradas)}")
     for label in propias:
         check(label in nombradas,
-              f"'{label}' también está en el dumpdata de scripts/backup.sh")
+              f"'{label}' también está en el dumpdata de scripts/respaldo_pilas.sh")
 
     # Y al revés: una app borrada del proyecto que siga en la lista rompe el dumpdata entero
-    # con LookupError, y el cron se lo come.
+    # con LookupError, y el timer lo registra como un FALLO de la pila entera.
     for label in BACKUP_APPS:
         check(label in propias,
               f"BACKUP_APPS no nombra apps que ya no existen: '{label}'")

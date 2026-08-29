@@ -92,9 +92,9 @@ def doctor():
     # failure. ANDROID_HOME is checked as a directory, not as a string, so a stale export from
     # a deleted SDK reads as absent instead of green.
     #
-    # And `which` alone is not enough for the other half: cron and systemd run with a PATH that
-    # carries no platform-tools — `bunker_crontab` resets it to /usr/local/bin:/usr/bin:/bin, and
-    # `scripts/ronda_doze.sh` hardcodes the absolute adb path for exactly this reason. A `which`
+    # And `which` alone is not enough for the other half: a systemd timer runs with a PATH
+    # that carries no platform-tools, which is why `scripts/ronda_doze.sh` hardcodes the
+    # absolute adb path. A `which`
     # miss is therefore not evidence that adb is absent; the SDK's own copy is the second look.
     console.print("\n[bold cyan]Android[/bold cyan]")
     sdk = os.environ.get("ANDROID_HOME", "")

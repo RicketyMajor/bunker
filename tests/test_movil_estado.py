@@ -13,6 +13,7 @@ Every check runs inside a transaction that is rolled back, so it is safe against
 """
 import json
 import os
+import re
 from datetime import timedelta
 
 import django
@@ -23,6 +24,7 @@ django.setup()
 from django.conf import settings  # noqa: E402
 from django.db import connection, transaction  # noqa: E402
 from django.test import RequestFactory  # noqa: E402
+from django.urls import Resolver404, resolve  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
@@ -171,14 +173,39 @@ def test_el_manifiesto_sigue_el_contenido():
     print("OK · el manifiesto sigue el contenido y sirve rutas relativas")
 
 
+def _ruta_que_pide_panel_js():
+    """The path `cargarSerie` builds, read out of panel.js itself.
+
+    Read from the source and not written down here: a copy of the URL in this file is the very
+    drift the check exists to catch, one file further along.
+    """
+    ruta = os.path.join(str(settings.BASE_DIR), 'bunker_core', 'static', 'movil', 'panel.js')
+    # A moved file contributes zero matches in silence, and "no bad URL found" over an empty
+    # read is true and worthless. Assert the file is there before believing the regex.
+    assert os.path.isfile(ruta), f"no existe {ruta}: el barrido no leyo nada"
+    fuente = open(ruta, encoding='utf-8').read()
+    # ANCLADO en el cuerpo de `cargarSerie`, no en el fichero entero. La primera version cogia
+    # la primera `/api/` de panel.js y esa esta en un COMENTARIO de la linea 16: el check pasaba
+    # verde con la URL de `cargarSerie` apuntando a una ruta inexistente, porque nunca la leyo.
+    # Hay ademas un `/api/panel/` en otro comentario, que ya no existe y habria dado un rojo
+    # falso. Comprobado volcando lo que recogia el patron antes de creerle.
+    cuerpo = re.search(r'async function cargarSerie\b.*?\n}', fuente, re.S)
+    assert cuerpo, "panel.js ya no define `cargarSerie`: el ancla del guardia se movio"
+    urls = re.findall(r'`(/api/[^`?]+)', cuerpo.group(0))
+    assert urls, "`cargarSerie` no construye ninguna URL /api/: el patron no caso nada"
+    assert len(urls) == 1, f"`cargarSerie` construye {len(urls)} URLs; el guardia comprueba una: {urls}"
+    return urls[0]
+
+
 def test_panel_es_una_ruta_real_con_su_marca():
     """`/panel/` resolves, renders the same template, and carries the panel's own markup.
 
     Three things this catches that a 200 does not. The route could resolve to the capture
     template with no panel markup at all, in which case `Panel.montar()` finds no `#p-briefing`
     and returns silently — a blank page and no error, which is the failure mode this whole task
-    exists to make impossible. The `data-fuente` attribute is the block's endpoint and lives in
-    the markup, so losing it makes every block fetch `undefined`. And the state CSS must be
+    exists to make impossible. The block's endpoint no longer lives in the markup — it is built
+    in `panel.js`, so the check that used to read `data-fuente` now resolves that URL against
+    Django's router instead, which is where the real drift can happen. And the state CSS must be
     prefixed with `#panel`: unprefixed, `#panel section` outranks it and the states lose their
     background — measured in the browser 2026-08-21, --dim landed on --bg-alt at 4.17:1.
     """
@@ -197,8 +224,15 @@ def test_panel_es_una_ruta_real_con_su_marca():
     assert 'id="p-serie"' in html, "/panel/ perdio el bloque de la serie"
     assert '<h2>ACTIVIDAD POR MES</h2>' in html, (
         "el bloque de la serie perdio su h2; h1 -> h3 salta un nivel de encabezado")
-    assert 'data-fuente="/api/stats/timeline/"' in html, (
-        "el bloque perdio su data-fuente; `pedir` recibiria undefined")
+    # El endpoint de la serie lo construye `cargarSerie` en panel.js. Nada ata esa cadena a
+    # `urls.py`, asi que una ruta renombrada deja el bloque pidiendo un 404 EN SILENCIO: el
+    # `pedir` de estado.js pinta `rechazado` y la pagina sigue viva. `data-fuente` guardaba esto
+    # cuando la URL vivia en el marcado; se fue el 2026-08-29 y el guardia lo sigue hasta el JS.
+    ruta_serie = _ruta_que_pide_panel_js()
+    try:
+        resolve(ruta_serie)
+    except Resolver404:
+        raise AssertionError(f"panel.js pide {ruta_serie}, que Django ya no enruta")
     assert 'body[data-superficie="panel"] #home' in html, (
         "sin el conmutador de superficie el panel se pinta ENCIMA de la captura")
     for estado in ('cargando', 'sin-enlace', 'rechazado', 'roto', 'vacio'):

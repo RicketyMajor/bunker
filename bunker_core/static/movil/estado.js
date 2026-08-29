@@ -68,15 +68,4 @@ export async function pedir(url, destino, { vacio = (d) => !d || d.length === 0 
   return datos;
 }
 
-/**
- * Put `destino` in the empty state by hand, with the SAME rendering `pedir` produces.
- *
- * One request can carry four blocks (see `/api/panel/`), so a block can be empty while the
- * request succeeded. Without this the block would invent its own "nothing here" and there
- * would be two empty states that look different for the same fact.
- */
-export function vaciar(destino, mensaje = 'Nada todavía.') {
-  pintar(destino, ESTADOS.VACIO, mensaje);
-}
-
 export { ESTADOS };
