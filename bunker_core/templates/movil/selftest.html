@@ -81,7 +81,10 @@ const restaurar = () => {
       json: async () => ({ message: 'No aplicado — esa página ya se anotó.' }),
     }));
     assert(Cola.pendientes() === 1, 'borro un rechazo');
-    assert(Cola.items()[0].error.includes('mismo día'), 'no guardo el mensaje real');
+    // The substring must come from the mock two lines above. It said 'mismo día' back when
+    // this check drove `habito`; the 2026-08-27 split re-pointed it at `paginas` and changed
+    // the mocked body, and the assertion was left behind — so the check was red on every run.
+    assert(Cola.items()[0].error.includes('ya se anotó'), 'no guardo el mensaje real');
   });
 
   // The two below are the reason this file exists. Both failures are invisible in the UI:

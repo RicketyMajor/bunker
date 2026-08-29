@@ -22,11 +22,6 @@ from rich.columns import Columns
 from rich.prompt import Prompt
 from rich.table import Table
 from rich import box
-from cli.books import book_app
-from cli.loans import loan_app
-from cli.wishlist import wishlist_app
-from cli.tracker import tracker_app
-from cli.directories import dir_app
 from cli.tui.app import BunkerApp
 from cli.doctor import doctor
 from cli.config import BASE_URL, API_PORT
@@ -35,11 +30,6 @@ console = Console()
 app = typer.Typer(
     help="CLI tool to manage my personal library.", no_args_is_help=True)
 
-app.add_typer(book_app, name="book")
-app.add_typer(loan_app, name="loan")
-app.add_typer(wishlist_app, name="wishlist")
-app.add_typer(tracker_app, name="tracker")
-app.add_typer(dir_app, name="dir")
 app.command("doctor")(doctor)
 
 # Esta variable recordará si ya revisó la red

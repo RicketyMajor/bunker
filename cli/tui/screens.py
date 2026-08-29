@@ -587,6 +587,7 @@ class BunkerLauncherScreen(Screen):
         except Exception:
             pass
 
+    @work(thread=True)
     def fetch_dashboard(self) -> None:
         try:
             from .constants import API_DASHBOARD

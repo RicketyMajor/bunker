@@ -2,7 +2,10 @@
 *.sqlite3
 __pycache__/
 .env
-bunker_backup.json
+# Capsulas de tiempo del backup manual. El patron cubre las variantes con sufijo:
+#  quedaba FUERA de la regla exacta y aparecia
+# como no rastreado, a un  de commitear 921 objetos de datos personales.
+bunker_backup*.json
 wishlist_duplicados_*.json
 node_modules/
 venv/

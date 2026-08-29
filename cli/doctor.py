@@ -123,6 +123,13 @@ def doctor():
     if not _run("tests.test_cli_imports",
                 [sys.executable, "-m", "tests.test_cli_imports"]):
         fallos += 1
+    # On the HOST: it mounts the real Textual app, which needs `cli.tui` and its terminal
+    # machinery, neither of which the container installs. `test_cli_imports` above proves the
+    # modules import; this one proves `bunker enter` reaches a painted frame — the gap that let
+    # 37a9359 ship a TUI that died on mount and stayed dead for two days.
+    if not _run("tests.test_tui_arranca",
+                [sys.executable, "-m", "tests.test_tui_arranca"]):
+        fallos += 1
     # On the HOST and not in `web`: it shells out to esbuild, which lives in `node_modules/`
     # here and is not installed in the container.
     if not _run("tests.test_bundle",
