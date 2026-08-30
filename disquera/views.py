@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
+from bunker_core.dedup import ya_conocido
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
@@ -41,7 +42,7 @@ class MusicWishlistViewSet(viewsets.ModelViewSet):
         title = request.data.get('title')
 
         if title:
-            exists = MusicWishlist.objects.filter(title__iexact=title).exists()
+            exists = ya_conocido(MusicWishlist.objects.all(), title)
             if exists:
                 return Response(
                     {"message": f"'{title}' ya está en el radar o fue rechazado. Ignorando."},

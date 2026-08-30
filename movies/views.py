@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
+from bunker_core.dedup import ya_conocido
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -46,9 +47,9 @@ class MovieWishlistViewSet(viewsets.ModelViewSet):
         title = request.data.get('title')
 
         if title:
-            # Us .objects sin el filtro de is_rejected y __iexact para ignorar mayúsculas
-            # Así revisa si existe en el Tablón activo O en la lista negra.
-            exists = MovieWishlist.objects.filter(title__iexact=title).exists()
+            # Regla compartida (bunker_core/dedup.py): mismo numero de entrega Y base parecida.
+            # Lee `.objects` sin filtrar, asi que la lista negra tambien cuenta como conocido.
+            exists = ya_conocido(MovieWishlist.objects.all(), title)
             if exists:
                 # Devolvuelve un 200 OK pero no guarda nada.
                 # Al devolver 200, el scraper de Node.js no lanza error y sigue trabajando,

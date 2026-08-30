@@ -12,15 +12,18 @@ const path = require('path');
 //     estrategias existen y estan rastreadas, y una carpeta vacia recien creada da cero
 //     estrategias y cae en el mismo return una linea despues.
 //
-// Los LIBROS no entran aqui, y no es por descuido: sus estrategias son `scrape()` o
-// `scrape(keywords)` SIN el argumento `apiUrl`, usan dos endpoints distintos
-// (`wishlist-crud/` para leer, `wishlist/add/` para escribir) y su payload de watchers es
-// `data.keywords`, no `data.map(w => w.keyword)`. Unificarlos es otro trabajo.
+// Los libros entraron el 2026-08-30. Las tres diferencias que este comentario listaba eran
+// reales y las tres cosmeticas: `claves` absorbe la forma distinta de watchers, `enriquecer`
+// absorbe `author_string`, y el segundo endpoint desaparecio solo cuando el filtro de
+// duplicados subio al servidor (bunker_core/dedup.py) y el tablon dejo de viajar hasta aqui.
 
 async function obtenerVigilados(cfg) {
     try {
         const response = await axios.get(cfg.apiWatchers);
-        return response.data.map(w => w.keyword) || [];
+        // `/api/books/watchers/` devuelve {keywords:[…]}; los otros dos, [{keyword}]. Una
+        // linea de config en vez de tocar un endpoint que sirve a otros consumidores.
+        const extraer = cfg.claves || (d => d.map(w => w.keyword));
+        return extraer(response.data) || [];
     } catch (error) {
         console.error(`[${cfg.etiqueta}] Error conectando con API Django:`, error.message);
         return [];
@@ -76,6 +79,7 @@ async function barrer(cfg) {
             for (const item of results) {
                 try {
                     Object.assign(item, cfg.extras);
+                    if (cfg.enriquecer) Object.assign(item, cfg.enriquecer(item, keywords));
                     const response = await axios.post(cfg.apiWishlist, item);
 
                     // Django devuelve 201 si es un descubrimiento nuevo

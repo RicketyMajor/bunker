@@ -4,6 +4,7 @@ from rest_framework import status
 from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_paginas, feedback_terminado
+from bunker_core.dedup import ya_conocido
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
@@ -117,8 +118,9 @@ def add_wishlist_item(request):
     if not title:
         return Response({"error": "El título es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Evita que el scraper llene la base de datos con el mismo libro todos los días
-    if WishlistItem.objects.filter(title=title, buy_url=buy_url).exists():
+    # Una sola regla para los tres tableros (bunker_core/dedup.py). `buy_url` sale del
+    # predicado a proposito: el mismo titulo en dos tiendas era dos filas.
+    if ya_conocido(WishlistItem.objects.all(), title):
         return Response({"message": "El libro ya estaba en el tablón de deseos."}, status=status.HTTP_200_OK)
 
     # Crea el nuevo registro en el tablón
