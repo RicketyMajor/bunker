@@ -128,6 +128,13 @@ _ETIQUETAS = {
     'movies': {'monto': None, 'monto_1': None,
                'obra': 'películas vistas', 'obra_1': 'película vista',
                'actividad': 'películas'},
+    # `actividad` is "música", an activity noun like books' "lectura", not the object plural
+    # movies uses. The two existing modules disagree with each other, so precedent settled
+    # nothing; "música" is the one that does not collide with the inventory — in an app that
+    # IS a record collection, "Dos meses sin discos" reads as owning none.
+    'music': {'monto': None, 'monto_1': None,
+              'obra': 'discos escuchados', 'obra_1': 'disco escuchado',
+              'actividad': 'música'},
 }
 
 
@@ -256,9 +263,10 @@ def conclusiones():
     accident of insertion order; a round trip makes the cap of three cover three parts of the
     Bunker instead of one.
 
-    `music` is NOT in `_ETIQUETAS` and never has been, so the Disquera has never produced a
-    sentence here. That predates the 2026-08-27 split and is recorded in
-    `context/general/state-of-the-project.md`; adding it is a nouns question, not a plumbing one.
+    `music` joined `_ETIQUETAS` on 2026-08-30 and had never been in it before. Its sentences
+    stay silent until the music series holds three periods with data — `_MINIMO_PERIODOS`, the
+    same bar every module clears — which is a property of the data, not of this dict. On the day
+    it was added the live series had ONE (June 2026, 6 rows), so nothing on screen changed.
     """
     import calendar
     from bunker_core.timeline import serie

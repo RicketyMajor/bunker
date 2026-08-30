@@ -944,7 +944,7 @@ class LibraryMainScreen(ColeccionScreen):
 
     # --- REVERSIÓN DE HÁBITOS (ELIMINAR REGISTRO) ---
     @work(thread=True)
-    def process_delete_habit(self, record_id: str) -> None:
+    def process_revert_record(self, record_id: str) -> None:
         try:
             resp = httpx.delete(
                 f"{API_TRACKER_ANNUAL}{record_id}/", timeout=5.0)

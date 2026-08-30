@@ -81,15 +81,21 @@ class TrackerTab(TabPane):
     """Pestaña 4: el Registro Anual de lectura.
 
     Se llamó "Hábitos" hasta el 2026-08-27. Nunca contuvo hábitos de la Posada: lee
-    `ReadingSession` y `AnnualRecord`. Los métodos `action_delete_habit`/`process_delete_habit`
-    conservan su nombre a propósito.
-    ponytail: renombrarlos toca cadenas de BINDINGS en tres ficheros para cero cambio de
-    comportamiento; hazlo el día que se toque uno de esos BINDINGS por otro motivo.
+    `ReadingSession` y `AnnualRecord`, y sus métodos son `action_revert_record` /
+    `process_revert_record` desde el 2026-08-30: revierten un registro anual, y este
+    repositorio no tiene hábitos desde que la Posada se fue.
+
+    El nombre viejo era `delete_habit` y llevaba un `ponytail:` que decía «renómbralos el día
+    que se toque uno de esos BINDINGS por otro motivo». Ese día fue `a1eed5d`, que añadió la
+    tecla `x` que le faltaba al Videoclub. **Al renombrar, la cadena de BINDINGS y el método
+    van juntos o la tecla deja de llegar en silencio** — que es exactamente el defecto que
+    `a1eed5d` arreglaba. Lo defiende `test_tui_arranca`, que recorre las BINDINGS de cada
+    widget montado y además pulsa la tecla.
     """
     BINDINGS = [
         ("p", "screen.log_pages", "Anotar Páginas"),
         ("f", "screen.finish_book", "Registrar Terminado"),
-        ("x", "screen.delete_habit", "Revertir Registro"),
+        ("x", "screen.revert_record", "Revertir Registro"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -164,7 +170,7 @@ class MusicLoansTab(TabPane):
 
 class MusicTrackerTab(TabPane):
     BINDINGS = [("f", "screen.finish_album", "Registrar Escucha"),
-                ("x", "screen.delete_habit", "Revertir Registro")]
+                ("x", "screen.revert_record", "Revertir Registro")]
 
     def compose(self) -> ComposeResult:
         with Vertical():

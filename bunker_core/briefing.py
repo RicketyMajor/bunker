@@ -51,6 +51,7 @@ def construir_briefing():
 
     from bunker_core.models import BunkerState
     from catalog.models import ReadingSession
+    from disquera.models import MusicAnnualRecord
     from movies.models import MovieAnnualRecord
 
     estado, _ = BunkerState.objects.get_or_create(id=1)
@@ -62,6 +63,9 @@ def construir_briefing():
     # that a film watched last night could not move. The spec's own correction says it: a
     # film watched is the fact, its runtime is a property of the film.
     cine_ayer = MovieAnnualRecord.objects.filter(date_watched=ayer).count()
+    # Records listened, NOT minutes — the same correction as films above. `ListeningEntry` is
+    # the music minute ledger: 1 row, nothing writes it since 2026-08-14.
+    discos_ayer = MusicAnnualRecord.objects.filter(date_listened=ayer).count()
 
     # Closest to finishing: fewest pages left, not furthest along. A book at 580/608 beats
     # one at 40/300 even though the second is a smaller fraction of nothing.
@@ -86,7 +90,7 @@ def construir_briefing():
     revision = _revision() if mostrar_revision else None
 
     return {
-        "ayer": {"paginas": paginas_ayer, "peliculas": cine_ayer},
+        "ayer": {"paginas": paginas_ayer, "peliculas": cine_ayer, "discos": discos_ayer},
         "libro_mas_cerca": libro_cerca,
         "conclusiones": conclusiones(),
         "show_review": mostrar_revision,

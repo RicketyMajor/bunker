@@ -27,6 +27,7 @@ from bunker_core.briefing import (  # noqa: E402
 from django.db import connection  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from movies.models import MovieAnnualRecord  # noqa: E402
+from disquera.models import MusicAnnualRecord  # noqa: E402
 from bunker_core.models import BunkerState  # noqa: E402
 from catalog.models import Author, Book, ReadingSession  # noqa: E402
 
@@ -85,7 +86,7 @@ def _claves_leidas(clase):
 def _comprobar_pantalla(fichero, nombre_clase, ambitos):
     """Lo que una pantalla LEE tiene que estar en lo que el productor EMITE.
 
-    `ambitos` es una lista de `(etiqueta, raíces, dict vivo)`. Las `raíces` de un mismo ámbito
+    `ambitos` es una lista de `(etiqueta, raíces, dict vivo, exigir_todas)`. Las `raíces` de un ámbito
     son ALIAS —`d` y `self.datos` son el mismo payload—, así que la vacuidad se exige sobre su
     UNIÓN: pedirla raíz por raíz pone en rojo a una pantalla que sólo usa una de las dos formas.
 
@@ -109,7 +110,7 @@ def _comprobar_pantalla(fichero, nombre_clase, ambitos):
     check(clase is not None, f"{nombre_clase} sigue llamándose así en {fichero}")
 
     leidas = _claves_leidas(clase)
-    for etiqueta, raices, vivo in ambitos:
+    for etiqueta, raices, vivo, exigir_todas in ambitos:
         union = set().union(*(leidas.get(r, set()) for r in raices))
         # Vacuidad: si el barrido no matchea nada, el `<=` de abajo es cierto sobre la nada. El
         # umbral no se clava en el número de hoy a propósito — hacerlo convierte cualquier
@@ -118,6 +119,16 @@ def _comprobar_pantalla(fichero, nombre_clase, ambitos):
         sobran = union - set(vivo)
         check(not sobran,
               f"{nombre_clase} no lee claves de '{etiqueta}' que ya no se emiten: {sobran}")
+        # Y la vía inversa, donde este check no miraba: una clave EMITIDA que nadie pinta.
+        # Es la misma muerte silenciosa que la de arriba —`hoy`, `habitos`, `logros_nuevos`
+        # pintándose muertos tras la separación— del revés, y salía VERDE.
+        # Sólo se exige donde todas las claves del ámbito son texto. El payload raíz no lo es:
+        # `show_review` es estructura y `review` lo pinta OTRA pantalla, así que exigirlo allí
+        # sería rojo por diseño el primer día.
+        if exigir_todas:
+            sin_pintar = set(vivo) - union
+            check(not sin_pintar,
+                  f"{nombre_clase} pinta todas las claves de '{etiqueta}': falta {sin_pintar}")
 
 
 def _comprobar_claves_del_briefing(datos):
@@ -141,13 +152,13 @@ def _comprobar_claves_del_briefing(datos):
     from bunker_core.briefing import _revision
 
     _comprobar_pantalla('cli/tui/modals.py', 'BriefingScreen', [
-        ('el briefing', ('d', 'self.datos'), datos),
-        ("ayer", ('ayer',), datos['ayer']),
+        ('el briefing', ('d', 'self.datos'), datos, False),
+        ("ayer", ('ayer',), datos['ayer'], True),
     ])
     # `datos['review']` es None seis días de cada siete, así que se pregunta al productor
     # directamente en vez de esperar a que toque revisión.
     _comprobar_pantalla('cli/tui/screens.py', 'WeeklyReviewScreen', [
-        ('la revisión', ('review', 'self.review'), _revision()),
+        ('la revisión', ('review', 'self.review'), _revision(), False),
     ])
 
 
@@ -331,6 +342,15 @@ def run_tests():
         MovieAnnualRecord.objects.create(title="Prueba", date_watched=ayer)
         check(construir_briefing()["ayer"]["peliculas"] == antes_pelis + 1,
               "una película vista ayer aparece en el briefing de hoy")
+
+        # --- "Ayer" cuenta también discos escuchados. ------------------------------------
+        #     `ListeningEntry` es el libro de minutos muerto (1 fila, nada la escribe desde
+        #     2026-08-14), igual que `MovieViewingSession`. Lo que se cuenta es el hecho:
+        #     un disco escuchado, no sus minutos. Misma forma que el bloque de arriba.
+        antes_discos = construir_briefing()["ayer"]["discos"]
+        MusicAnnualRecord.objects.create(title="Prueba", date_listened=ayer)
+        check(construir_briefing()["ayer"]["discos"] == antes_discos + 1,
+              "un disco escuchado ayer aparece en el briefing de hoy")
 
         transaction.set_rollback(True)
 

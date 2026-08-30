@@ -140,7 +140,7 @@ def test_las_pantallas_de_coleccion_montan():
             for nodo in [pantalla, *pantalla.query("*")]:
                 for b in getattr(type(nodo), "BINDINGS", []):
                     accion = b[1] if isinstance(b, tuple) else getattr(b, "action", "")
-                    # "screen.delete_habit" y "switch_tab('tab_x')" -> delete_habit, switch_tab
+                    # "screen.revert_record" y "switch_tab('tab_x')" -> revert_record, switch_tab
                     acciones.add(accion.split("(")[0].split(".")[-1])
             return [type(s).__name__ for s in app.screen_stack], resueltos, acciones
 
@@ -152,13 +152,13 @@ def test_las_pantallas_de_coleccion_montan():
             f"{cls.__name__} monto pero sus ids no existen en el arbol de widgets: {rotos}")
 
         # Que el metodo RESUELVA por el MRO no es que una tecla llegue a el. `MovieTrackerTab`
-        # no llevaba `("x", "screen.delete_habit", ...)` — la tenian las otras dos pestañas de
+        # no llevaba `("x", "screen.revert_record", ...)` — la tenian las otras dos pestañas de
         # Registro — asi que en el Videoclub la tecla no hacia nada mientras revertia un
         # registro en Biblioteca y Disquera, y un check que solo mira el MRO sale VERDE sobre
         # codigo muerto. Se recorren las BINDINGS de la pantalla y de todo widget montado.
         assert len(acciones) > 5, (
             f"{cls.__name__}: solo {len(acciones)} acciones con tecla — el barrido no casa nada")
-        for acc in ("toggle_sidebar", "focus_search", "switch_tab", "delete_habit"):
+        for acc in ("toggle_sidebar", "focus_search", "switch_tab", "revert_record"):
             assert acc in acciones, (
                 f"{cls.__name__}: ninguna tecla invoca `{acc}` — el metodo existe y es "
                 f"inalcanzable. Teclas vistas: {sorted(acciones)}")
@@ -175,7 +175,7 @@ def test_el_mixin_resuelve_sus_cuatro_acciones():
     from cli.tui.music_screens import MusicMainScreen
 
     acciones = ["action_toggle_sidebar", "action_focus_search",
-                "action_switch_tab", "action_delete_habit"]
+                "action_switch_tab", "action_revert_record"]
     atributos = ["TABLA_PRINCIPAL", "CONTENEDOR_TABS", "TABLA_ANUAL", "MSG_REVERTIR"]
     pantallas = (LibraryMainScreen, MovieMainScreen, MusicMainScreen)
 
@@ -205,7 +205,7 @@ def test_la_tecla_x_revierte_en_las_tres():
     """The strongest form: press the key and see the action fire.
 
     Neither check above could see the two defects this one found. `MovieTrackerTab` was missing
-    `("x", "screen.delete_habit", ...)` entirely — the MRO check was green over a method no key
+    `("x", "screen.revert_record", ...)` entirely — the MRO check was green over a method no key
     could reach. And the Biblioteca HAD the binding and was still dead: its
     `on_tabbed_content_tab_activated` focused the first `DataTable` **or Markdown**, `TrackerTab`
     yields its `Markdown` first, `Markdown.can_focus` is False, so `.focus()` did nothing, the
@@ -241,7 +241,7 @@ def test_la_tecla_x_revierte_en_las_tres():
             assert app.screen is pantalla, (
                 f"{cls.__name__} no llego a ser la pantalla activa: "
                 f"{type(app.screen).__name__} se queda con las teclas")
-            pantalla.action_delete_habit = lambda: disparos.append("x")
+            pantalla.action_revert_record = lambda: disparos.append("x")
             await pilot.press("4")
             await pilot.pause()
             activa = pantalla.query_one(cls.CONTENEDOR_TABS, TabbedContent).active
@@ -258,7 +258,7 @@ def test_la_tecla_x_revierte_en_las_tres():
             f"{cls.__name__}: la pestaña Registro quedo SIN FOCO, y sin foco no aplican las "
             "BINDINGS del TabPane")
         assert disparos, (
-            f"{cls.__name__}: 'x' no invoco delete_habit en la pestaña Registro")
+            f"{cls.__name__}: 'x' no invoco revert_record en la pestaña Registro")
 
 
 if __name__ == "__main__":

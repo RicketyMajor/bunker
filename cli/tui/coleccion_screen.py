@@ -6,7 +6,7 @@ Measured, not assumed. Every method of `LibraryMainScreen`, `MovieMainScreen` an
     1.000  action_toggle_sidebar   identical byte for byte in all three
     0.987  action_focus_search     differs only in #books_table / #movies_table / #music_table
     0.975  action_switch_tab       differs only in #main_tabs / #movie_tabs / #music_tabs
-    0.939  action_delete_habit     widget ids plus the sentence shown to the user
+    0.939  action_revert_record     widget ids plus the sentence shown to the user
     ------------------------------------------------------------------ cut
     0.904  populate_inbox          reads item['isbn'] vs item['barcode']  <- domain, not an id
     0.830  action_sync_scraper
@@ -62,7 +62,7 @@ class ColeccionScreen(Screen):
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one(self.CONTENEDOR_TABS, TabbedContent).active = tab_id
 
-    def action_delete_habit(self) -> None:
+    def action_revert_record(self) -> None:
         # Las tres constantes de id fallan solas si una subclase las olvida: `query_one("")`
         # lanza `NoMatches`. `MSG_REVERTIR` NO — `"".format(title=…)` funciona, y el usuario
         # veria un `ConfirmModal` en blanco pidiendole que confirme un borrado sin decirle de
@@ -83,7 +83,7 @@ class ColeccionScreen(Screen):
 
             def handle_confirm(confirm: bool) -> None:
                 if confirm:
-                    self.process_delete_habit(row_key)
+                    self.process_revert_record(row_key)
 
             self.app.push_screen(ConfirmModal(
                 self.MSG_REVERTIR.format(title=title)), handle_confirm)

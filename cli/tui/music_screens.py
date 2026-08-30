@@ -686,7 +686,7 @@ class MusicMainScreen(ColeccionScreen):
 
     # --- REVERSIÓN DE HÁBITOS (DISQUERA) ---
     @work(thread=True)
-    def process_delete_habit(self, record_id: str) -> None:
+    def process_revert_record(self, record_id: str) -> None:
         try:
             # Utiliza la constante que ya se tiene definida en constants.py
             resp = httpx.delete(

@@ -28,7 +28,7 @@ from django.utils import timezone  # noqa: E402
 
 from bunker_core.insights import (  # noqa: E402
     _ETIQUETAS, REGLAS, conclusiones, feedback_paginas,
-    feedback_terminado, regla_tendencia_monto,
+    feedback_terminado, regla_mejor_periodo, regla_tendencia_monto,
 )
 from catalog.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
 from disquera.models import MusicAnnualRecord  # noqa: E402
@@ -185,6 +185,38 @@ def run_tests():
         for regla in REGLAS:
             check(regla(un_punto, libros, 0.5) is None,
                   f"{regla.__name__} acepta avance y sigue callada sin datos")
+
+        # --- La Disquera tiene sustantivos propios. --------------------------------------
+        #     La serie VIVA de música tiene UN periodo con datos (junio 2026, 6 filas), así
+        #     que las seis reglas se callan sobre ella y una comprobación contra la base no
+        #     probaría nada. Se comprueba con listas a mano, como toda regla en este fichero.
+        musica = _ETIQUETAS['music']
+        tres_discos = [{"period": "2026-06", "count": 1, "amount": 0},
+                       {"period": "2026-07", "count": 2, "amount": 0},
+                       {"period": "2026-08", "count": 6, "amount": 0}]
+        dichas = [f for f in (r(tres_discos, musica) for r in REGLAS) if f]
+        check(dichas, f"con tres periodos con datos la Disquera afirma algo: {dichas}")
+        check(all("disco" in f or "música" in f for f in dichas),
+              f"y lo dice con SUS sustantivos: {dichas}")
+        check(not any(ajeno in f for f in dichas
+                      for ajeno in ("libro", "página", "película")),
+              f"ninguna frase de música toma prestados los sustantivos de otro módulo: {dichas}")
+
+        # Sin monto, como cine: una regla de monto sobre música afirmaría "0 páginas" de un
+        # disco. `music` es count-only en timeline.py:_fuentes y `amount` es 0 por diseño.
+        check(regla_tendencia_monto(tres_discos, musica) is None,
+              "una regla de monto sobre música se calla, igual que sobre cine")
+
+        # Singular. Para un módulo count-only NO se puede llegar al singular por `regla_record`
+        # —exige superar un máximo previo de al menos 1, luego el actual es >= 2— así que la
+        # propiedad se comprueba por `regla_mejor_periodo`, cuyo pico sí puede valer 1.
+        pico_de_uno = [{"period": "2026-05", "count": 1, "amount": 0},
+                       {"period": "2026-06", "count": 1, "amount": 0},
+                       {"period": "2026-07", "count": 1, "amount": 0},
+                       {"period": "2026-08", "count": 0, "amount": 0}]
+        frase = regla_mejor_periodo(pico_de_uno, musica)
+        check(frase and "1 disco escuchado" in frase,
+              f"una unidad va en singular: {frase!r}")
 
         # El tope, y el reparto: tres frases del mismo módulo dejaban muda a la Posada.
         cs = conclusiones()

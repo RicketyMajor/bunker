@@ -314,6 +314,9 @@ class BriefingScreen(ModalScreen[None]):
             if ayer.get("peliculas"):
                 n = ayer["peliculas"]
                 lineas.append(f"{n} película{'s' if n != 1 else ''} vista{'s' if n != 1 else ''}.")
+            if ayer.get("discos"):
+                n = ayer["discos"]
+                lineas.append(f"{n} disco{'s' if n != 1 else ''} escuchado{'s' if n != 1 else ''}.")
             if not lineas:
                 lineas.append("Ayer no quedó registrado nada.")
             yield Label("\n".join(lineas), id="briefing_ayer")

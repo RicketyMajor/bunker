@@ -126,7 +126,7 @@ class MovieTrackerTab(TabPane):
     # llevaba el binding. Borrada; esta es la viva, y ademas es la que trae heatmap y plot.
     BINDINGS = [
         ("f", "screen.finish_movie", "Registrar Cinta Vista"),
-        ("x", "screen.delete_habit", "Revertir Registro"),
+        ("x", "screen.revert_record", "Revertir Registro"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -804,7 +804,7 @@ class MovieMainScreen(ColeccionScreen):
 
     # --- REVERSIÓN DE HÁBITOS (VIDEOCLUB) ---
     @work(thread=True)
-    def process_delete_habit(self, record_id: str) -> None:
+    def process_revert_record(self, record_id: str) -> None:
         try:
             # API_MOVIE_TRACKER_ANNUAL_DEL debe terminar en / para que Django concatene la ID
             resp = httpx.delete(
