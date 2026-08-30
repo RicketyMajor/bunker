@@ -277,7 +277,6 @@ class BunkerDashboardScreen(Screen):
         book_md = f"""
 * **Total en Colección:** `{b.get('total', 0)}` obras
 * **Obras Terminadas:** `{b.get('read', 0)}`
-* **Horas de Lectura Est.:** `{b.get('hours', 0)} hrs`
         """
         self.query_one("#dash_books", Markdown).update(book_md)
 
@@ -285,7 +284,6 @@ class BunkerDashboardScreen(Screen):
         movie_md = f"""
 * **Total en Bóveda:** `{m.get('total', 0)}` cintas
 * **Cintas Vistas:** `{m.get('watched', 0)}`
-* **Horas de Visionado:** `{m.get('hours', 0)} hrs`
         """
         self.query_one("#dash_movies", Markdown).update(movie_md)
 
@@ -704,10 +702,9 @@ class BunkerLauncherScreen(Screen):
             b = data.get("books") or {}
             b_read = b.get("read", 0)
             b_total = b.get("total", 0)
-            b_hours = b.get("hours", 0)
             self.query_one("#bar_books", Label).update(self.create_gauge(b_read, max(b_total, 1)))
             self.query_one("#stat_books", Label).update(
-                f"  [dim]{b_read}/{b_total} completados • {b_hours}h est.[/]"
+                f"  [dim]{b_read}/{b_total} completados[/]"
             )
             
             health = (b_read / b_total * 100) if b_total > 0 else 0
@@ -719,19 +716,17 @@ class BunkerLauncherScreen(Screen):
             m = data.get("movies") or {}
             m_watched = m.get("watched", 0)
             m_total = m.get("total", 0)
-            m_hours = m.get("hours", 0)
             self.query_one("#bar_movies", Label).update(self.create_gauge(m_watched, max(m_total, 1)))
             self.query_one("#stat_movies", Label).update(
-                f"  [dim]{m_watched}/{m_total} vistas • {m_hours}h est.[/]"
+                f"  [dim]{m_watched}/{m_total} vistas[/]"
             )
 
             mu = data.get("music") or {}
             mu_listened = mu.get("listened", 0)
             mu_total = mu.get("total", 0)
-            mu_hours = mu.get("hours", 0)
             self.query_one("#bar_music", Label).update(self.create_gauge(mu_listened, max(mu_total, 1)))
             self.query_one("#stat_music", Label).update(
-                f"  [dim]{mu_listened}/{mu_total} escuchados • {mu_hours}h est.[/]"
+                f"  [dim]{mu_listened}/{mu_total} escuchados[/]"
             )
 
             # ── FEED ──

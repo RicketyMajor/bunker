@@ -36,23 +36,20 @@ class AssetStoreTest {
     }
 
     @Test
-    fun `un snapshot de hoy conserva los habitos`() {
+    fun `el inventario sobrevive por viejo que sea el snapshot`() {
+        // These two used to be a pair about `habitos_pendientes`, the one list the server derived
+        // from today's weekday: kept past midnight it offered habits the server answered 409 to,
+        // so `estadoCacheado` emptied it. That list left with the Posada split on 2026-08-27 and
+        // what remains is inventory, which does not expire. What still has to hold is that age
+        // changes NOTHING — the old code reached into the snapshot on a clock condition, and this
+        // is what says it no longer does.
         val s = store()
-        s.guardarEstado("""{"habitos_pendientes":[{"id":1}],"libros":[{"id":9}]}""",
-                        System.currentTimeMillis())
-        assertTrue(s.estadoCacheado().contains("\"habitos_pendientes\":[{\"id\":1}]"))
-    }
-
-    @Test
-    fun `un snapshot de ayer pierde los habitos y conserva el inventario`() {
-        // The server derives that list from today's weekday and today's completions; kept past
-        // midnight it offers habits the server answers 409 to, and hides the ones actually due.
-        val s = store()
-        val ayer = System.currentTimeMillis() - 26 * 60 * 60 * 1000
-        s.guardarEstado("""{"habitos_pendientes":[{"id":1}],"libros":[{"id":9}]}""", ayer)
-        val leido = s.estadoCacheado()
-        assertTrue("perdio el inventario", leido.contains("\"libros\""))
-        assertTrue("conservo los habitos de ayer", leido.contains("\"habitos_pendientes\":[]"))
+        val cuerpo = """{"libros":[{"id":9}],"peliculas":[],"albums":[]}"""
+        s.guardarEstado(cuerpo, System.currentTimeMillis() - 26 * 60 * 60 * 1000)
+        val ayer = s.estadoCacheado()
+        s.guardarEstado(cuerpo, System.currentTimeMillis())
+        assertEquals("la edad del snapshot cambio lo que se lee", s.estadoCacheado(), ayer)
+        assertTrue("perdio el inventario", ayer.contains("\"libros\""))
     }
 
     @Test

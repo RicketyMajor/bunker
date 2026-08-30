@@ -3,13 +3,11 @@ package cl.alonso.bunker
 import android.content.Context
 import android.webkit.WebResourceResponse
 import androidx.webkit.WebViewAssetLoader
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Calendar
 
 /**
  * Two jobs that share one rule: what the WebView is handed must never be half of something.
@@ -36,25 +34,24 @@ class AssetStore(
         prefs.edit().putString("estado", json).putLong("estado_en", cuando).apply()
     }
 
+    /**
+     * The snapshot, or "{}" when there is none and when the stored one will not parse — the
+     * WebView does `JSON.parse(PUENTE.estado())` and an exception there takes the startup flush
+     * down with it, so this parses before handing anything back.
+     *
+     * It used to empty `habitos_pendientes` past midnight, because that was the one list in the
+     * snapshot the server derived from today's weekday. That list left with the Posada split on
+     * 2026-08-27 and every list that remains is an inventory: none of them expire, so nothing
+     * here depends on the day any more. `estado_en` is still recorded — `sincronizadoEn()` is
+     * what tells the page how old the snapshot is.
+     */
     fun estadoCacheado(): String {
         val json = prefs.getString("estado", null) ?: return "{}"
-        val cuando = prefs.getLong("estado_en", 0)
         return try {
-            val o = JSONObject(json)
-            // Every list in the snapshot is day-independent except this one.
-            if (!esHoy(cuando)) o.put("habitos_pendientes", JSONArray())
-            o.toString()
+            JSONObject(json).toString()
         } catch (e: Exception) {
             "{}"
         }
-    }
-
-    private fun esHoy(cuando: Long): Boolean {
-        if (cuando == 0L) return false
-        val a = Calendar.getInstance().apply { timeInMillis = cuando }
-        val b = Calendar.getInstance()
-        return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
-            a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
     }
 
     /**

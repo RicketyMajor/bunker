@@ -128,7 +128,7 @@ class PuenteTest {
 
     @Test
     fun `sin nada cacheado el sobre sigue siendo legible`() {
-        // A first launch offline. app.js does `sobre.estado || {...VACIO}` and must not be handed
+        // A first launch offline. app.js falls back to `vacio()` here and must not be handed
         // something JSON.parse throws on.
         val sobre = JSONObject(Puente(ctx, store(), AssetStore(ctx) { "" }) {}.estado())
         assertEquals(0, sobre.getJSONObject("estado").length())

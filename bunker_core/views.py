@@ -11,7 +11,6 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.http import JsonResponse
-from django.db.models import Sum
 from django.utils.timezone import localdate
 from datetime import timedelta
 from catalog.models import Book, ReadingSession, AnnualRecord as BookAnnualRecord
@@ -71,8 +70,12 @@ def global_dashboard_view(request):
         books = Book.objects.all()
         data["books"]["total"] = books.count()
         data["books"]["read"] = books.filter(is_read=True).count()
-        total_pages = books.aggregate(Sum('page_count'))['page_count__sum'] or 0
-        data["books"]["hours"] = round((total_pages * 1.5) / 60, 1)
+        # No `hours` here. The Disquera below carries the reason in its own comment: the
+        # minute ledgers were deleted on 2026-08-14 for being "a number nobody types
+        # honestly". All three sectors then went on inventing one by exactly that standard —
+        # `pages * 1.5 / 60`, `watched * 2`, `listened * 0.75` — and the books figure summed
+        # EVERY book in the vault, read or not, under the label "Horas de Lectura Est.".
+        # Removed 2026-08-29, along with the `Sum` aggregate that fed only this line.
         
         # Calculate reading streak
         from catalog.models import ReadingSession
@@ -106,7 +109,6 @@ def global_dashboard_view(request):
         movies = Movie.objects.all()
         data["movies"]["total"] = movies.count()
         data["movies"]["watched"] = movies.filter(is_watched=True).count()
-        data["movies"]["hours"] = data["movies"]["watched"] * 2
         
         top_movie = movies.filter(personal_rating__isnull=False).order_by('-personal_rating').first()
         if top_movie:
@@ -120,7 +122,6 @@ def global_dashboard_view(request):
         albums = Album.objects.all()
         data["music"]["total"] = albums.count()
         data["music"]["listened"] = albums.filter(is_listened=True).count()
-        data["music"]["hours"] = round(data["music"]["listened"] * 0.75, 1)
 
         # Albums listened this week. This used to sum ListeningEntry.minutes_listened; the
         # minute ledger was removed because an album is the unit that gets logged, and a

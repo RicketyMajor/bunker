@@ -12,11 +12,17 @@ import * as Cola from './queue.js';
 const LLAVE_ESTADO = 'transmisor_estado';
 // Every list the sheets read belongs here, and a MISSING key is not harmless: a cold start
 // offline reads this object, `estadoCacheado()` answers "{}" — which is truthy — so the guard
-// in cargarEstado() hands VACIO straight to the sheets, and an absent key reads `undefined`.
+// in cargarEstado() hands this straight to the sheets, and an absent key reads `undefined`.
 // `aventureros` and `habitos_pendientes` were two more until the 2026-08-27 Posada split.
-const VACIO = {
+//
+// A factory and not a constant: `{ ...VACIO }` was a SHALLOW copy, so both call sites below
+// shared the same four arrays with each other and with the empty state itself. Nothing pushes
+// into them today — every site reassigns via `filter` — so this was latent, but one future
+// `push` would have poisoned the empty state for the rest of the session, and a factory is
+// what makes that unrepresentable rather than merely absent.
+const vacio = () => ({
   leyendo: null, libros: [], peliculas: [], albums: [],
-};
+});
 
 // Same bridge queue.js binds, bound the same way and for the same reason. Inside the APK the
 // snapshot lives in native storage next to the queue, because a WebView serving local assets
@@ -38,7 +44,7 @@ const diaLocal = (d = new Date()) => {
 };
 
 const cache = leerCache();
-let estado = cache ? cache.estado : { ...VACIO };
+let estado = cache ? cache.estado : vacio();
 let sincronizado = cache ? cache.sincronizado : null;
 let enLinea = false;
 
@@ -92,7 +98,7 @@ function refrescarChip() {
 // `!== false` and not `!`: in a plain browser there is no bridge and the key does not exist,
 // and an absent key must read as "nothing to warn about". Same for a phone running a NEWER
 // app.js against an OLDER APK, which the over-the-air asset update makes a real shape and not
-// a hypothetical. That is the missing-key trap `VACIO` hit twice — `{}` is truthy and
+// a hypothetical. That is the missing-key trap `vacio()` hit twice — `{}` is truthy and
 // `undefined` is not `false`.
 function pintarAvisoAlarma(sobre) {
   if (!PUENTE) return;
@@ -106,7 +112,20 @@ async function cargarEstado() {
     // may be three days old. Freshness is a separate fact and the native side is the only thing
     // that knows it, so it is reported alongside rather than inferred here.
     const sobre = JSON.parse(PUENTE.estado());
-    estado = sobre.estado && Object.keys(sobre.estado).length ? sobre.estado : { ...VACIO };
+    // The snapshot wins on every list — it is the server's answer and this device cannot know
+    // what changed on the desktop. `current_page` is the exception, because it is a position
+    // THIS device advances between syncs: `#pg-guardar` moves it in memory, and the snapshot
+    // lives in native prefs that only a COMPLETED sync writes. `PUENTE.sincronizar()` is
+    // asynchronous — "its answer does not come back here", a few lines up — so taking the
+    // envelope wholesale threw away the advance the capture had just made and repainted the
+    // OLD page number, on the phone only. Keep the higher of the two: pages move forward, the
+    // server is authoritative when it is ahead, and `#pg-guardar` already refuses to lower it.
+    const posicion = estado.leyendo;
+    estado = sobre.estado && Object.keys(sobre.estado).length ? sobre.estado : vacio();
+    if (posicion && estado.leyendo && posicion.book_id === estado.leyendo.book_id
+        && posicion.current_page > estado.leyendo.current_page) {
+      estado.leyendo.current_page = posicion.current_page;
+    }
     sincronizado = sobre.sincronizado || null;
     enLinea = !!sobre.en_linea;
     pintarHome();

@@ -150,7 +150,7 @@ def test_every_verb_rejects_a_future_date():
         assert resp.status_code == 400, (
             f"{vista.__name__}: esperaba 400, llego {resp.status_code}"
         )
-    print("OK · los 3 verbos rechazan el futuro con 400")
+    print(f"OK · los {len(casos)} verbos rechazan el futuro con 400")
 
 
 # Cuatro pruebas de hábitos vivían aquí: fecha pasada -> 409, hoy funciona, un día que no
@@ -220,7 +220,8 @@ def test_the_collection_capture_verbs_answer_with_a_fact():
     """Every logging endpoint returns a fact alongside the acknowledgement.
 
     Two things are pinned here, and the second is the one that breaks quietly. First, that
-    `feedback` exists and is non-empty on all five verbs. Second, that `message` survived
+    `feedback` exists and is non-empty on all four verbs — five cases, because `log_pages`
+    is exercised both loose and against a book. Second, that `message` survived
     verbatim: the TUI, the phone's offline queue and three other checks in this project all
     read `message`, so this change is additive or it is a regression.
 

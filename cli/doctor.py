@@ -45,12 +45,15 @@ CHECKS_IN_CONTAINER = (
 )
 
 
-def _run(label, argv, stdin_file=None):
+def _run(label, argv, stdin_file=None, timeout=180):
     """`stdin_file` feeds a script to an interpreter that cannot see it on disk — the scraper
-    containers bind-mount only `./scraper:/app`, so `tests/` never reaches them."""
+    containers bind-mount only `./scraper:/app`, so `tests/` never reaches them.
+
+    `timeout` is per-check because one of them is not like the others: everything here answers in
+    seconds, but a Gradle daemon that has just died recompiles the whole module first."""
     try:
         entrada = stdin_file.read_text(encoding="utf-8") if stdin_file else None
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=180,
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
                               cwd=project_root, input=entrada)
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
         console.print(f"  [red]✗[/red] {label}: {exc}")
@@ -58,7 +61,11 @@ def _run(label, argv, stdin_file=None):
     ok = proc.returncode == 0
     console.print(f"  [green]✓[/green] {label}" if ok else f"  [red]✗[/red] {label}")
     if not ok:
-        console.print(f"[dim]{(proc.stdout + proc.stderr).strip()[-500:]}[/dim]")
+        # 1200 and not 500: Gradle ends a failing run with ~400 characters of boilerplate
+        # ("See the report at", "Try: Run with --scan"), so a 500-character tail showed the
+        # count and cut every failing test NAME. More tail helps every check here — the
+        # Python ones end in a traceback, where more is also better.
+        console.print(f"[dim]{(proc.stdout + proc.stderr).strip()[-1200:]}[/dim]")
     return ok
 
 
@@ -113,6 +120,31 @@ def doctor():
         # /opt//x — a green line showing the wrong value, which is worse than a red one.
         console.print(f"  [green]✓[/green] adb · ANDROID_HOME {escape(sdk)}")
 
+    # The suite is a gate, but only where there is a toolchain to run it: a machine that just
+    # serves the Búnker has no SDK, and that is not a defect — same reason the lines above are
+    # informational. Where the SDK IS present this is not optional, because the suite went RED
+    # for three days in August 2026 with nothing watching it (`668a62c` renamed the assets and
+    # `AssetStoreTest` did not follow), and it was found by hand.
+    #
+    # `-p android`: the wrapper resolves its own jar from its own directory, so it runs from the
+    # project root with no `cd` and `_run`'s cwd stays the same as every other check.
+    #
+    # `--offline` on purpose. Every dependency is already in the Gradle cache, and a gate that
+    # reaches the network goes red when the network does — which is a false red, the worst kind.
+    # A genuinely cold cache fails naming the artifact it could not resolve; drop the flag once
+    # by hand to refill it.
+    #
+    # 420 s and not the default 180: measured at 16 s warm and 31 s with `--rerun-tasks`, but the
+    # first run after a reboot has no daemon and compiles the module before testing anything.
+    _gradlew = project_root / "android" / "gradlew"
+    if hay_sdk and _gradlew.is_file():
+        if not _run("android · testDebugUnitTest",
+                    [str(_gradlew), "-p", "android", "testDebugUnitTest", "--offline"],
+                    timeout=420):
+            fallos += 1
+    elif hay_sdk:
+        console.print("  [yellow]○[/yellow] falta android/gradlew: la suite no puede correr")
+
     console.print("\n[bold cyan]Migraciones[/bold cyan]")
     if not _run("sin migraciones pendientes",
                 ["docker", "compose", "exec", "-T", "web",
@@ -149,6 +181,13 @@ def doctor():
     if not _run("tests/test_radar.js",
                 ["docker", "compose", "exec", "-T", "scraper-movies", "node"],
                 stdin_file=_radar):
+        fallos += 1
+
+    # Node, on the HOST: app.js imports only './queue.js', so it needs no node_modules at all.
+    # It drives the real `cargarEstado()` against a stubbed bridge, because the one thing the
+    # APK does that no browser does is replace `estado` wholesale with the native snapshot —
+    # which used to discard the page advance the capture had just made.
+    if not _run("tests/test_avance.js", ["node", "tests/test_avance.js"]):
         fallos += 1
 
     if fallos:
