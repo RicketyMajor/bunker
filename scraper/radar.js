@@ -2,6 +2,30 @@ require('./logger');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+
+// Node 20 activa happy-eyeballs por defecto y da 250 ms POR INTENTO de conexion
+// (autoSelectFamilyAttemptTimeout). El TCP a musicbrainz.org (Hetzner, Alemania) tarda 321 ms
+// desde este contenedor, asi que el intento IPv4 se abandona y el IPv6 muere con ENETUNREACH
+// porque la red de Docker no tiene. El `timeout` de la estrategia no llega a aplicarse jamas:
+// falla a los 250 ms. Va aqui y no en la estrategia porque cualquier host a mas de 250 ms muere
+// igual, en las ocho. Las estrategias heredan esto sin nombrarlo: Node cachea el modulo, asi que
+// su require('axios') es esta misma instancia. Verificado conduciendo hhv_vinyl, no leyendo una
+// propiedad — `new https.Agent({autoSelectFamily:false}).autoSelectFamily` es `undefined`, la
+// opcion vive en `.options`, y comprobar el nombre en vez del comportamiento da un falso rojo.
+axios.defaults.httpsAgent = new https.Agent({ autoSelectFamily: false });
+
+// Un AggregateError tiene `.message` VACIO. Las ocho estrategias registran solo `error.message`,
+// asi que el fallo de arriba se imprimia como una linea en blanco —
+// `[!] Error en Vinyl Store para 'Daft Punk': ` — y costo una sesion entera diagnosticarlo.
+// `err.code` traia ETIMEDOUT desde el principio y nadie lo miraba.
+axios.interceptors.response.use(null, (error) => {
+    if (!error.message) {
+        const subs = error.errors ? error.errors.map(e => e.code || e.message).join(', ') : '';
+        error.message = (error.code || 'error sin codigo') + (subs ? ` :: ${subs}` : '');
+    }
+    return Promise.reject(error);
+});
 
 // El cuerpo compartido de los radares de cine y musica. Eran dos ficheros de ~107 lineas que
 // diferian en 45, y de esas 45 solo DOS eran comportamiento:
@@ -64,9 +88,17 @@ async function barrer(cfg) {
     let totalRecycled = 0;
 
     for (const strategy of strategies) {
+        // Una estrategia de catalogo no corre de noche. `bluray_com` puede traer hasta 3
+        // ediciones fisicas por cada titulo del tablon: con 12 titulos eso son 36 filas de
+        // variantes de formato que hay que rechazar a mano. Es una accion deliberada de Alonso,
+        // no algo que pase a las 3 de la mañana.
+        if (strategy.soloCatalogo && !cfg.catalogo) {
+            console.log(`\n[${cfg.etiqueta}] Omitida (sólo catálogo): ${strategy.name}`);
+            continue;
+        }
         console.log(`\n[${cfg.etiqueta}] Desplegando sabueso en: ${strategy.name || 'Tienda Desconocida'}`);
         try {
-            const results = await strategy.scrape(keywords, cfg.apiWishlist);
+            const results = await strategy.scrape(keywords, cfg.apiWishlist, { limite: cfg.limite || 3 });
 
             if (results.length === 0) {
                 console.log(`      [!] 0 coincidencias encontradas.`);
@@ -77,6 +109,14 @@ async function barrer(cfg) {
             totalFound += results.length;
 
             for (const item of results) {
+                // Ventana de novedades. Una fila SIN año NO se juzga: `amazon_usa` no da fecha
+                // (su fuente no la publica en el listado) y es la UNICA fuente de cine capaz de
+                // descubrir algo, por su orden `s=date-desc-rank`. Rechazar el año vacio la
+                // borraria en silencio, que es peor que el ruido que este filtro quita.
+                if (cfg.desdeAno && item.release_year && Number(item.release_year) < cfg.desdeAno) {
+                    console.log(`      [⌛] Fuera de ventana (${item.release_year}) :: '${item.title}'`);
+                    continue;
+                }
                 try {
                     Object.assign(item, cfg.extras);
                     if (cfg.enriquecer) Object.assign(item, cfg.enriquecer(item, keywords));
@@ -113,7 +153,14 @@ async function barrer(cfg) {
 }
 
 function arrancarRadar(cfg) {
-    if (process.argv.includes('--manual')) {
+    if (process.argv.includes('--catalogo')) {
+        // Barrido de CATALOGO: trae todo lo publicado por cada vigilado, sin ventana de fecha.
+        // Termina y no se repite — callar despues es correcto, ya lo trajo todo. Es lo contrario
+        // del ciclo de 12 h, que pregunta "que ha salido" en vez de "que me falta".
+        console.log(`[${cfg.banner}] Barrido de CATÁLOGO (límite ${cfg.limiteCatalogo || 25}).`);
+        barrer({ ...cfg, limite: cfg.limiteCatalogo || 25, desdeAno: null, catalogo: true })
+            .then(() => process.exit(0));
+    } else if (process.argv.includes('--manual')) {
         console.log(`[${cfg.banner}] Ejecución de escaneo manual iniciada.`);
         barrer(cfg).then(() => process.exit(0));
     } else {

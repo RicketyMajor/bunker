@@ -2,12 +2,13 @@ const axios = require('axios');
 
 module.exports = {
     name: 'Bandcamp / Digital Releases (iTunes API Mock)',
-    scrape: async function(keywords, apiUrl) {
+    scrape: async function(keywords, apiUrl, opciones) {
+        const lim = (opciones && opciones.limite) || 3;   // 3 en el ciclo de 12 h, cfg.limiteCatalogo en --catalogo
         const releases = [];
         
         for (const keyword of keywords) {
             const encodedKeyword = encodeURIComponent(keyword);
-            const targetUrl = `https://itunes.apple.com/search?term=${encodedKeyword}&entity=album&limit=3`;
+            const targetUrl = `https://itunes.apple.com/search?term=${encodedKeyword}&entity=album&limit=${lim}`;
             
             try {
                 const response = await axios.get(targetUrl, { timeout: 5000 });

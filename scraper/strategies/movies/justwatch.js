@@ -2,7 +2,8 @@ const puppeteer = require('puppeteer');
 
 module.exports = {
     name: 'JustWatch (Streaming)',
-    scrape: async function(keywords = [], apiUrl) {
+    scrape: async function(keywords = [], apiUrl, opciones) {
+        const lim = (opciones && opciones.limite) || 3;   // 3 en el ciclo de 12 h, cfg.limiteCatalogo en --catalogo
         const releases = [];
         if (keywords.length === 0) return releases;
 
@@ -27,12 +28,12 @@ module.exports = {
             try {
                 await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-                const results = await page.evaluate((kw) => {
+                const results = await page.evaluate((kw, max) => {
                     const items = [];
                     // JustWatch a menudo usa .title-list-grid__item o etiquetas de enlace similares
                     const nodes = document.querySelectorAll('a.title-list-grid__item, a.title-list-row__column, img.picture-comp__img');
                     
-                    const maxNodes = Math.min(nodes.length, 3);
+                    const maxNodes = Math.min(nodes.length, max);
                     for (let i = 0; i < maxNodes; i++) {
                         let title = "";
                         
@@ -47,12 +48,15 @@ module.exports = {
                             items.push({
                                 title: title.replace(/ - JustWatch/i, '').trim(),
                                 director: kw,
-                                release_year: new Date().getFullYear().toString()
+                                release_year: ""   // ponytail: vacio cuando la fuente no da fecha. Antes ponia el año del
+                                       // BARRIDO, y por eso The Thing (1982) esta guardada como 2026. Un
+                                       // filtro de novedad sobre un año inventado sale verde en las dos
+                                       // direcciones. Rellenar el dia que la fuente traiga la fecha real.
                             });
                         }
                     }
                     return items;
-                }, keyword);
+                }, keyword, lim);
 
                 releases.push(...results);
                 await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));

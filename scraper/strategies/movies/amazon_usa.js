@@ -2,7 +2,8 @@ const puppeteer = require('puppeteer');
 
 module.exports = {
     name: 'Amazon USA (Movies & TV) - Puppeteer Edition',
-    scrape: async function(keywords = [], apiUrl) {
+    scrape: async function(keywords = [], apiUrl, opciones) {
+        const lim = (opciones && opciones.limite) || 3;   // 3 en el ciclo de 12 h, cfg.limiteCatalogo en --catalogo
         const releases = [];
         if (keywords.length === 0) return releases;
 
@@ -32,13 +33,13 @@ module.exports = {
                 await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
                 // Extrae la información inyectando código directamente en el navegador
-                const results = await page.evaluate((kw) => {
+                const results = await page.evaluate((kw, max) => {
                     const items = [];
                     // Amazon usa este atributo para sus resultados
                     const nodes = document.querySelectorAll('[data-component-type="s-search-result"]');
                     
                     // Solo analiza los primeros 3 resultados
-                    const maxNodes = Math.min(nodes.length, 3);
+                    const maxNodes = Math.min(nodes.length, max);
                     for (let i = 0; i < maxNodes; i++) {
                         const titleEl = nodes[i].querySelector('.a-text-normal');
                         if (!titleEl) continue;
@@ -51,12 +52,15 @@ module.exports = {
                             items.push({
                                 title: title.split(' [')[0].split(' (')[0], // Limpia " [Blu-ray]"
                                 director: kw,
-                                release_year: new Date().getFullYear().toString()
+                                release_year: ""   // ponytail: vacio cuando la fuente no da fecha. Antes ponia el año del
+                                       // BARRIDO, y por eso The Thing (1982) esta guardada como 2026. Un
+                                       // filtro de novedad sobre un año inventado sale verde en las dos
+                                       // direcciones. Rellenar el dia que la fuente traiga la fecha real.
                             });
                         }
                     }
                     return items;
-                }, keyword);
+                }, keyword, lim);
 
                 releases.push(...results);
 

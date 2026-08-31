@@ -99,7 +99,106 @@ async function conducir(cfg, forma) {
         assert.ok(movie.carpeta === 'movies' && music.carpeta === 'music',
             'una carpeta de estrategias apunta al modulo equivocado');
 
+        // --- La sede compartida: el agente y el interceptor viven en radar.js para las OCHO ---
+        // Se comprueba DESPUES de requerir radar.js y sobre la instancia que ve una estrategia
+        // cualquiera (`require('axios')` devuelve la misma, por la cache de modulos de Node).
+        //
+        // NO se comprueba leyendo el fichero: un assert de texto sobre `radar.js` pasa igual
+        // aunque la linea este dentro de un `if (false)`. Y NO se comprueba mirando
+        // `agente.autoSelectFamily`, que es `undefined` — https.Agent guarda las opciones en
+        // `.options`, y leer el nombre en vez del sitio da un rojo falso. Costo una ronda.
+        const agente = require('axios').defaults.httpsAgent;
+        assert.ok(agente, 'radar.js ya no instala un httpsAgent compartido');
+        assert.strictEqual(agente.options.autoSelectFamily, false,
+            'happy-eyeballs vuelve a estar activo: cualquier host a mas de 250 ms de RTT fallara '
+            + 'con ETIMEDOUT y mensaje VACIO, que es como hhv_vinyl llevaba semanas muerta');
+
+        // El interceptor, conducido de verdad: se le pasa el error que el defecto produce.
+        const manejadores = require('axios').interceptors.response.handlers.filter(h => h && h.rejected);
+        assert.ok(manejadores.length >= 1, 'radar.js ya no instala el interceptor de mensajes vacios');
+        const agregado = new AggregateError(
+            [Object.assign(new Error('connect ETIMEDOUT 1.2.3.4:443'), { code: 'ETIMEDOUT' }),
+             Object.assign(new Error('connect ENETUNREACH ::1:443'), { code: 'ENETUNREACH' })]);
+        agregado.message = '';                       // asi llega de axios: VACIO
+        agregado.code = 'ETIMEDOUT';
+        let rellenado = null;
+        await manejadores[0].rejected(agregado).catch(e => { rellenado = e.message; });
+        assert.ok(rellenado && rellenado.length > 0,
+            'el interceptor dejo pasar un error con mensaje vacio: el fallo volveria a imprimirse '
+            + "como `[!] Error en Vinyl Store para 'Daft Punk': ` y sin causa");
+        assert.ok(rellenado.includes('ETIMEDOUT') && rellenado.includes('ENETUNREACH'),
+            `el mensaje no nombra los sub-errores del AggregateError: ${JSON.stringify(rellenado)}`);
+
+        // --- Ninguna estrategia INVENTA el año ------------------------------------------
+        // El defecto no era que el año fuese incorrecto: es que se fabricaba. Las cinco
+        // estrategias de cine escribian `new Date().getFullYear()`, o sea el año del BARRIDO, y
+        // por eso las 13 filas del tablon dicen 2026 — incluida The Thing, de 1982.
+        // Importa porque el filtro de novedad de `radar.js` juzga `release_year`: medido contra
+        // un año inventado sale verde en las dos direcciones y no defiende nada.
+        const dirEstrategias = path.join(RAIZ, 'strategies');
+        const culpables = [];
+        for (const modulo of fs.readdirSync(dirEstrategias)) {
+            const sub = path.join(dirEstrategias, modulo);
+            if (!fs.statSync(sub).isDirectory()) continue;
+            for (const f of fs.readdirSync(sub).filter(x => x.endsWith('.js'))) {
+                if (fs.readFileSync(path.join(sub, f), 'utf8').includes('getFullYear')) {
+                    culpables.push(`${modulo}/${f}`);
+                }
+            }
+        }
+        // Suelo anti-vacuidad: si el barrido no encontro ficheros, el bucle de arriba pasa por
+        // vacio y este check felicita a un directorio inexistente.
+        assert.ok(fs.readdirSync(dirEstrategias).length >= 3,
+            'el barrido de estrategias no vio los tres modulos: el check de arriba es vacuo');
+        assert.strictEqual(culpables.length, 0,
+            `estas estrategias vuelven a fabricar release_year con la fecha del barrido: ${culpables.join(', ')}`);
+
+        // --- `soloCatalogo` mantiene una estrategia fuera del ciclo de 12 h -----------------
+        // Conducido, no leido: un assert de texto sobre `radar.js` pasa igual aunque la guardia
+        // este dentro de un `if (false)`. Se planta una estrategia marcada y se comprueban las
+        // DOS direcciones — omitida sin `catalogo`, desplegada con el. Una sola direccion no
+        // distingue "la guardia funciona" de "la estrategia no producia nada".
+        const dirSolo = path.join(RAIZ, 'strategies', '_sonda_catalogo');
+        fs.mkdirSync(dirSolo, { recursive: true });
+        fs.writeFileSync(path.join(dirSolo, 'solo.js'), `
+module.exports = {
+    name: 'SondaSoloCatalogo',
+    soloCatalogo: true,
+    scrape: async () => [{ title: 'ZZSonda Edicion Fisica 99' }],
+};
+`);
+        try {
+            enviados.length = 0;
+            formaWatchers = [{ keyword: 'objetivo' }];
+            await barrer({ ...movie, carpeta: '_sonda_catalogo' });
+            assert.strictEqual(enviados.length, 0,
+                'una estrategia soloCatalogo posteo en el ciclo de 12 h: bluray_com inundaria el '
+                + 'tablon con variantes de formato cada noche');
+
+            enviados.length = 0;
+            await barrer({ ...movie, carpeta: '_sonda_catalogo', catalogo: true });
+            assert.strictEqual(enviados.length, 1,
+                'una estrategia soloCatalogo NO corrio en modo catalogo: la guardia la excluye '
+                + 'siempre y bluray_com no se desplegaria nunca');
+        } finally {
+            fs.rmSync(dirSolo, { recursive: true, force: true });
+        }
+
+        // `bluray_com` lee el ATRIBUTO, no el texto. El textContent de a.hoverlink esta VACIO
+        // —envuelve una portada—, asi que leer texto da 0 filas sobre la pagina BUENA, que es
+        // como el selector viejo se leia como "pagina vacia" en vez de "selector podrido".
+        const br = fs.readFileSync(path.join(RAIZ, 'strategies', 'movies', 'bluray_com.js'), 'utf8');
+        assert.ok(br.includes("getAttribute('title')"),
+            'bluray_com dejo de leer el atributo title: volveria a devolver 0 filas en silencio');
+        assert.ok(!/querySelectorAll\('a\.title'\)|\$\('a\.title'\)/.test(br),
+            'bluray_com volvio al selector muerto a.title');
+        assert.ok(br.includes('soloCatalogo: true'),
+            'bluray_com volvio al ciclo automatico de 12 h');
+
         console.log('OK: los tres radares comparten cuerpo, y cada uno manda lo suyo por el cable');
+        console.log('OK: soloCatalogo excluye del ciclo de 12 h y despliega en --catalogo');
+        console.log('OK: el agente y el interceptor compartidos estan puestos y son portantes');
+        console.log('OK: ninguna estrategia inventa el año de lanzamiento');
     } finally {
         fs.rmSync(dirSonda, { recursive: true, force: true });
     }
