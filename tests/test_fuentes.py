@@ -38,7 +38,10 @@ VIGILADOS = ['Yusuke Murata', 'Berserk', 'Mariana Enriquez']
 
 # (titulo, autor, esperado, por que)
 CASOS = [
-    ('ZZPrueba Berserk 42', '', True, 'la serie esta en el titulo'),
+    ('ZZPrueba Berserk 42', 'Berserk', True,
+     'la serie llega en el campo de autor: las estrategias la escriben ahi, medido 2026-08-31'),
+    ('ZZPrueba Berserk 42', '', False,
+     'y SUELTA en el titulo ya no basta — 33 filas de basura entraban por esa via'),
     ('ZZPrueba One Punch-Man 24', 'Yusuke Murata', True,
      'EL CASO QUE IMPORTA: la serie NO se vigila, su autor SI'),
     ('ZZPrueba Este es el mar', 'Mariana Enríquez', True,
@@ -47,6 +50,52 @@ CASOS = [
     ('ZZPrueba ARZAK El pequeno panteon', 'Moebius', False, 'autor real, no vigilado'),
     ('ZZPrueba One Punch-Man 24', '', False,
      'sin autor no hay nada que casar: por eso la estrategia debe etiquetar'),
+]
+
+# El corpus documentado del handoff 045, con el signo que la regla nueva les debe dar. Diez de
+# basura y seis colaboraciones legitimas. Los vigilados son los VIVOS de musica: esta tabla no
+# escribe nada, solo interroga la regla.
+VIGILADOS_CREDITO = ['Daft Punk', 'Justice', 'The Chemical Brothers', 'Kavinsky']
+EXCLUSIONES_CREDITO = {'Kavinsky': ['M!das', 'Mdas', 'Finesse Ngara']}
+
+# (titulo, persona, esperado, por que)
+CASOS_CREDITO = [
+    # -- la via de la PERSONA: credito entero, no subcadena
+    ('Think or Sink: 1984-85 Recordings', 'Justice League (2)', False,
+     "'Justice' esta DENTRO de un credito mas largo"),
+    ('Key To World Peace', 'Prophetic Justice Ministry', False, 'idem, en medio del nombre'),
+    ('Victorious 2. 0', 'Victorious Cast & Victoria Justice', False,
+     "el credito es 'victoria justice', no 'justice'"),
+    ('Nightcall - Single', 'Kavinsky, Angèle & Phoenix', True,
+     'LA QUE IMPORTA: colaboracion real, el vigilado es un credito entero'),
+    ('Get Lucky / Spacer', 'Daft Punk / Sheila & B. Devotion', True, 'separador "/"'),
+    ('Outsider (Donald Durand Rework)', 'Kavinsky & Donald Durand', True, 'separador "&"'),
+    ('Galvanize [Chris Lake Remix]', 'The Chemical Brothers & Chris Lake', True,
+     'el vigilado lleva articulo y sigue siendo un credito entero'),
+    # -- la via del TITULO: solo dentro de una clausula de credito
+    ('Justice - Single', 'Sevana', False, 'el vigilado suelto en el titulo no cuenta (x33)'),
+    ('Divine Justice', 'Oscar Sanchez (3)', False, 'idem'),
+    ('Stephen King', 'Ariel Bosi', False, 'un libro SOBRE King no es un libro DE King'),
+    ('Starboy (feat. Daft Punk) [Kygo Remix] - Single', 'The Weeknd', True,
+     'LA QUE IMPORTA: clausula feat. con el vigilado como credito entero'),
+    ('Take Me Out (Daft Punk Remix)', 'Franz Ferdinand', True,
+     'clausula de remix — esta fila esta VIVA en el tablon'),
+    ('Justice (feat. Trombone Shorty) - Single', 'Dumpstaphunk', False,
+     "'Justice' es el titulo, esta FUERA de la clausula"),
+    ('Take a Hint (feat. Victoria Justice & Elizabeth Gillies)', 'Victorious Cast', False,
+     'los creditos de la clausula son otros dos'),
+    ('Digital Love (Daft Punk Cover)', 'Different Dream', False,
+     'una version ajena: la clausula no abre ni cierra como credito'),
+    ('Kavinsky (Nightcall) [AI COVER] - Single', 'MUSICODE', False,
+     'el vigilado esta fuera de toda clausula'),
+    # -- las exclusiones
+    # EL TECHO, en sus DOS filas: son dos grafias del mismo homonimo keniano y excluyen filas
+    # distintas — en el titulo el credito es 'mdas' y en el artista es 'm das'. Un solo caso
+    # dejaba una de las dos sin ejercitar y pasaba por buena (visto en /code-review).
+    ('Tingisha (feat. Kavinsky, Mchina & Mdas) - Single', 'Finesse Ngara', False,
+     "el homonimo por la clausula del titulo: lo separa la exclusion 'Mdas'"),
+    ('Nairobi Nights', 'Kavinsky & M!das', False,
+     "el homonimo por el campo de artista: lo separa la exclusion 'M!das'"),
 ]
 
 # Los ViewSets de cine y musica son DRF y necesitan su fabrica, que sabe de `format=json`.
@@ -93,10 +142,45 @@ def run_tests():
         check(es_vigilado(titulo, autor, VIGILADOS) is esperado,
               f"{'acepta' if esperado else 'rechaza'} '{titulo[:34]}' ({porque})")
 
+    for titulo, persona, esperado, porque in CASOS_CREDITO:
+        check(es_vigilado(titulo, persona, VIGILADOS_CREDITO, EXCLUSIONES_CREDITO) is esperado,
+              f"{'acepta' if esperado else 'rechaza'} '{titulo[:38]}' ({porque})")
+
     # Suelo anti-vacuidad: sin vigilados la guardia no puede opinar. Que devuelva False es lo
     # correcto AQUI; es la vista quien decide no aplicarla cuando la tabla esta vacia.
     check(es_vigilado('ZZPrueba lo que sea', '', []) is False,
           'sin vigilados, es_vigilado dice False')
+
+    # `request.data` es JSON: el campo de persona puede llegar como lista, dict o numero. La
+    # regla vieja los stringificaba en un f-string; la nueva los pasa a `unicodedata.normalize`,
+    # que levanta TypeError -> 500 en los tres caminos de escritura. Encontrado en la revision.
+    for raro in (['Daft Punk'], {'a': 1}, 42, None):
+        check(es_vigilado('ZZPrueba', raro, ['Daft Punk']) in (True, False),
+              f'un campo de persona {type(raro).__name__} no revienta la guardia')
+    check(es_vigilado(['ZZPrueba'], '', ['Daft Punk']) is False,
+          'y un titulo que no es cadena tampoco')
+
+    # La aguja y el pajar tienen que normalizarse IGUAL. `_creditos` parte por `/` y `&` y borra
+    # la puntuacion; si el vigilado solo pasa por `_sin_acentos`, un nombre con puntuacion no
+    # casa NI CONSIGO MISMO y el vigilado queda mudo para siempre sin avisar. Encontrado por
+    # `/code-review` el 2026-08-31, y con el cae la exclusion `M!das` del docstring.
+    for nombre in ('AC/DC', "Guns N' Roses", 'Simon & Garfunkel', 'M.I.A.', 'Earth, Wind & Fire'):
+        check(es_vigilado('ZZPrueba lo que sea', nombre, [nombre]) is True,
+              f'un vigilado con puntuacion casa consigo mismo: {nombre!r}')
+    check(es_vigilado('ZZPrueba', 'Kavinsky & M!das', ['Kavinsky'], {'Kavinsky': ['M!das']}) is False,
+          "la exclusion 'M!das' escrita como se lee SI excluye")
+
+    # Y cada grafia excluye SU fila, no la del vecino: sin esto una sola entrada de la lista
+    # sostiene las dos filas y la otra puede estar rota sin que nada lo diga.
+    check(es_vigilado('Tingisha (feat. Kavinsky, Mchina & Mdas)', 'Finesse Ngara',
+                      ['Kavinsky'], {'Kavinsky': ['Mdas']}) is False,
+          "'Mdas' sola excluye la fila de la clausula del titulo")
+    check(es_vigilado('Nairobi Nights', 'Kavinsky & M!das',
+                      ['Kavinsky'], {'Kavinsky': ['M!das']}) is False,
+          "'M!das' sola excluye la fila del campo de artista")
+    check(es_vigilado('Nairobi Nights', 'Kavinsky & M!das',
+                      ['Kavinsky'], {'Kavinsky': ['Mdas']}) is True,
+          "y NO se cubren entre si: 'Mdas' no salva la fila del artista")
 
     rollback(_libros_end_to_end)
     rollback(_las_tres_sedes)
@@ -122,8 +206,9 @@ def _libros_end_to_end():
     # se enterase. *Una prueba que escribe en la base viva tiene que limpiar ANTES, no despues:
     # despues no corre cuando falla.*
     WishlistItem.objects.filter(title=basura).delete()
+    # `_publicar` manda `author_string` siempre, aunque sea vacio: esa es la forma del radar.
     check(_publicar(basura, '') == 200,
-          'la vista RECHAZA (200, no 201) un titulo que no menciona a ningun vigilado')
+          'la vista RECHAZA (200, no 201) una fila DEL RADAR que no menciona a ningun vigilado')
     check(WishlistItem.objects.filter(title=basura).count() == 0,
           'y no ha escrito ninguna fila')
     WishlistItem.objects.filter(title=basura).delete()
@@ -175,8 +260,10 @@ def _las_tres_sedes():
         check(es_vigilado(basura, '', vivos) is False,
               f'{etiqueta}: el titulo de prueba no casa por si solo')
         L.objects.filter(title=basura).delete()
-        check(postear({"title": basura}).status_code == 200,
-              f'{etiqueta}: RECHAZA (200) lo que no menciona a ningun vigilado')
+        # Con el campo de persona PUESTO: es la forma del scraper, que es a quien juzga la
+        # guardia. Sin el campo seria un alta a mano y se aceptaria (ver el bloque de arriba).
+        check(postear({"title": basura, campo: "ZZAlguien Ajeno"}).status_code == 200,
+              f'{etiqueta}: RECHAZA (200) una fila DEL RADAR que no menciona a ningun vigilado')
         check(L.objects.filter(title=basura).count() == 0,
               f'{etiqueta}: y no ha escrito ninguna fila')
 
@@ -186,6 +273,34 @@ def _las_tres_sedes():
         check(resp.status_code == 201,
               f"{etiqueta}: ACEPTA (201) por {campo}='{persona}' con el titulo sin casar")
         L.objects.filter(title=basura).delete()
+
+    # EL MOVIL POSTEA SOLO {title}, sin campo de persona (movil/app.js:571). La guardia existe
+    # para filtrar la manguera del scraper —que SIEMPRE etiqueta: 0 de 519 filas producidas
+    # carecen de campo de persona, libros incluidos via `enriquecer`— no para juzgar lo que
+    # Alonso teclea a mano. Sin esto, 'Berserk 42' escrito en el telefono se descarta con un 200
+    # y la cola lo da por transmitido: el usuario ve "anotado" y no hay fila. Encontrado por
+    # /code-review el 2026-08-31.
+    for etiqueta, postear, W, L, campo in SEDES:
+        aMano = f'ZZPrueba Tecleado A Mano {etiqueta} 77'
+        L.objects.filter(title=aMano).delete()
+        check(postear({"title": aMano}).status_code == 201,
+              f'{etiqueta}: un alta MANUAL (solo title, sin {campo}) se ACEPTA')
+        L.objects.filter(title=aMano).delete()
+
+    # La exclusion tiene que llegar por la VISTA. Un `es_vigilado` que la respeta y una vista que
+    # no se la pasa dejan el tablon exactamente igual que antes. Fuera del bucle: es de musica.
+    tocadas = MusicWatcher.objects.filter(keyword='Kavinsky', is_active=True).update(
+        exclusiones='M!das, Mdas, Finesse Ngara')
+    check(tocadas == 1,
+          'hay un vigilado Kavinsky VIVO al que ponerle la exclusion (si no, lo de abajo es vacuo)')
+    homonimo = 'ZZPrueba Tingisha (feat. Kavinsky, Mchina & Mdas)'
+    MusicWishlist.objects.filter(title=homonimo).delete()
+    postear_musica = SEDES[1][1]
+    check(postear_musica({"title": homonimo, "artist": "Finesse Ngara"}).status_code == 200,
+          'musica: la VISTA rechaza (200) el homonimo excluido')
+    check(MusicWishlist.objects.filter(title=homonimo).count() == 0,
+          'y no ha escrito ninguna fila')
+    MusicWishlist.objects.filter(title=homonimo).delete()
 
 
 if __name__ == "__main__":

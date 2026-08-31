@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from bunker_core.dedup import ya_conocido, es_vigilado
+from bunker_core.dedup import ya_conocido, es_vigilado, desglosar
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
@@ -55,9 +55,16 @@ class MusicWishlistViewSet(viewsets.ModelViewSet):
         # 2026-08-30 sobre las filas vivas: 7 de 10 NO mencionan a su vigilado en el titulo
         # ('Random Access Memories', 'Discovery' y 'Homework' son las tres de Daft Punk), asi
         # que un filtro que solo mirase ahi borraria practicamente el tablon.
-        vigilados = list(MusicWatcher.objects.filter(is_active=True)
-                         .values_list('keyword', flat=True))
-        if vigilados and not es_vigilado(title, request.data.get('artist'), vigilados):
+        vigilados, exclusiones = desglosar(
+            MusicWatcher.objects.filter(is_active=True).values_list('keyword', 'exclusiones'))
+        persona = request.data.get('artist')
+        # La guardia juzga la manguera del scraper, que SIEMPRE etiqueta (0 de 519 filas
+        # producidas sin campo de persona, libros incluidos via `enriquecer`). Un POST que
+        # OMITE el campo es un alta a mano desde el movil (movil/app.js:571 postea solo
+        # {title}) y no se juzga: rechazarla devuelve 200, la cola lo lee como transmitido y
+        # la fila se pierde en silencio.
+        if vigilados and persona is not None and not es_vigilado(title, persona, vigilados,
+                                                                 exclusiones):
             return Response(
                 {"message": "No menciona a ningún vigilado."},
                 status=status.HTTP_200_OK

@@ -97,6 +97,9 @@ class Watcher(models.Model):
     """Palabras clave (autores, series) que el scraper buscará todos los días."""
     keyword = models.CharField(
         max_length=200, unique=True, help_text="Autor, serie o palabra clave a vigilar")
+    exclusiones = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="Créditos que descartan la fila aunque el vigilado aparezca, separados por comas")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -52,6 +52,9 @@ class MusicWatcher(models.Model):
     """Bandas o géneros que el scraper vigilará."""
     keyword = models.CharField(
         max_length=255, help_text="Artista o Banda (Ej: Pink Floyd)")
+    exclusiones = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="Créditos que descartan la fila aunque el vigilado aparezca, separados por comas")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

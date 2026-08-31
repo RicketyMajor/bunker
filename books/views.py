@@ -4,7 +4,7 @@ from rest_framework import status
 from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_paginas, feedback_terminado
-from bunker_core.dedup import ya_conocido, es_vigilado
+from bunker_core.dedup import ya_conocido, es_vigilado, desglosar
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
@@ -130,8 +130,16 @@ def add_wishlist_item(request):
     #
     # `if vigilados and ...` a proposito: con la tabla de vigilados vacia la guardia no tiene
     # contra que juzgar, y rechazarlo todo dejaria el radar mudo sin decir por que.
-    vigilados = list(Watcher.objects.filter(is_active=True).values_list('keyword', flat=True))
-    if vigilados and not es_vigilado(title, request.data.get('author_string'), vigilados):
+    vigilados, exclusiones = desglosar(
+        Watcher.objects.filter(is_active=True).values_list('keyword', 'exclusiones'))
+    persona = request.data.get('author_string')
+    # La guardia juzga la manguera del scraper, que SIEMPRE etiqueta (0 de 519 filas
+    # producidas sin campo de persona, libros incluidos via `enriquecer`). Un POST que
+    # OMITE el campo es un alta a mano desde el movil (movil/app.js:571 postea solo
+    # {title}) y no se juzga: rechazarla devuelve 200, la cola lo lee como transmitido y
+    # la fila se pierde en silencio.
+    if vigilados and persona is not None and not es_vigilado(title, persona, vigilados,
+                                                             exclusiones):
         return Response({"message": "No menciona a ningún vigilado."},
                         status=status.HTTP_200_OK)
 

@@ -58,6 +58,9 @@ class MovieWatcher(models.Model):
     """Palabras clave, directores o sagas que el scraper vigilará en TMDB."""
     keyword = models.CharField(
         max_length=255, help_text="Director o Saga (Ej: Denis Villeneuve)")
+    exclusiones = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="Créditos que descartan la fila aunque el vigilado aparezca, separados por comas")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from bunker_core.dedup import ya_conocido, es_vigilado
+from bunker_core.dedup import ya_conocido, es_vigilado, desglosar
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -67,9 +67,16 @@ class MovieWishlistViewSet(viewsets.ModelViewSet):
         # del titulo. Medido el 2026-08-30 sobre las filas vivas: 10 de 13 NO mencionan a su
         # vigilado en el titulo ('Incendies', 'Arrival', 'Dune' son las tres de Villeneuve), asi
         # que un filtro que solo mirase ahi borraria practicamente el tablon.
-        vigilados = list(MovieWatcher.objects.filter(is_active=True)
-                         .values_list('keyword', flat=True))
-        if vigilados and not es_vigilado(title, request.data.get('director'), vigilados):
+        vigilados, exclusiones = desglosar(
+            MovieWatcher.objects.filter(is_active=True).values_list('keyword', 'exclusiones'))
+        persona = request.data.get('director')
+        # La guardia juzga la manguera del scraper, que SIEMPRE etiqueta (0 de 519 filas
+        # producidas sin campo de persona, libros incluidos via `enriquecer`). Un POST que
+        # OMITE el campo es un alta a mano desde el movil (movil/app.js:571 postea solo
+        # {title}) y no se juzga: rechazarla devuelve 200, la cola lo lee como transmitido y
+        # la fila se pierde en silencio.
+        if vigilados and persona is not None and not es_vigilado(title, persona, vigilados,
+                                                                 exclusiones):
             return Response(
                 {"message": "No menciona a ningún vigilado."},
                 status=status.HTTP_200_OK

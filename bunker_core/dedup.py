@@ -43,7 +43,79 @@ def _sin_acentos(texto):
     return ''.join(c for c in descompuesto if unicodedata.category(c) != 'Mn').lower().strip()
 
 
-def es_vigilado(titulo, autor, palabras):
+# Un campo de persona lista VARIOS creditos: 'Kavinsky, Angele & Phoenix',
+# 'Daft Punk / Sheila & B. Devotion'. Comparar el vigilado contra cada credito ENTERO es lo que
+# separa 'Kavinsky' de 'Justice League (2)'. Medido el 2026-08-31 sobre 519 filas producidas por
+# un barrido real de los tres radares: la subcadena metia 45 filas y 43 eran basura.
+#
+# ` x ` y `with` NO son separadores, a proposito: sobre los 162 campos de persona distintos de
+# los dos corpus no cambian UN SOLO troceado, y `\bx\b` puede partir un nombre real por la mitad.
+_SEPARADOR = re.compile(r'\s*(?:[,&/+;]|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|\bvs\.?\b)\s*')
+
+# La UNICA via por la que el titulo cuenta. Un vigilado suelto en el titulo metia 33 filas de
+# basura de golpe ('Justice - Single' de Sevana, 'Divine Justice' de Oscar Sanchez) y las dos
+# unicas filas legitimas que la via del titulo ha producido jamas lo llevaban dentro de una
+# clausula: 'Starboy (feat. Daft Punk)' y 'Take Me Out (Daft Punk Remix)'.
+# ponytail: un solo nivel de parentesis. 'Song (feat. Justice (3))' da el credito 'justice 3'
+# y el vigilado 'Justice' se pierde. Medido: 0 titulos anidados en las 519 filas de un barrido
+# real, y los sufijos de Discogs ('(2)', '(3)') aparecen en el campo de ARTISTA, no dentro de
+# una clausula. El dia que aparezcan, la salida es un contador de profundidad, no otra regex.
+_CLAUSULA = re.compile(r'[(\[]([^)\]]*)[)\]]')
+_ABRE_CREDITO = re.compile(r'^\s*(?:feat\.?|ft\.?|featuring)\b', re.IGNORECASE)
+_CIERRA_CREDITO = re.compile(r'\b(?:remix|edit|rework|mashup|mix)\s*$', re.IGNORECASE)
+# Una version ajena NO es una colaboracion: 'Digital Love (Daft Punk Cover)' lo toca otro grupo.
+_NO_ES_CREDITO = re.compile(r'\b(?:cover|tribute|karaoke)\b', re.IGNORECASE)
+
+
+def _creditos(texto):
+    """Los creditos enteros de un campo de persona, normalizados y sin puntuacion.
+
+    `str(texto)` y no `texto` a secas: el campo llega de `request.data`, que es JSON, y un
+    `"artist": ["a"]` traia un TypeError desde `unicodedata.normalize` -> 500 en los tres
+    caminos de escritura. La regla vieja lo stringificaba en un f-string y devolvia 200.
+    """
+    for trozo in _SEPARADOR.split(_sin_acentos('' if not texto else str(texto))):
+        limpio = re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', ' ', trozo)).strip()
+        if limpio:
+            yield limpio
+
+
+def _creditos_del_titulo(titulo):
+    """Los creditos que un titulo declara: '(feat. X)' o '(X Remix)'. Nada mas.
+
+    Se lee sobre el titulo CRUDO, no normalizado: los parentesis y los corchetes son la
+    delimitacion, y `_sin_acentos` no los toca pero `_creditos` si los borraria.
+    """
+    for cuerpo in _CLAUSULA.findall('' if not titulo else str(titulo)):
+        if _NO_ES_CREDITO.search(cuerpo):
+            continue
+        if _ABRE_CREDITO.search(cuerpo):
+            cuerpo = _ABRE_CREDITO.sub('', cuerpo)
+        elif _CIERRA_CREDITO.search(cuerpo):
+            cuerpo = _CIERRA_CREDITO.sub('', cuerpo)
+        else:
+            continue
+        for credito in _creditos(cuerpo):
+            yield credito
+
+
+def _casa(palabra, presentes):
+    """¿Esta el vigilado entre los creditos presentes, normalizado IGUAL que ellos?
+
+    La aguja pasa por `_creditos` como el pajar, y no solo por `_sin_acentos`. Sin esto las dos
+    partes se normalizan distinto y un vigilado con puntuacion no casa NI CONSIGO MISMO:
+    'AC/DC' se parte en {'ac', 'dc'} del lado del credito y se queda en 'ac/dc' del lado del
+    vigilado, asi que el vigilado queda mudo para siempre y nada lo dice. Lo mismo mataba la
+    exclusion 'M!das', que del lado del credito es 'm das'.
+
+    Un vigilado de varios creditos ('Simon & Garfunkel') casa cuando estan TODOS.
+    """
+    propios = set(_creditos(palabra))
+    return bool(propios) and propios <= presentes
+
+
+
+def es_vigilado(titulo, autor, palabras, exclusiones=None):
     """¿Menciona este item a alguno de los vigilados, por titulo O por autor?
 
     Por autor, y no solo por titulo, porque CINCO de los diez vigilados son nombres de persona
@@ -54,9 +126,52 @@ def es_vigilado(titulo, autor, palabras):
 
     El autor puede llegar acentuado de la fuente ('Mariana Enríquez') y el vigilado escribirse sin
     acento, asi que las dos partes pasan por _sin_acentos.
+
+    Y por CREDITO y no por subcadena desde el 2026-08-31, que es la mitad que faltaba medir. Sobre
+    519 filas producidas por un barrido real: la via del titulo metia 42 filas y solo UNA era
+    legitima, y la subcadena del campo de persona metia otras 3, las 3 basura. Las series de
+    libros no la necesitan — sus filas llegan con la serie en el campo de autor
+    ('Chainsaw Man #4' :: autor 'Chainsaw Man'), asi que casan por credito igual.
+
+    ⚠ Y ese autor NO siempre lo pone la fuente: `scraper/book_radar.config.js:enriquecer` rellena
+    el campo vacio con el primer vigilado que sea SUBCADENA del titulo, o con 'Desconocido'
+    (63 de 223 filas de un barrido real). Asi que para LIBROS la regla de subcadena sobre el
+    titulo sigue viva una capa mas arriba, en el scraper, y esta guardia no la ve. Que eso sea
+    correcto depende del vigilado: para una serie ('Berserk 21' -> autor 'Berserk') es exacto,
+    para una persona puede etiquetar un libro SOBRE alguien como si fuera SUYO. Medirlo exige
+    capturar la salida de la estrategia ANTES de `enriquecer`; no esta hecho.
+
+    ponytail: un homonimo con el mismo formato de credito entra igual — 'Kavinsky & M!das' (un
+    artista keniano) es indistinguible de 'Kavinsky & Donald Durand' para cualquier regla de
+    cadenas, y 'Liberty & Justice' de 'Daft Punk / Sheila'. Lo resuelve `exclusiones`, a mano y
+    solo cuando alguien nota el homonimo. Si algun dia hay que automatizarlo, la salida es
+    comparar el identificador de la fuente (`discogs_id` ya viaja en el payload de musica), no
+    afinar mas la cadena.
     """
-    texto = _sin_acentos(f'{titulo} {autor or ""}')
-    return any(_sin_acentos(p) in texto for p in palabras if p)
+    presentes = set(_creditos(autor)) | set(_creditos_del_titulo(titulo))
+    exclusiones = exclusiones or {}
+    for palabra in palabras:
+        if not _casa(palabra, presentes):
+            continue
+        if any(_casa(x, presentes) for x in exclusiones.get(palabra, ())):
+            continue
+        return True
+    return False
+
+
+def desglosar(pares):
+    """[('Kavinsky', 'M!das, Mdas')] -> (['Kavinsky'], {'Kavinsky': ['M!das', 'Mdas']}).
+
+    Los tres tableros guardan las exclusiones como texto separado por comas en su propia tabla de
+    vigilancia, y las tres vistas necesitan exactamente esta forma para `es_vigilado`.
+    """
+    vigilados, exclusiones = [], {}
+    for palabra, crudas in pares:
+        vigilados.append(palabra)
+        lista = [e.strip() for e in (crudas or '').split(',') if e.strip()]
+        if lista:
+            exclusiones[palabra] = lista
+    return vigilados, exclusiones
 
 
 def clave(titulo):
