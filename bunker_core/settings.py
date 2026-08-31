@@ -126,10 +126,10 @@ INSTALLED_APPS = [
     # Transmisor's templates raise TemplateDoesNotExist and its static files 404, because
     # TEMPLATES['DIRS'] is empty and STATICFILES_DIRS is unset.
     'bunker_core',
-    'catalog',
+    'books',
     'rest_framework',
     'movies',
-    'disquera',
+    'music',
 ]
 
 MIDDLEWARE = [

@@ -8,6 +8,6 @@ module.exports = {
     apiWatchers: 'http://web:8000/api/music/watchers/',
     apiWishlist: 'http://web:8000/api/music/wishlist/',
     // Vacio a proposito: `MusicWishlist` no tiene `priority` ni `added_by`
-    // (disquera/models.py:62-73). No es una omision pendiente de rellenar.
+    // (music/models.py:62-73). No es una omision pendiente de rellenar.
     extras: {},
 };

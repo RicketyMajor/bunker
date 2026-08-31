@@ -50,8 +50,8 @@ def construir_briefing():
     ayer = hoy - timedelta(days=1)
 
     from bunker_core.models import BunkerState
-    from catalog.models import ReadingSession
-    from disquera.models import MusicAnnualRecord
+    from books.models import ReadingSession
+    from music.models import MusicAnnualRecord
     from movies.models import MovieAnnualRecord
 
     estado, _ = BunkerState.objects.get_or_create(id=1)

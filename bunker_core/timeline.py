@@ -31,8 +31,8 @@ WINDOW_MAX = 60
 def _fuentes(module):
     """(model, date_field, amount_field, filtro) per source. Imported lazily: this module is
     inside the project package that owns settings.py."""
-    from catalog.models import AnnualRecord, ReadingSession
-    from disquera.models import MusicAnnualRecord
+    from books.models import AnnualRecord, ReadingSession
+    from music.models import MusicAnnualRecord
     from movies.models import MovieAnnualRecord
 
     # THE FIRST SOURCE IS THE ONE THE MODULE COUNTS. Any source carrying an amount field

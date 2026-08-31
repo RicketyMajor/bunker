@@ -87,9 +87,11 @@ async function barrer(cfg) {
                         console.log(`      [+] AÑADIDO: '${item.title}'`);
                         totalAdded++;
                     }
-                    // Django devuelve 200 si ya existe o está en lista negra
+                    // Django devuelve 200 si ya existe, si esta en lista negra, o si no
+                    // menciona a ningun vigilado. El mensaje distingue los tres; el status no,
+                    // asi que hardcodear RECICLADO contaba un descarte como un duplicado.
                     else if (response.status === 200) {
-                        console.log(`      [♻️] RECICLADO: '${item.title}'`);
+                        console.log(`      [♻️] ${response.data.message} :: '${item.title}'`);
                         totalRecycled++;
                     }
                 } catch (dbError) {

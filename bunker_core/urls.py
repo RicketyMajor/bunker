@@ -7,7 +7,7 @@ from bunker_core.views import (global_dashboard_view, backup_database, list_back
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/books/', include('catalog.urls')),
+    path('api/books/', include('books.urls')),
     path('api/movies/', include('movies.urls')),
     path('api/dashboard/', global_dashboard_view, name='dashboard'),
     path('api/health/', health_check, name='health_check'),
@@ -36,7 +36,7 @@ urlpatterns = [
     # Since the 2026-08-27 split it shows ONE block: the historical series over books, movies
     # and music. `/api/panel/` and its four Posada blocks left with La Posada.
     path('panel/', movil_app, name='panel'),
-    path('api/music/', include('disquera.urls')),
+    path('api/music/', include('music.urls')),
 
     # --- RUTAS DEL PROTOCOLO DE EVACUACIÓN ---
     path('api/backup/', backup_database, name='backup'),

@@ -24,17 +24,17 @@ django.setup()
 from django.db import transaction  # noqa: E402
 from rest_framework.test import APIRequestFactory  # noqa: E402
 
-from catalog.models import ScanInbox  # noqa: E402
-from catalog.views import ScanInboxViewSet  # noqa: E402
-from disquera.models import MusicInbox  # noqa: E402
-from disquera.views import MusicInboxViewSet  # noqa: E402
+from books.models import ScanInbox  # noqa: E402
+from books.views import ScanInboxViewSet  # noqa: E402
+from music.models import MusicInbox  # noqa: E402
+from music.views import MusicInboxViewSet  # noqa: E402
 from movies.models import MovieInbox  # noqa: E402
 from movies.views import MovieInboxViewSet  # noqa: E402
 
 FABRICA = APIRequestFactory()
 
 # (label, viewset, model, wire field name). The field names are read off the models, not
-# guessed: catalog/models.py:157 declares `isbn`, the other two declare `barcode`.
+# guessed: books/models.py:157 declares `isbn`, the other two declare `barcode`.
 BANDEJAS = (
     ("libro", ScanInboxViewSet, ScanInbox, "isbn", "9788437604947"),
     ("peli", MovieInboxViewSet, MovieInbox, "barcode", "7321900000001"),

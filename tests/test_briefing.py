@@ -27,9 +27,9 @@ from bunker_core.briefing import (  # noqa: E402
 from django.db import connection  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from movies.models import MovieAnnualRecord  # noqa: E402
-from disquera.models import MusicAnnualRecord  # noqa: E402
+from music.models import MusicAnnualRecord  # noqa: E402
 from bunker_core.models import BunkerState  # noqa: E402
-from catalog.models import Author, Book, ReadingSession  # noqa: E402
+from books.models import Author, Book, ReadingSession  # noqa: E402
 
 # Medido, no supuesto: books cuesta 2 consultas agrupadas (AnnualRecord + ReadingSession) y
 # movies y music 1 cada uno. Si cambia, el número es la cuenta y el check dice cuál salió.

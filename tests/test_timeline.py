@@ -41,8 +41,8 @@ from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.timeline import WINDOW_MAX, serie  # noqa: E402
-from catalog.models import Author, Book, ReadingSession  # noqa: E402
-from disquera.models import ListeningEntry, MusicAnnualRecord  # noqa: E402
+from books.models import Author, Book, ReadingSession  # noqa: E402
+from music.models import ListeningEntry, MusicAnnualRecord  # noqa: E402
 from movies.models import MovieViewingSession  # noqa: E402
 
 _checks = 0

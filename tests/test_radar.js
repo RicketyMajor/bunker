@@ -1,6 +1,6 @@
 // Guard for the ONE thing the radar unification could silently change: which extra fields each
 // radar attaches to an item before POSTing it. `MovieWishlist` has `priority`/`added_by` columns
-// (movies/models.py:89-90); `MusicWishlist` has neither (disquera/models.py:62-73). Merging the
+// (movies/models.py:89-90); `MusicWishlist` has neither (music/models.py:62-73). Merging the
 // two radars without this check is how a schema difference becomes a silent behaviour change in
 // whichever copy lost the argument.
 //

@@ -89,10 +89,10 @@ def test_every_verb_files_under_the_event_date():
     from django.db import transaction
     from rest_framework.test import APIRequestFactory
 
-    from catalog.models import AnnualRecord
-    from catalog.views import finish_book
-    from disquera.models import MusicAnnualRecord
-    from disquera.views import finish_album
+    from books.models import AnnualRecord
+    from books.views import finish_book
+    from music.models import MusicAnnualRecord
+    from music.views import finish_album
     from movies.models import MovieAnnualRecord
     from movies.views import finish_movie
 
@@ -134,8 +134,8 @@ def test_every_verb_files_under_the_event_date():
 def test_every_verb_rejects_a_future_date():
     from rest_framework.test import APIRequestFactory
 
-    from disquera.views import finish_album
-    from catalog.views import finish_book
+    from music.views import finish_album
+    from books.views import finish_book
     from movies.views import finish_movie
 
     manana = (HOY + timedelta(days=1)).isoformat()
@@ -174,8 +174,8 @@ def test_finish_book_rejects_an_id_that_does_not_exist():
     from django.db import connection, transaction
     from rest_framework.test import APIRequestFactory
 
-    from catalog.models import AnnualRecord
-    from catalog.views import finish_book
+    from books.models import AnnualRecord
+    from books.views import finish_book
 
     f = APIRequestFactory()
     try:
@@ -199,8 +199,8 @@ def test_finish_book_without_an_id_still_works():
     from django.db import transaction
     from rest_framework.test import APIRequestFactory
 
-    from catalog.models import AnnualRecord
-    from catalog.views import finish_book
+    from books.models import AnnualRecord
+    from books.views import finish_book
 
     f = APIRequestFactory()
     try:
@@ -232,9 +232,9 @@ def test_the_collection_capture_verbs_answer_with_a_fact():
     from django.db import transaction
     from rest_framework.test import APIRequestFactory
 
-    from catalog.models import Author, Book
-    from catalog.views import finish_book, log_pages
-    from disquera.views import finish_album
+    from books.models import Author, Book
+    from books.views import finish_book, log_pages
+    from music.views import finish_album
     from movies.views import finish_movie
 
     f = APIRequestFactory()

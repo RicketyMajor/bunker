@@ -20,8 +20,8 @@ from django.db.models import Sum  # noqa: E402
 from django.utils import timezone  # noqa: E402
 from rest_framework.test import APIRequestFactory  # noqa: E402
 
-from catalog.models import Book, ReadingSession  # noqa: E402
-from catalog.views import log_pages, tracker_stats  # noqa: E402
+from books.models import Book, ReadingSession  # noqa: E402
+from books.views import log_pages, tracker_stats  # noqa: E402
 
 factory = APIRequestFactory()
 

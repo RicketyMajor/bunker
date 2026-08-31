@@ -49,7 +49,7 @@ def feedback_paginas(pages_read, occurred_on, book=None, current_page=None):
         if restantes <= 50:
             return f"Te quedan {restantes} páginas de «{book.title}»."
 
-    from catalog.models import ReadingSession
+    from books.models import ReadingSession
     total_mes = (ReadingSession.objects
                  .filter(date__year=occurred_on.year, date__month=occurred_on.month)
                  .aggregate(t=Sum('pages_read'))['t'] or 0)
@@ -58,8 +58,8 @@ def feedback_paginas(pages_read, occurred_on, book=None, current_page=None):
 
 def feedback_terminado(modulo, title, occurred_on):
     """An item finished. The interesting fact is how many that year holds."""
-    from catalog.models import AnnualRecord
-    from disquera.models import MusicAnnualRecord
+    from books.models import AnnualRecord
+    from music.models import MusicAnnualRecord
     from movies.models import MovieAnnualRecord
 
     # The milestone phrase is stored whole rather than built from the noun: "película" is

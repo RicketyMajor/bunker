@@ -13,9 +13,9 @@ from rest_framework.response import Response
 from django.http import JsonResponse
 from django.utils.timezone import localdate
 from datetime import timedelta
-from catalog.models import Book, ReadingSession, AnnualRecord as BookAnnualRecord
+from books.models import Book, ReadingSession, AnnualRecord as BookAnnualRecord
 from movies.models import Movie, MovieAnnualRecord
-from disquera.models import Album, MusicAnnualRecord
+from music.models import Album, MusicAnnualRecord
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def global_dashboard_view(request):
         # Removed 2026-08-29, along with the `Sum` aggregate that fed only this line.
         
         # Calculate reading streak
-        from catalog.models import ReadingSession
+        from books.models import ReadingSession
         sessions = ReadingSession.objects.filter(pages_read__gt=0).values_list('date', flat=True).distinct()
         session_dates = set(sessions)
         

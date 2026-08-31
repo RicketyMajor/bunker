@@ -13,14 +13,22 @@ module.exports = {
             const response = await axios.get(targetUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
+                },
+                timeout: 20000,
             });
 
             const $ = cheerio.load(response.data);
 
             // 2. EXTRACCIÓN: La web de Ivrea suele usar la clase .novedad, tablas o simplemente etiquetas <b>/<strong>
             // Buscamos todas las imágenes o textos resaltados en la página
-            $('b, strong, .tomo').each((index, element) => {
+            // `b, strong, .tomo` agarraba el RECLAMO DE TIENDA, no los titulos: devolvia
+            // "Con hotstamping" y "Edicion de tomos dobles Incluye paginas a color", que es
+            // el dato sucio que el tablon lleva meses acumulando. Los titulos viven en <h2>:
+            // "SAINT SEIYA: THE LOST CANVAS #8", "CENTURIA #8". Entre ellos hay cabeceras de
+            // fecha ("6 DE AGOSTO") que no se filtran aqui a proposito — la guardia del
+            // servidor las rechaza por no mencionar a ningun vigilado, y un filtro de fechas
+            // aqui seria una segunda sede de la misma regla.
+            $('h2').each((index, element) => {
                 // Limpiamos el texto (quitamos saltos de línea y espacios extra)
                 let title = $(element).text().replace(/\n/g, ' ').trim();
 

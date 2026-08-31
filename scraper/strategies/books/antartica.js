@@ -13,7 +13,8 @@ module.exports = {
 
             try {
                 const response = await axios.get(searchUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                timeout: 20000,
                 });
 
                 const $ = cheerio.load(response.data);
@@ -30,6 +31,8 @@ module.exports = {
                     if (title) {
                         releases.push({
                             title: title,
+                            // El vigilado que produjo este resultado (ver buscalibre.js).
+                            author_string: keyword,
                             publisher: "Antártica",
                             price: price || 'Precio no detectado',
                             buy_url: link,

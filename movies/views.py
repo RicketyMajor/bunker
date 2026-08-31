@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from bunker_core.dedup import ya_conocido
+from bunker_core.dedup import ya_conocido, es_vigilado
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -60,6 +60,20 @@ class MovieWishlistViewSet(viewsets.ModelViewSet):
                 )
 
         # Si es genuinamente nueva, deja     que Django haga el flujo de guardado normal
+
+        # La misma sede unica de relevancia que libros (bunker_core/dedup.py:es_vigilado). Casa
+        # por titulo O por director, y el segundo no es un extra: los vigilados de cine son
+        # DIRECTORES ('John Carpenter', 'Denis Villeneuve'), y un nombre asi no aparece dentro
+        # del titulo. Medido el 2026-08-30 sobre las filas vivas: 10 de 13 NO mencionan a su
+        # vigilado en el titulo ('Incendies', 'Arrival', 'Dune' son las tres de Villeneuve), asi
+        # que un filtro que solo mirase ahi borraria practicamente el tablon.
+        vigilados = list(MovieWatcher.objects.filter(is_active=True)
+                         .values_list('keyword', flat=True))
+        if vigilados and not es_vigilado(title, request.data.get('director'), vigilados):
+            return Response(
+                {"message": "No menciona a ningún vigilado."},
+                status=status.HTTP_200_OK
+            )
         return super().create(request, *args, **kwargs)
 
 

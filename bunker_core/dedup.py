@@ -2,9 +2,9 @@
 
 There were three before this file, and none of them could see a volume number:
 
-    catalog/views.py    title EXACT + buy_url EXACT, case-sensitive
+    books/views.py      title EXACT + buy_url EXACT, case-sensitive
     book_radar.js:71    Fuse.js at threshold 0.15, in Node, over the whole board
-    movies/disquera     title__iexact
+    movies/music        title__iexact
 
 The Fuse one was the dangerous one. Measured on 2026-08-30 against the 250 live rows, leave-one-out:
 if every title on the board arrived today as a discovery, 93 would be dropped, and 68 of those
@@ -41,6 +41,22 @@ _MARCADOR = re.compile(r'\b(?:vol|volume|tomo)\b')
 def _sin_acentos(texto):
     descompuesto = unicodedata.normalize('NFD', texto or '')
     return ''.join(c for c in descompuesto if unicodedata.category(c) != 'Mn').lower().strip()
+
+
+def es_vigilado(titulo, autor, palabras):
+    """¿Menciona este item a alguno de los vigilados, por titulo O por autor?
+
+    Por autor, y no solo por titulo, porque CINCO de los diez vigilados son nombres de persona
+    ('Yusuke Murata', 'Inio Asano') y un nombre de autor no aparece dentro del titulo de su libro.
+    Medido el 2026-08-30 sobre las 252 filas vivas: un filtro solo por titulo descarta 42 filas de
+    8 series vigiladas, incluidas las 14 de One Punch-Man y las 9 de Punpun — que son exactamente
+    los descubrimientos que el arreglo de la deduplicacion existia para dejar entrar.
+
+    El autor puede llegar acentuado de la fuente ('Mariana Enríquez') y el vigilado escribirse sin
+    acento, asi que las dos partes pasan por _sin_acentos.
+    """
+    texto = _sin_acentos(f'{titulo} {autor or ""}')
+    return any(_sin_acentos(p) in texto for p in palabras if p)
 
 
 def clave(titulo):

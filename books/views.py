@@ -4,7 +4,7 @@ from rest_framework import status
 from .models import Book, Author, Genre, Watcher, WishlistItem, Friend, Loan, ReadingSession, AnnualRecord, Directory, ScanInbox
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_paginas, feedback_terminado
-from bunker_core.dedup import ya_conocido
+from bunker_core.dedup import ya_conocido, es_vigilado
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
@@ -122,6 +122,18 @@ def add_wishlist_item(request):
     # predicado a proposito: el mismo titulo en dos tiendas era dos filas.
     if ya_conocido(WishlistItem.objects.all(), title):
         return Response({"message": "El libro ya estaba en el tablón de deseos."}, status=status.HTTP_200_OK)
+
+    # Una sola sede para la relevancia, igual que para los duplicados: el telefono y la TUI la
+    # heredan sin tocarlos, y las doce estrategias sin editar ninguna. Diez de las doce barren
+    # una pagina de novedades entera y no miran a quien vigilas (medido 2026-08-30: el 79 % del
+    # tablon no menciona a ningun vigilado).
+    #
+    # `if vigilados and ...` a proposito: con la tabla de vigilados vacia la guardia no tiene
+    # contra que juzgar, y rechazarlo todo dejaria el radar mudo sin decir por que.
+    vigilados = list(Watcher.objects.filter(is_active=True).values_list('keyword', flat=True))
+    if vigilados and not es_vigilado(title, request.data.get('author_string'), vigilados):
+        return Response({"message": "No menciona a ningún vigilado."},
+                        status=status.HTTP_200_OK)
 
     # Crea el nuevo registro en el tablón
     item = WishlistItem.objects.create(
@@ -347,7 +359,7 @@ def genre_stats(request):
     return Response({"labels": labels, "values": values}, status=200)
 
 
-# catalog/views.py
+# books/views.py
 
 class AnnualRecordViewSet(viewsets.ModelViewSet):
     """Devuelve la lista de libros leídos (filtrada siempre por el año actual)"""

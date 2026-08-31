@@ -30,8 +30,8 @@ from bunker_core.insights import (  # noqa: E402
     _ETIQUETAS, REGLAS, conclusiones, feedback_paginas,
     feedback_terminado, regla_mejor_periodo, regla_tendencia_monto,
 )
-from catalog.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
-from disquera.models import MusicAnnualRecord  # noqa: E402
+from books.models import AnnualRecord, Author, Book, ReadingSession  # noqa: E402
+from music.models import MusicAnnualRecord  # noqa: E402
 from movies.models import MovieAnnualRecord  # noqa: E402
 
 _checks = 0

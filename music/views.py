@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from bunker_core.dedup import ya_conocido
+from bunker_core.dedup import ya_conocido, es_vigilado
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
@@ -49,6 +49,19 @@ class MusicWishlistViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_200_OK
                 )
 
+        # La misma sede unica de relevancia que libros (bunker_core/dedup.py:es_vigilado). Casa
+        # por titulo O por artist, y el segundo no es un extra: los vigilados de musica son
+        # una BANDA ('Daft Punk'), y un nombre asi no aparece dentro del titulo. Medido el
+        # 2026-08-30 sobre las filas vivas: 7 de 10 NO mencionan a su vigilado en el titulo
+        # ('Random Access Memories', 'Discovery' y 'Homework' son las tres de Daft Punk), asi
+        # que un filtro que solo mirase ahi borraria practicamente el tablon.
+        vigilados = list(MusicWatcher.objects.filter(is_active=True)
+                         .values_list('keyword', flat=True))
+        if vigilados and not es_vigilado(title, request.data.get('artist'), vigilados):
+            return Response(
+                {"message": "No menciona a ningún vigilado."},
+                status=status.HTTP_200_OK
+            )
         return super().create(request, *args, **kwargs)
 
 
@@ -153,7 +166,7 @@ def scan_album(request):
 # --- TRACKER MUSICAL ---
 
 
-# disquera/views.py
+# music/views.py
 
 @api_view(['GET'])
 def tracker_stats(request):

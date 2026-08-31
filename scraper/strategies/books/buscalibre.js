@@ -15,7 +15,8 @@ module.exports = {
                 const response = await axios.get(searchUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
-                    }
+                    },
+                timeout: 20000,
                 });
 
                 const $ = cheerio.load(response.data);
@@ -37,6 +38,12 @@ module.exports = {
                     if (title && !isBoxset) {
                         releases.push({
                             title: title,
+                            // El vigilado que produjo este resultado. La relevancia de una
+                            // estrategia que BUSCA esta en la consulta, no en el dato devuelto,
+                            // y hasta hoy se tiraba: por eso 'One Punch-Man #24' llegaba al
+                            // servidor sin nada que lo relacionase con 'Yusuke Murata', que es
+                            // como se vigila esa serie. Ninguna de las dos extrae autor.
+                            author_string: keyword,
                             publisher: "Buscalibre",
                             price: finalPrice, 
                             buy_url: link.startsWith('http') ? link : `https://www.buscalibre.cl${link}`,

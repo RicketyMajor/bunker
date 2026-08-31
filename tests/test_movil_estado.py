@@ -29,7 +29,7 @@ from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from bunker_core.views import movil_estado  # noqa: E402
-from catalog.models import Author, Book, ReadingSession  # noqa: E402
+from books.models import Author, Book, ReadingSession  # noqa: E402
 
 HOY = timezone.localdate()
 FABRICA = RequestFactory()

@@ -88,28 +88,49 @@ def test_clave_extrae_el_numero_final():
 from django.db import transaction  # noqa: E402
 from rest_framework.test import APIRequestFactory  # noqa: E402
 
-from catalog.models import WishlistItem  # noqa: E402
-from catalog.views import add_wishlist_item  # noqa: E402
-from disquera.models import MusicWishlist  # noqa: E402
-from disquera.views import MusicWishlistViewSet  # noqa: E402
-from movies.models import MovieWishlist  # noqa: E402
+from books.models import Watcher, WishlistItem  # noqa: E402
+from books.views import add_wishlist_item  # noqa: E402
+from music.models import MusicWatcher, MusicWishlist  # noqa: E402
+from music.views import MusicWishlistViewSet  # noqa: E402
+from movies.models import MovieWatcher, MovieWishlist  # noqa: E402
 from movies.views import MovieWishlistViewSet  # noqa: E402
 
 FABRICA = APIRequestFactory()
 
 
+# LOS TRES POSTERS METEN UN VIGILADO VIVO EN SU CAMPO DE PERSONA, y no es decoracion: desde el
+# 2026-08-30 las tres vistas tienen una segunda guardia ademas de la de duplicados. Sin esto,
+# ninguna de estas pruebas LLEGA a la logica de deduplicacion y las tres salen rojas acusando al
+# filtro de tomos, que es exactamente lo que paso al implementarla.
 def _postear_libro(datos):
-    return add_wishlist_item(FABRICA.post("/", datos, format="json"))
+    """El POST de libros lleva SIEMPRE un vigilado vivo en `author_string`.
+
+    Desde 2026-08-30 `add_wishlist_item` tiene una segunda guardia ademas de la de duplicados:
+    rechaza con 200 lo que no menciona a ningun vigilado (bunker_core/dedup.py:es_vigilado).
+    Los titulos `ZZPrueba` de aqui no mencionan a nadie a proposito — llevan ese prefijo para no
+    colisionar con la base viva — asi que sin esto la prueba NUNCA LLEGA a la logica de
+    deduplicacion y sale roja acusando al filtro de tomos.
+
+    Se lee de la base en vez de escribir un nombre a mano: un vigilado codificado aqui convierte
+    esta prueba en rehen de la lista de vigilancia de Alonso.
+    """
+    vivo = Watcher.objects.filter(is_active=True).values_list('keyword', flat=True).first()
+    return add_wishlist_item(FABRICA.post("/", {**datos, "author_string": vivo or ""},
+                                          format="json"))
 
 
 def _postear_peli(datos):
+    """Mismo motivo que `_postear_libro`: sin `director` la guardia de relevancia rechaza."""
+    vivo = MovieWatcher.objects.filter(is_active=True).values_list('keyword', flat=True).first()
     return MovieWishlistViewSet.as_view({"post": "create"})(
-        FABRICA.post("/", datos, format="json"))
+        FABRICA.post("/", {**datos, "director": vivo or ""}, format="json"))
 
 
 def _postear_disco(datos):
+    """Mismo motivo: aqui el campo de persona se llama `artist`."""
+    vivo = MusicWatcher.objects.filter(is_active=True).values_list('keyword', flat=True).first()
     return MusicWishlistViewSet.as_view({"post": "create"})(
-        FABRICA.post("/", datos, format="json"))
+        FABRICA.post("/", {**datos, "artist": vivo or ""}, format="json"))
 
 
 # (etiqueta, poster, modelo, dos titulos ya en el tablon, la entrega NUEVA, la MISMA otra vez)

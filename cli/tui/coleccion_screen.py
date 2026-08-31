@@ -13,7 +13,7 @@ Measured, not assumed. Every method of `LibraryMainScreen`, `MovieMainScreen` an
     ...    33 more, all below 0.70
 
 `populate_inbox` stays copied three times on purpose: `ScanInbox` names its column `isbn`
-(`catalog/models.py:157`) while `MovieInbox` and `MusicInbox` use `barcode`. Parameterising a
+(`books/models.py:157`) while `MovieInbox` and `MusicInbox` use `barcode`. Parameterising a
 five-line method by table id, payload key and default is three knobs for five lines, and it
 would hide a real schema difference behind a config value.
 

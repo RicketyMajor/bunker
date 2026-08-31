@@ -39,6 +39,7 @@ CHECKS_IN_CONTAINER = (
     "tests.test_insights",
     "tests.test_briefing",
     "tests.test_dedup",
+    "tests.test_fuentes",
     "tests.test_timeline",
     "tests.test_backup_apps",
     "tests.test_panel",

@@ -165,7 +165,7 @@ for i in $(seq 1 $((ESPERA/20))); do
   LLEGADA=$(docker compose -f "$BASE/docker-compose.yml" exec -T web python -c "
 import django, os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE','bunker_core.settings'); django.setup()
-from catalog.models import ScanInbox
+from books.models import ScanInbox
 from django.utils import timezone
 s = ScanInbox.objects.filter(isbn='$ISBN').first()
 print(timezone.localtime(s.date_scanned).strftime('%H:%M:%S') if s else '')
@@ -200,7 +200,7 @@ grep -cE "MiuiInputKeyEventLog|MTKPOWER_HINT_APP_TOUCH" "$TMP/logcat.txt" 2>/dev
 docker compose -f "$BASE/docker-compose.yml" exec -T web python -c "
 import django, os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE','bunker_core.settings'); django.setup()
-from catalog.models import ScanInbox
+from books.models import ScanInbox
 s = ScanInbox.objects.filter(isbn='$ISBN').first()
 if s: print('borrando la fila de prueba', s.id); s.delete()
 " 2>/dev/null | tail -1
