@@ -3,7 +3,7 @@ from textual.widgets import Label, Button
 from textual.widgets import ProgressBar
 from datetime import datetime
 from textual.reactive import reactive
-import httpx
+from cli import sede
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Markdown, Button, Label
@@ -139,7 +139,7 @@ class BookDetailsScreen(Screen):
     @work(thread=True)
     def fetch_details(self) -> None:
         try:
-            resp = httpx.get(f"{API_LIBRARY}{self.book_id}/", timeout=5.0)
+            resp = sede.get(f"{API_LIBRARY}{self.book_id}/", timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(self.render_details, resp.json())
         except Exception:
@@ -486,8 +486,7 @@ class BunkerLauncherScreen(Screen):
     def fetch_dashboard(self) -> None:
         try:
             from .constants import API_DASHBOARD
-            import httpx
-            resp = httpx.get(API_DASHBOARD, timeout=5.0)
+            resp = sede.get(API_DASHBOARD, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(self.update_reactive_data, resp.json())
             else:
@@ -500,8 +499,7 @@ class BunkerLauncherScreen(Screen):
         """El parte diario. Si no contesta, el Launcher aparece igual: eso es el requisito."""
         try:
             from .constants import API_BRIEFING, API_BRIEFING_SEEN
-            import httpx
-            resp = httpx.get(API_BRIEFING, timeout=3.0)
+            resp = sede.get(API_BRIEFING, timeout=3.0)
             if resp.status_code != 200:
                 return
             datos = resp.json()
@@ -527,7 +525,7 @@ class BunkerLauncherScreen(Screen):
             # viniera true con `review` en None, marcar la semana como vista quemaría la
             # revisión de esa semana sin que nadie la haya visto, y no hay vuelta atrás.
             try:
-                httpx.post(API_BRIEFING_SEEN, json={"con_revision": con_revision}, timeout=3.0)
+                sede.post(API_BRIEFING_SEEN, json={"con_revision": con_revision}, timeout=3.0)
             except Exception:
                 pass
         # El `except` desnudo es el requisito, no descuido: si el endpoint falla o tarda, el
@@ -669,7 +667,7 @@ class BunkerLauncherScreen(Screen):
     def process_backup(self) -> None:
         from cli.config import BACKUP_TOKEN as token
         try:
-            resp = httpx.post(API_BACKUP, headers={"X-Bunker-Token": token}, timeout=15.0)
+            resp = sede.post(API_BACKUP, headers={"X-Bunker-Token": token}, timeout=15.0)
             if resp.status_code == 200:
                 data = resp.json()
                 self.app.call_from_thread(
@@ -685,7 +683,7 @@ class BunkerLauncherScreen(Screen):
     def process_restore(self) -> None:
         from cli.config import BACKUP_TOKEN as token
         try:
-            resp = httpx.post(API_RESTORE, headers={"X-Bunker-Token": token}, timeout=15.0)
+            resp = sede.post(API_RESTORE, headers={"X-Bunker-Token": token}, timeout=15.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.app.notify, "Búnker restaurado con éxito. Datos recargados.", title="Restauración Exitosa")

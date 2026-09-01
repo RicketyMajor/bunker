@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 
-import httpx
+from cli import sede
 import typer
 from rich.console import Console
 from rich.markup import escape
@@ -73,7 +73,7 @@ def _run(label, argv, stdin_file=None, timeout=180):
 
 def _reachable(label, url, timeout=5):
     try:
-        r = httpx.get(url, timeout=timeout)
+        r = sede.get(url, timeout=timeout)
     except Exception as exc:
         console.print(f"  [red]✗[/red] {label} inalcanzable: {exc}")
         return False
@@ -160,6 +160,13 @@ def doctor():
             fallos += 1
     if not _run("tests.test_cli_imports",
                 [sys.executable, "-m", "tests.test_cli_imports"]):
+        fallos += 1
+    # On the HOST: no database, no container — it stabs `httpx` on `cli.sede` itself. Guards the
+    # CLI's single HTTP seat, which is the only reason 111 call sites can send one auth header.
+    # Its last check also pins that `cli/api.py` is still the ISBN oracle `books/views.py` imports:
+    # the plan wanted the seat AT that path, and writing it there would have deleted the oracle.
+    if not _run("tests.test_cli_sede",
+                [sys.executable, "-m", "tests.test_cli_sede"]):
         fallos += 1
     # On the HOST: it mounts the real Textual app, which needs `cli.tui` and its terminal
     # machinery, neither of which the container installs. `test_cli_imports` above proves the

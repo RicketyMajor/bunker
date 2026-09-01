@@ -5,6 +5,7 @@ import click
 import subprocess
 import time
 import httpx
+from cli import sede
 import sys
 import socket
 import sys
@@ -41,7 +42,7 @@ def ensure_infrastructure_up():
 
     try:
         # Sube el timeout a 2.0s para evitar "falsos positivos" de caída
-        httpx.get(f"{BASE_URL}/api/health/", timeout=2.0)
+        sede.get(f"{BASE_URL}/api/health/", timeout=2.0)
         _infrastructure_checked = True  # Sellamos la verificación exitosa
 
     except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
@@ -60,7 +61,7 @@ def ensure_infrastructure_up():
             "[cyan]Sincronizando bases de datos distribuidas[/cyan]", end="")
         for _ in range(20):
             try:
-                httpx.get(
+                sede.get(
                     f"{BASE_URL}/api/health/", timeout=2.0)
                 console.print(
                     "\n[bold green]¡Sistemas en línea![/bold green]\n")
@@ -124,7 +125,7 @@ def get_local_ip():
 def get_dashboard_stats():
     """Consulta la API BFF para obtener todas las métricas en una sola llamada."""
     try:
-        resp = httpx.get(f"{BASE_URL}/api/dashboard/", timeout=2.0)
+        resp = sede.get(f"{BASE_URL}/api/dashboard/", timeout=2.0)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -210,8 +211,8 @@ def show_scanner_qr():
 def list_structure():
     """Muestra la estructura unificada de la raíz (Directorios + Libros Huérfanos)."""
     try:
-        books_resp = httpx.get(f"{BASE_URL}/api/books/library/")
-        dirs_resp = httpx.get(f"{BASE_URL}/api/books/directories/")
+        books_resp = sede.get(f"{BASE_URL}/api/books/library/")
+        dirs_resp = sede.get(f"{BASE_URL}/api/books/directories/")
         books_resp.raise_for_status()
         dirs_resp.raise_for_status()
 
@@ -282,8 +283,8 @@ def show_tree():
     """Explorador visual del Sistema de Archivos (Directorios y Libros)."""
     console.print("\n[bold cyan]ÁRBOL DE DIRECTORIOS[/bold cyan]\n")
     try:
-        books = httpx.get(f"{BASE_URL}/api/books/library/").json()
-        dirs = httpx.get(f"{BASE_URL}/api/books/directories/").json()
+        books = sede.get(f"{BASE_URL}/api/books/library/").json()
+        dirs = sede.get(f"{BASE_URL}/api/books/directories/").json()
     except Exception as e:
         console.print(f"[bold red]Error de red: {e}[/bold red]")
         return

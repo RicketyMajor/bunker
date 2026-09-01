@@ -1,4 +1,4 @@
-import httpx
+from cli import sede
 import io
 from textual.app import ComposeResult
 from textual.events import ScreenResume
@@ -92,7 +92,7 @@ class MovieDetailsScreen(Screen):
     @work(thread=True)
     def fetch_details(self) -> None:
         try:
-            resp = httpx.get(f"{API_MOVIES}{self.movie_id}/", timeout=5.0)
+            resp = sede.get(f"{API_MOVIES}{self.movie_id}/", timeout=5.0)
             if resp.status_code == 200:
                 movie_data = resp.json()
                 self.app.call_from_thread(self.render_details, movie_data)
@@ -270,8 +270,8 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def load_movies(self) -> None:
         try:
-            movies_resp = httpx.get(API_MOVIES, timeout=5.0)
-            dirs_resp = httpx.get(API_MOVIE_DIRS, timeout=5.0)
+            movies_resp = sede.get(API_MOVIES, timeout=5.0)
+            dirs_resp = sede.get(API_MOVIE_DIRS, timeout=5.0)
 
             if movies_resp.status_code == 200:
                 self.all_movies = movies_resp.json()
@@ -283,7 +283,7 @@ class MovieMainScreen(ColeccionScreen):
 
         # Cargar Inbox Físico
         try:
-            resp_inbox = httpx.get(API_MOVIE_INBOX, timeout=5.0)
+            resp_inbox = sede.get(API_MOVIE_INBOX, timeout=5.0)
             if resp_inbox.status_code == 200:
                 self.app.call_from_thread(
                     self.populate_inbox, resp_inbox.json())
@@ -292,9 +292,9 @@ class MovieMainScreen(ColeccionScreen):
 
         # Cargar el Registro Anual de Películas y sus métricas
         try:
-            tracker = httpx.get(API_MOVIE_TRACKER, timeout=5.0).json()
-            annual = httpx.get(API_MOVIE_TRACKER_ANNUAL, timeout=5.0).json()
-            heatmap = httpx.get(API_MOVIE_TRACKER_HEATMAP, timeout=5.0).json()
+            tracker = sede.get(API_MOVIE_TRACKER, timeout=5.0).json()
+            annual = sede.get(API_MOVIE_TRACKER_ANNUAL, timeout=5.0).json()
+            heatmap = sede.get(API_MOVIE_TRACKER_HEATMAP, timeout=5.0).json()
             if isinstance(tracker, dict):
                 self.app.call_from_thread(
                     self.populate_tracker, tracker, annual, heatmap.get("counts", []))
@@ -306,7 +306,7 @@ class MovieMainScreen(ColeccionScreen):
 
         # Cargar Wishlist
         try:
-            wishlist = httpx.get(API_MOVIE_WISHLIST, timeout=5.0).json()
+            wishlist = sede.get(API_MOVIE_WISHLIST, timeout=5.0).json()
             if isinstance(wishlist, list):
                 self.app.call_from_thread(self.populate_wishlist, wishlist)
         except Exception:
@@ -465,7 +465,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_manual_movie(self, payload: dict) -> None:
         try:
-            resp = httpx.post(f"{API_MOVIES}", json=payload, timeout=5.0)
+            resp = sede.post(f"{API_MOVIES}", json=payload, timeout=5.0)
             if resp.status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, "Película archivada manualmente.", title="Éxito")
@@ -480,7 +480,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_movie_scan(self, title: str) -> None:
         try:
-            resp = httpx.post(
+            resp = sede.post(
                 f"{API_MOVIE_SCAN}", json={"title": title}, timeout=10.0)
             if resp.status_code == 201:
                 self.app.call_from_thread(
@@ -513,10 +513,10 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_barcode_api(self, inbox_id: str, barcode: str) -> None:
         try:
-            resp = httpx.post(API_MOVIE_PROCESS, json={
+            resp = sede.post(API_MOVIE_PROCESS, json={
                               "barcode": barcode}, timeout=15.0)
             if resp.status_code == 201:
-                httpx.delete(f"{API_MOVIE_INBOX}{inbox_id}/", timeout=5.0)
+                sede.delete(f"{API_MOVIE_INBOX}{inbox_id}/", timeout=5.0)
                 self.app.call_from_thread(
                     self.app.notify, "¡Película procesada y guardada en el Videoclub!", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
@@ -548,7 +548,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_inbox(self, inbox_id: str) -> None:
         try:
-            if httpx.delete(f"{API_MOVIE_INBOX}{inbox_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_MOVIE_INBOX}{inbox_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Código descartado.", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
@@ -578,7 +578,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def execute_delete_movie(self, movie_id: str) -> None:
         try:
-            httpx.delete(f"{API_MOVIES}{movie_id}/", timeout=5.0)
+            sede.delete(f"{API_MOVIES}{movie_id}/", timeout=5.0)
             self.app.call_from_thread(
                 self.app.notify, "Cinta incinerada.", title="Éxito")
             self.app.call_from_thread(self.load_movies)
@@ -624,7 +624,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def update_movie_status(self, movie_id: str, payload: dict) -> None:
         try:
-            resp = httpx.patch(f"{API_MOVIES}{movie_id}/",
+            resp = sede.patch(f"{API_MOVIES}{movie_id}/",
                                json=payload, timeout=5.0)
             if resp.status_code == 200:
                 msg = "Película devuelta a la bóveda." if not payload.get(
@@ -694,7 +694,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_create_dir(self, payload: dict) -> None:
         try:
-            if httpx.post(API_MOVIE_DIRS, json=payload, timeout=5.0).status_code == 201:
+            if sede.post(API_MOVIE_DIRS, json=payload, timeout=5.0).status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, f"Directorio '{payload['name']}' creado", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
@@ -724,7 +724,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_move_movie(self, movie_id: str, dest_dir: int | None) -> None:
         try:
-            resp = httpx.patch(f"{API_MOVIES}{movie_id}/",
+            resp = sede.patch(f"{API_MOVIES}{movie_id}/",
                                json={"directory": dest_dir}, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
@@ -759,7 +759,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_dir(self, dir_id: str) -> None:
         try:
-            if httpx.delete(f"{API_MOVIE_DIRS}{dir_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_MOVIE_DIRS}{dir_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Carpeta destruida. Las cintas volvieron a la raíz.", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
@@ -781,7 +781,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_finish_movie(self, payload: dict) -> None:
         try:
-            resp = httpx.post(API_MOVIE_TRACKER_FINISH,
+            resp = sede.post(API_MOVIE_TRACKER_FINISH,
                               json=payload, timeout=5.0)
             if resp.status_code == 201:
                 # BÚSQUEDA EN MEMORIA RAM
@@ -789,7 +789,7 @@ class MovieMainScreen(ColeccionScreen):
                     (m for m in self.all_movies if m['title'].lower() == payload['title'].lower()), None)
 
                 if movie_to_mark:
-                    httpx.patch(
+                    sede.patch(
                         f"{API_MOVIES}{movie_to_mark['id']}/", json={"is_watched": True}, timeout=5.0)
 
                 datos = resp.json()
@@ -807,7 +807,7 @@ class MovieMainScreen(ColeccionScreen):
     def process_revert_record(self, record_id: str) -> None:
         try:
             # API_MOVIE_TRACKER_ANNUAL_DEL debe terminar en / para que Django concatene la ID
-            resp = httpx.delete(
+            resp = sede.delete(
                 f"{API_MOVIE_TRACKER_ANNUAL_DEL}{record_id}/", timeout=5.0)
             if resp.status_code == 204:
                 self.app.call_from_thread(
@@ -843,7 +843,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_add_watcher(self, keyword: str) -> None:
         try:
-            if httpx.post(API_MOVIE_WATCHERS, json={"keyword": keyword, "is_active": True}, timeout=5.0).status_code == 201:
+            if sede.post(API_MOVIE_WATCHERS, json={"keyword": keyword, "is_active": True}, timeout=5.0).status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, f"Vigilando: {keyword}", title="Radar Activado")
         except Exception as e:
@@ -859,7 +859,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def fetch_and_show_watchers(self) -> None:
         try:
-            watchers = httpx.get(API_MOVIE_WATCHERS, timeout=5.0).json()
+            watchers = sede.get(API_MOVIE_WATCHERS, timeout=5.0).json()
 
             def do_delete_watcher(w_id: int | None) -> None:
                 if w_id:
@@ -873,7 +873,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_watcher(self, watcher_id: int) -> None:
         try:
-            if httpx.delete(f"{API_MOVIE_WATCHERS}{watcher_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_MOVIE_WATCHERS}{watcher_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Objetivo eliminado del radar.", title="Éxito")
         except Exception as e:
@@ -899,7 +899,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_wishlist(self, item_id: str) -> None:
         try:
-            if httpx.patch(f"{API_MOVIE_WISHLIST}{item_id}/", json={"is_rejected": True}, timeout=5.0).status_code == 200:
+            if sede.patch(f"{API_MOVIE_WISHLIST}{item_id}/", json={"is_rejected": True}, timeout=5.0).status_code == 200:
                 self.app.call_from_thread(
                     self.app.notify, "Lanzamiento oculto para siempre.", title="Éxito")
                 self.app.call_from_thread(self.load_movies)
@@ -920,9 +920,9 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_clear_wishlist(self) -> None:
         try:
-            items = httpx.get(API_MOVIE_WISHLIST, timeout=5.0).json()
+            items = sede.get(API_MOVIE_WISHLIST, timeout=5.0).json()
             for item in items:
-                httpx.patch(
+                sede.patch(
                     f"{API_MOVIE_WISHLIST}{item['id']}/", json={"is_rejected": True}, timeout=5.0)
             self.app.call_from_thread(
                 self.app.notify, f"{len(items)} lanzamientos enviados a lista negra.", title="Limpieza")
@@ -974,7 +974,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def fetch_and_edit_movie(self, movie_id: str) -> None:
         try:
-            resp = httpx.get(f"{API_MOVIES}{movie_id}/", timeout=5.0)
+            resp = sede.get(f"{API_MOVIES}{movie_id}/", timeout=5.0)
             if resp.status_code == 200:
                 movie = resp.json()
                 self.app.call_from_thread(
@@ -993,7 +993,7 @@ class MovieMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_edit_movie(self, movie_id: str, payload: dict) -> None:
         try:
-            resp = httpx.patch(f"{API_MOVIES}{movie_id}/",
+            resp = sede.patch(f"{API_MOVIES}{movie_id}/",
                                json=payload, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(

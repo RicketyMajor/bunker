@@ -1,4 +1,4 @@
-import httpx
+from cli import sede
 from textual.app import ComposeResult
 from textual.events import ScreenResume
 from textual.screen import Screen
@@ -67,7 +67,7 @@ class MusicDetailsScreen(Screen):
     @work(thread=True)
     def fetch_details(self) -> None:
         try:
-            resp = httpx.get(f"{API_MUSIC}{self.album_id}/", timeout=5.0)
+            resp = sede.get(f"{API_MUSIC}{self.album_id}/", timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(self.render_details, resp.json())
         except Exception:
@@ -200,8 +200,8 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def load_data(self) -> None:
         try:
-            albums_resp = httpx.get(API_MUSIC, timeout=5.0)
-            dirs_resp = httpx.get(API_MUSIC_DIRS, timeout=5.0)
+            albums_resp = sede.get(API_MUSIC, timeout=5.0)
+            dirs_resp = sede.get(API_MUSIC_DIRS, timeout=5.0)
             if albums_resp.status_code == 200:
                 self.all_albums = albums_resp.json()
                 dirs = dirs_resp.json() if dirs_resp.status_code == 200 else []
@@ -210,7 +210,7 @@ class MusicMainScreen(ColeccionScreen):
             pass
 
         try:
-            inbox = httpx.get(API_MUSIC_INBOX, timeout=5.0).json()
+            inbox = sede.get(API_MUSIC_INBOX, timeout=5.0).json()
             if isinstance(inbox, list):
                 self.app.call_from_thread(self.populate_inbox, inbox)
         except Exception:
@@ -218,11 +218,11 @@ class MusicMainScreen(ColeccionScreen):
 
         try:
             # .raise_for_status() para detectar errores de URL de inmediato
-            tracker_resp = httpx.get(API_MUSIC_TRACKER, timeout=5.0)
+            tracker_resp = sede.get(API_MUSIC_TRACKER, timeout=5.0)
             tracker_resp.raise_for_status()
             tracker = tracker_resp.json()
 
-            annual_resp = httpx.get(API_MUSIC_TRACKER_ANNUAL, timeout=5.0)
+            annual_resp = sede.get(API_MUSIC_TRACKER_ANNUAL, timeout=5.0)
             annual_resp.raise_for_status()
             annual = annual_resp.json()
 
@@ -238,7 +238,7 @@ class MusicMainScreen(ColeccionScreen):
         cargar_serie(self, "#music_tracker_plot", "music", "Álbumes escuchados por mes")
 
         try:
-            wishlist = httpx.get(API_MUSIC_WISHLIST, timeout=5.0).json()
+            wishlist = sede.get(API_MUSIC_WISHLIST, timeout=5.0).json()
             if isinstance(wishlist, list):
                 self.app.call_from_thread(self.populate_wishlist, wishlist)
         except Exception:
@@ -395,7 +395,7 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_manual_scan(self, title: str) -> None:
         try:
-            resp = httpx.post(API_MUSIC_SCAN, json={
+            resp = sede.post(API_MUSIC_SCAN, json={
                               "title": title}, timeout=15.0)
             if resp.status_code == 201:
                 self.app.call_from_thread(
@@ -411,7 +411,7 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_manual_album(self, payload: dict) -> None:
         try:
-            resp = httpx.post(API_MUSIC, json=payload, timeout=5.0)
+            resp = sede.post(API_MUSIC, json=payload, timeout=5.0)
             if resp.status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, "Álbum registrado manualmente.", title="Éxito")
@@ -437,7 +437,7 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def fetch_and_edit_album(self, album_id: str) -> None:
         try:
-            resp = httpx.get(f"{API_MUSIC}{album_id}/", timeout=5.0)
+            resp = sede.get(f"{API_MUSIC}{album_id}/", timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
                     self.open_edit_modal_sync, resp.json(), album_id)
@@ -453,7 +453,7 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_edit_album(self, album_id: str, payload: dict) -> None:
         try:
-            resp = httpx.patch(f"{API_MUSIC}{album_id}/",
+            resp = sede.patch(f"{API_MUSIC}{album_id}/",
                                json=payload, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
@@ -482,7 +482,7 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def execute_delete_album(self, album_id: str) -> None:
         try:
-            httpx.delete(f"{API_MUSIC}{album_id}/", timeout=5.0)
+            sede.delete(f"{API_MUSIC}{album_id}/", timeout=5.0)
             self.app.call_from_thread(
                 self.app.notify, "Disco desechado.", title="Éxito")
             self.app.call_from_thread(self.load_data)
@@ -509,10 +509,10 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_barcode_api(self, inbox_id: str, barcode: str) -> None:
         try:
-            resp = httpx.post(API_MUSIC_PROCESS, json={
+            resp = sede.post(API_MUSIC_PROCESS, json={
                               "barcode": barcode}, timeout=15.0)
             if resp.status_code == 201:
-                httpx.delete(f"{API_MUSIC_INBOX}{inbox_id}/", timeout=5.0)
+                sede.delete(f"{API_MUSIC_INBOX}{inbox_id}/", timeout=5.0)
                 self.app.call_from_thread(
                     self.app.notify, "¡Disco encontrado y guardado!", title="Éxito")
                 self.app.call_from_thread(self.load_data)
@@ -531,7 +531,7 @@ class MusicMainScreen(ColeccionScreen):
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
             if row_key:
-                httpx.delete(f"{API_MUSIC_INBOX}{row_key}/", timeout=5.0)
+                sede.delete(f"{API_MUSIC_INBOX}{row_key}/", timeout=5.0)
                 self.app.notify("Escaneo descartado.")
                 self.load_data()
         except Exception:
@@ -579,7 +579,7 @@ class MusicMainScreen(ColeccionScreen):
 
         def do_create(payload: dict | None) -> None:
             if payload:
-                httpx.post(API_MUSIC_DIRS, json=payload, timeout=5.0)
+                sede.post(API_MUSIC_DIRS, json=payload, timeout=5.0)
                 self.app.notify(f"Estante '{payload['name']}' construido.")
                 self.load_data()
         self.app.push_screen(DirModal(), do_create)
@@ -595,7 +595,7 @@ class MusicMainScreen(ColeccionScreen):
             def do_move(dest_val: str) -> None:
                 if dest_val != "cancel":
                     target = None if dest_val == "root" else int(dest_val)
-                    httpx.patch(f"{API_MUSIC}{row_key}/",
+                    sede.patch(f"{API_MUSIC}{row_key}/",
                                 json={"directory": target}, timeout=5.0)
                     self.app.notify("Disco movido.")
                     self.load_data()
@@ -612,7 +612,7 @@ class MusicMainScreen(ColeccionScreen):
             if dir_id != "cancel" and dir_id is not None:
                 def do_confirm(confirm: bool) -> None:
                     if confirm:
-                        httpx.delete(f"{API_MUSIC_DIRS}{dir_id}/", timeout=5.0)
+                        sede.delete(f"{API_MUSIC_DIRS}{dir_id}/", timeout=5.0)
                         self.app.notify("Estante destruido.")
                         self.load_data()
                 self.app.push_screen(ConfirmModal(
@@ -631,7 +631,7 @@ class MusicMainScreen(ColeccionScreen):
 
             def handle_lend(friend_name: str | None) -> None:
                 if friend_name:
-                    httpx.patch(f"{API_MUSIC}{row_key}/", json={"is_loaned": True,
+                    sede.patch(f"{API_MUSIC}{row_key}/", json={"is_loaned": True,
                                 "friend_name": friend_name}, timeout=5.0)
                     self.app.notify("Álbum prestado.")
                     self.load_data()
@@ -646,7 +646,7 @@ class MusicMainScreen(ColeccionScreen):
         try:
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
-            httpx.patch(f"{API_MUSIC}{row_key}/",
+            sede.patch(f"{API_MUSIC}{row_key}/",
                         json={"is_loaned": False, "friend_name": ""}, timeout=5.0)
             self.app.notify("Álbum recuperado.")
             self.load_data()
@@ -666,14 +666,14 @@ class MusicMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_finish_album(self, payload: dict) -> None:
         try:
-            resp = httpx.post(API_MUSIC_TRACKER_FINISH,
+            resp = sede.post(API_MUSIC_TRACKER_FINISH,
                               json=payload, timeout=5.0)
             if resp.status_code == 201:
                 # Actualiza automáticamente si está en el inventario
                 album_to_mark = next(
                     (a for a in self.all_albums if a['title'].lower() == payload['title'].lower()), None)
                 if album_to_mark:
-                    httpx.patch(
+                    sede.patch(
                         f"{API_MUSIC}{album_to_mark['id']}/", json={"is_listened": True}, timeout=5.0)
                 datos = resp.json()
                 self.app.call_from_thread(
@@ -689,7 +689,7 @@ class MusicMainScreen(ColeccionScreen):
     def process_revert_record(self, record_id: str) -> None:
         try:
             # Utiliza la constante que ya se tiene definida en constants.py
-            resp = httpx.delete(
+            resp = sede.delete(
                 f"{API_MUSIC_TRACKER_ANNUAL}{record_id}/", timeout=5.0)
             if resp.status_code == 204:
                 self.app.call_from_thread(
@@ -715,7 +715,7 @@ class MusicMainScreen(ColeccionScreen):
 
         def do_watch(keyword: str | None) -> None:
             if keyword:
-                httpx.post(API_MUSIC_WATCHERS, json={
+                sede.post(API_MUSIC_WATCHERS, json={
                            "keyword": keyword, "is_active": True}, timeout=5.0)
                 self.app.notify(f"Vigilando: {keyword}")
         self.app.push_screen(WatcherModal(
@@ -725,11 +725,11 @@ class MusicMainScreen(ColeccionScreen):
         if self.query_one("#music_tabs", TabbedContent).active != "tab_wishlist":
             return
         try:
-            watchers = httpx.get(API_MUSIC_WATCHERS, timeout=5.0).json()
+            watchers = sede.get(API_MUSIC_WATCHERS, timeout=5.0).json()
 
             def do_delete_watcher(w_id: int | None) -> None:
                 if w_id:
-                    httpx.delete(f"{API_MUSIC_WATCHERS}{w_id}/", timeout=5.0)
+                    sede.delete(f"{API_MUSIC_WATCHERS}{w_id}/", timeout=5.0)
                     self.app.notify("Objetivo eliminado del radar.")
             self.app.push_screen(WatchersListModal(
                 watchers), do_delete_watcher)
@@ -746,7 +746,7 @@ class MusicMainScreen(ColeccionScreen):
 
             def check_delete(confirm: bool | None) -> None:
                 if confirm:
-                    httpx.patch(f"{API_MUSIC_WISHLIST}{row_key}/",
+                    sede.patch(f"{API_MUSIC_WISHLIST}{row_key}/",
                                 json={"is_rejected": True}, timeout=5.0)
                     self.app.notify("Lanzamiento oculto.")
                     self.load_data()
@@ -761,9 +761,9 @@ class MusicMainScreen(ColeccionScreen):
 
         def do_clear(confirm: bool | None) -> None:
             if confirm:
-                items = httpx.get(API_MUSIC_WISHLIST, timeout=5.0).json()
+                items = sede.get(API_MUSIC_WISHLIST, timeout=5.0).json()
                 for item in items:
-                    httpx.patch(
+                    sede.patch(
                         f"{API_MUSIC_WISHLIST}{item['id']}/", json={"is_rejected": True}, timeout=5.0)
                 self.app.notify(f"Limpieza completa.")
                 self.load_data()

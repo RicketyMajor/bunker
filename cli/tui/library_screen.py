@@ -1,4 +1,4 @@
-import httpx
+from cli import sede
 import datetime
 import webbrowser
 from textual.app import ComposeResult
@@ -164,8 +164,8 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def load_all_data(self) -> None:
         try:
-            books = httpx.get(API_LIBRARY, timeout=5.0).json()
-            dirs = httpx.get(API_DIRECTORIES, timeout=5.0).json()
+            books = sede.get(API_LIBRARY, timeout=5.0).json()
+            dirs = sede.get(API_DIRECTORIES, timeout=5.0).json()
             if isinstance(books, list):
                 self.all_books = books
                 self.app.call_from_thread(self.update_ui_books, dirs)
@@ -175,14 +175,14 @@ class LibraryMainScreen(ColeccionScreen):
                 self.app.notify, f"Error en Inventario: {e}", severity="error")
 
         try:
-            inbox = httpx.get(API_INBOX, timeout=5.0).json()
+            inbox = sede.get(API_INBOX, timeout=5.0).json()
             if isinstance(inbox, list):
                 self.app.call_from_thread(self.populate_inbox, inbox)
         except Exception:
             pass
 
         try:
-            loans = httpx.get(API_LOANS, timeout=5.0).json()
+            loans = sede.get(API_LOANS, timeout=5.0).json()
             if isinstance(loans, list):
                 self.app.call_from_thread(self.populate_loans, loans)
         except Exception:
@@ -194,7 +194,7 @@ class LibraryMainScreen(ColeccionScreen):
         # pagaba un viaje HTTP de más y se tragaba la excepción. El bloque correcto —con
         # `annual`— está debajo, y es el que ha estado pintando la pestaña todo este tiempo.
         try:
-            wishlist = httpx.get(API_WISHLIST, timeout=5.0).json()
+            wishlist = sede.get(API_WISHLIST, timeout=5.0).json()
             if isinstance(wishlist, list):
                 self.app.call_from_thread(self.populate_wishlist, wishlist)
         except Exception:
@@ -202,8 +202,8 @@ class LibraryMainScreen(ColeccionScreen):
 
         # Cargar el Registro Anual y sus métricas
         try:
-            tracker = httpx.get(API_TRACKER, timeout=5.0).json()
-            annual = httpx.get(API_TRACKER_ANNUAL, timeout=5.0).json()
+            tracker = sede.get(API_TRACKER, timeout=5.0).json()
+            annual = sede.get(API_TRACKER_ANNUAL, timeout=5.0).json()
             if isinstance(tracker, dict):
                 self.app.call_from_thread(
                     self.populate_tracker, tracker, annual)
@@ -370,7 +370,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_manual_add(self, payload: dict) -> None:
         try:
-            resp = httpx.post(API_LIBRARY, json=payload, timeout=5.0)
+            resp = sede.post(API_LIBRARY, json=payload, timeout=5.0)
             if resp.status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, "¡Obra registrada magistralmente!", title="Éxito")
@@ -385,7 +385,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_isbn_add(self, isbn: str) -> None:
         try:
-            resp = httpx.post(API_SCAN, json={"isbn": isbn}, timeout=10.0)
+            resp = sede.post(API_SCAN, json={"isbn": isbn}, timeout=10.0)
             if resp.status_code in [200, 201]:
                 self.app.call_from_thread(
                     self.app.notify, "¡Libro registrado exitosamente!", title="Éxito")
@@ -416,7 +416,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def fetch_and_edit(self, book_id: str) -> None:
         try:
-            resp = httpx.get(f"{API_LIBRARY}{book_id}/", timeout=5.0)
+            resp = sede.get(f"{API_LIBRARY}{book_id}/", timeout=5.0)
             if resp.status_code == 200:
                 book = resp.json()
                 self.app.call_from_thread(
@@ -437,7 +437,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_edit(self, book_id: str, payload: dict) -> None:
         try:
-            resp = httpx.patch(f"{API_LIBRARY}{book_id}/",
+            resp = sede.patch(f"{API_LIBRARY}{book_id}/",
                                json=payload, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
@@ -489,17 +489,17 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_lend(self, book_id: str, friend_name: str) -> None:
         try:
-            f_resp = httpx.get(API_FRIENDS, timeout=5.0).json()
+            f_resp = sede.get(API_FRIENDS, timeout=5.0).json()
             friend_id = next(
                 (f['id'] for f in f_resp if f['name'].lower() == friend_name.lower()), None)
             if not friend_id:
-                friend_id = httpx.post(
+                friend_id = sede.post(
                     API_FRIENDS, json={"name": friend_name}, timeout=5.0).json()['id']
 
             loan_payload = {"book": int(book_id), "friend": friend_id,
                             "loan_date": datetime.datetime.now().strftime("%Y-%m-%d")}
-            if httpx.post(API_LOANS, json=loan_payload, timeout=5.0).status_code == 201:
-                httpx.patch(f"{API_LIBRARY}{book_id}/",
+            if sede.post(API_LOANS, json=loan_payload, timeout=5.0).status_code == 201:
+                sede.patch(f"{API_LIBRARY}{book_id}/",
                             json={"is_loaned": True}, timeout=5.0)
                 self.app.call_from_thread(
                     self.app.notify, f"¡Prestado a {friend_name}!", title="Éxito")
@@ -524,10 +524,10 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_return(self, loan_id: str) -> None:
         try:
-            book_id = httpx.get(f"{API_LOANS}{loan_id}/",
+            book_id = sede.get(f"{API_LOANS}{loan_id}/",
                                 timeout=5.0).json().get('book')
-            if httpx.delete(f"{API_LOANS}{loan_id}/", timeout=5.0).status_code == 204:
-                httpx.patch(f"{API_LIBRARY}{book_id}/",
+            if sede.delete(f"{API_LOANS}{loan_id}/", timeout=5.0).status_code == 204:
+                sede.patch(f"{API_LIBRARY}{book_id}/",
                             json={"is_loaned": False}, timeout=5.0)
                 self.app.call_from_thread(
                     self.app.notify, "¡Libro devuelto a la estantería!", title="Éxito")
@@ -549,7 +549,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_create_dir(self, payload: dict) -> None:
         try:
-            if httpx.post(API_DIRECTORIES, json=payload, timeout=5.0).status_code == 201:
+            if sede.post(API_DIRECTORIES, json=payload, timeout=5.0).status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, f"Directorio '{payload['name']}' creado", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
@@ -589,9 +589,9 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_inbox_item(self, inbox_id: str, isbn: str) -> None:
         try:
-            resp = httpx.post(API_SCAN, json={"isbn": isbn}, timeout=10.0)
+            resp = sede.post(API_SCAN, json={"isbn": isbn}, timeout=10.0)
             if resp.status_code in [200, 201]:
-                httpx.delete(f"{API_INBOX}{inbox_id}/", timeout=5.0)
+                sede.delete(f"{API_INBOX}{inbox_id}/", timeout=5.0)
                 self.app.call_from_thread(
                     self.app.notify, "¡Procesado y guardado en Inventario!", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
@@ -617,7 +617,7 @@ class LibraryMainScreen(ColeccionScreen):
         try:
             # Bound rather than tested inline: the response carries the fact the server
             # computed, and a one-liner has nothing left to read it from.
-            resp = httpx.post(API_TRACKER_PAGES, json={"pages": pages}, timeout=5.0)
+            resp = sede.post(API_TRACKER_PAGES, json={"pages": pages}, timeout=5.0)
             if resp.status_code == 201:
                 datos = resp.json()
                 # `or`, not a .get default: an endpoint answering "feedback": "" must fall
@@ -645,15 +645,15 @@ class LibraryMainScreen(ColeccionScreen):
     def process_finish_book(self, payload: dict) -> None:
         try:
             # Registra en el Tracker
-            resp = httpx.post(API_TRACKER_FINISH, json=payload, timeout=5.0)
+            resp = sede.post(API_TRACKER_FINISH, json=payload, timeout=5.0)
             if resp.status_code == 201:
                 # Busca si el libro existe en Inventario
-                lib_resp = httpx.get(API_LIBRARY, params={
+                lib_resp = sede.get(API_LIBRARY, params={
                                      "title": payload['title']}, timeout=5.0)
                 if lib_resp.status_code == 200 and lib_resp.json():
                     book_id = lib_resp.json()[0]['id']
                     # Lo marca como leído automáticamente!
-                    httpx.patch(f"{API_LIBRARY}{book_id}/",
+                    sede.patch(f"{API_LIBRARY}{book_id}/",
                                 json={"is_read": True}, timeout=5.0)
 
                 datos = resp.json()
@@ -677,7 +677,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def fetch_and_show_watchers(self) -> None:
         try:
-            watchers = httpx.get(API_WATCHERS, timeout=5.0).json()
+            watchers = sede.get(API_WATCHERS, timeout=5.0).json()
 
             def do_delete_watcher(w_id: int | None) -> None:
                 if w_id:
@@ -691,7 +691,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_watcher(self, watcher_id: int) -> None:
         try:
-            if httpx.delete(f"{API_WATCHERS}{watcher_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_WATCHERS}{watcher_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Autor eliminado del radar.", title="Éxito")
         except Exception as e:
@@ -711,9 +711,9 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_clear_wishlist(self) -> None:
         try:
-            items = httpx.get(API_WISHLIST, timeout=5.0).json()
+            items = sede.get(API_WISHLIST, timeout=5.0).json()
             for item in items:
-                httpx.patch(
+                sede.patch(
                     f"{API_WISHLIST}{item['id']}/", json={"is_rejected": True}, timeout=5.0)
             self.app.call_from_thread(
                 self.app.notify, f"{len(items)} libros enviados a la lista negra.", title="Limpieza")
@@ -744,7 +744,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_add_watcher(self, keyword: str) -> None:
         try:
-            if httpx.post(API_WATCHERS, json={"keyword": keyword, "is_active": True}, timeout=5.0).status_code == 201:
+            if sede.post(API_WATCHERS, json={"keyword": keyword, "is_active": True}, timeout=5.0).status_code == 201:
                 self.app.call_from_thread(
                     self.app.notify, f"Vigilando: {keyword}", title="Scraper")
         except Exception as e:
@@ -766,7 +766,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_wishlist_link(self, item_id: str) -> None:
         try:
-            resp = httpx.get(f"{API_WISHLIST}{item_id}/", timeout=5.0)
+            resp = sede.get(f"{API_WISHLIST}{item_id}/", timeout=5.0)
             if resp.status_code == 200:
                 url = resp.json().get('buy_url')
                 if url:
@@ -803,7 +803,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_book(self, book_id: str) -> None:
         try:
-            if httpx.delete(f"{API_LIBRARY}{book_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_LIBRARY}{book_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Libro borrado del servidor.", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
@@ -830,7 +830,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_inbox(self, inbox_id: str) -> None:
         try:
-            if httpx.delete(f"{API_INBOX}{inbox_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_INBOX}{inbox_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Escaneo descartado.", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
@@ -858,7 +858,7 @@ class LibraryMainScreen(ColeccionScreen):
     def process_delete_wishlist(self, item_id: str) -> None:
         try:
             # Usa PATCH para el Soft Delete
-            if httpx.patch(f"{API_WISHLIST}{item_id}/", json={"is_rejected": True}, timeout=5.0).status_code == 200:
+            if sede.patch(f"{API_WISHLIST}{item_id}/", json={"is_rejected": True}, timeout=5.0).status_code == 200:
                 self.app.call_from_thread(
                     self.app.notify, "Lanzamiento oculto para siempre.", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
@@ -891,7 +891,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_move_book(self, book_id: str, dest_dir: int | None) -> None:
         try:
-            resp = httpx.patch(f"{API_LIBRARY}{book_id}/",
+            resp = sede.patch(f"{API_LIBRARY}{book_id}/",
                                json={"directory": dest_dir}, timeout=5.0)
             if resp.status_code == 200:
                 self.app.call_from_thread(
@@ -931,7 +931,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_delete_dir(self, dir_id: str) -> None:
         try:
-            if httpx.delete(f"{API_DIRECTORIES}{dir_id}/", timeout=5.0).status_code == 204:
+            if sede.delete(f"{API_DIRECTORIES}{dir_id}/", timeout=5.0).status_code == 204:
                 self.app.call_from_thread(
                     self.app.notify, "Directorio destruido. Los libros han vuelto a la raíz.", title="Éxito")
                 self.app.call_from_thread(self.load_all_data)
@@ -946,7 +946,7 @@ class LibraryMainScreen(ColeccionScreen):
     @work(thread=True)
     def process_revert_record(self, record_id: str) -> None:
         try:
-            resp = httpx.delete(
+            resp = sede.delete(
                 f"{API_TRACKER_ANNUAL}{record_id}/", timeout=5.0)
             if resp.status_code == 204:
                 self.app.call_from_thread(

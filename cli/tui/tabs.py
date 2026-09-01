@@ -201,10 +201,10 @@ def cargar_serie(pantalla, selector, modulo, titulo):
     one likely to run while the user is popping the screen: `query_one` raises `NoMatches` on
     a screen that is gone, and `call_from_thread` raises while the app is shutting down.
     """
-    import httpx
+    from cli import sede
     from .constants import API_TIMELINE
     try:
-        datos = httpx.get(API_TIMELINE,
+        datos = sede.get(API_TIMELINE,
                           params={"module": modulo, "period": "monthly", "window": 12},
                           timeout=5.0).json().get('series', [])
     except Exception:

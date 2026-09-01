@@ -14,7 +14,7 @@ from textual import work
 from textual_plotext import PlotextPlot
 from .constants import API_GENRE_STATS
 from cli.config import API_PORT
-import httpx
+from cli import sede
 
 
 class IsbnModal(ModalScreen[str]):
@@ -990,7 +990,7 @@ class GenreStatsModal(ModalScreen[None]):
     @work(thread=True)
     def fetch_data(self) -> None:
         try:
-            resp = httpx.get(API_GENRE_STATS, timeout=5.0)
+            resp = sede.get(API_GENRE_STATS, timeout=5.0)
             if resp.status_code == 200:
                 data = resp.json()
                 self.app.call_from_thread(self.draw_plot, data.get("labels", []), data.get("values", []))
