@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from .models import Movie, MovieDirectory, MovieWatcher, MovieWishlist, MovieInbox, MovieAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from bunker_core.dedup import ya_conocido, es_vigilado, desglosar
+from bunker_core.wishlist import GuardiaDeTablon
 from .serializers import MovieSerializer, MovieDirectorySerializer, MovieWatcherSerializer, MovieWishlistSerializer, MovieInboxSerializer
 from .tmdb_oracle import search_movie_tmdb
 from .omdb_oracle import search_movie_omdb
@@ -36,52 +36,16 @@ class MovieWatcherViewSet(viewsets.ModelViewSet):
     serializer_class = MovieWatcherSerializer
 
 
-class MovieWishlistViewSet(viewsets.ModelViewSet):
+class MovieWishlistViewSet(GuardiaDeTablon, viewsets.ModelViewSet):
     # El queryset por defecto asegura que el GET solo muestre los no rechazados
     queryset = MovieWishlist.objects.filter(
         is_rejected=False).order_by('-date_found')
     serializer_class = MovieWishlistSerializer
-
-    def create(self, request, *args, **kwargs):
-        """Sobreescritura del método POST para garantizar la idempotencia."""
-        title = request.data.get('title')
-
-        if title:
-            # Regla compartida (bunker_core/dedup.py): mismo numero de entrega Y base parecida.
-            # Lee `.objects` sin filtrar, asi que la lista negra tambien cuenta como conocido.
-            exists = ya_conocido(MovieWishlist.objects.all(), title)
-            if exists:
-                # Devolvuelve un 200 OK pero no guarda nada.
-                # Al devolver 200, el scraper de Node.js no lanza error y sigue trabajando,
-                # pero la base de datos se mantiene sin de duplicados y zombis.
-                return Response(
-                    {"message": f"'{title}' ya está en el radar o fue rechazada. Ignorando."},
-                    status=status.HTTP_200_OK
-                )
-
-        # Si es genuinamente nueva, deja     que Django haga el flujo de guardado normal
-
-        # La misma sede unica de relevancia que libros (bunker_core/dedup.py:es_vigilado). Casa
-        # por titulo O por director, y el segundo no es un extra: los vigilados de cine son
-        # DIRECTORES ('John Carpenter', 'Denis Villeneuve'), y un nombre asi no aparece dentro
-        # del titulo. Medido el 2026-08-30 sobre las filas vivas: 10 de 13 NO mencionan a su
-        # vigilado en el titulo ('Incendies', 'Arrival', 'Dune' son las tres de Villeneuve), asi
-        # que un filtro que solo mirase ahi borraria practicamente el tablon.
-        vigilados, exclusiones = desglosar(
-            MovieWatcher.objects.filter(is_active=True).values_list('keyword', 'exclusiones'))
-        persona = request.data.get('director')
-        # La guardia juzga la manguera del scraper, que SIEMPRE etiqueta (0 de 519 filas
-        # producidas sin campo de persona, libros incluidos via `enriquecer`). Un POST que
-        # OMITE el campo es un alta a mano desde el movil (movil/app.js:571 postea solo
-        # {title}) y no se juzga: rechazarla devuelve 200, la cola lo lee como transmitido y
-        # la fila se pierde en silencio.
-        if vigilados and persona is not None and not es_vigilado(title, persona, vigilados,
-                                                                 exclusiones):
-            return Response(
-                {"message": "No menciona a ningún vigilado."},
-                status=status.HTTP_200_OK
-            )
-        return super().create(request, *args, **kwargs)
+    # Los tres mandos de `GuardiaDeTablon`. El `create()` esta ahi: era la misma funcion que la
+    # de musica salvo el campo de persona y una `a` de genero.
+    watcher_model = MovieWatcher
+    campo_persona = 'director'
+    genero_rechazo = 'a'   # la pelicula fue rechazadA
 
 
 @api_view(['POST'])

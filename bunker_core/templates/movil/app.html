@@ -46,47 +46,39 @@
      Intención: Alonso, con el teléfono en una mano, de noche o al despertar, leyendo "cómo voy"
      en menos de cinco segundos. Se lee como el estado de una radio de campaña: frío, denso,
      monoespaciado — el mismo mundo que el TUI y la cabecera TRANSMISOR.
-     Jerarquía: UNA cifra domina (el prestigio, 34px/600) y todo lo demás baja. La rejilla de
-     tarjetas métricas iguales es justamente el defecto que esto rechaza: sin foco, la vista no
-     tiene dónde ir. Profundidad: solo superficies, --bg → --bg-alt, un salto. Sin sombras (no
-     leen en oscuro) ni bordes decorativos; el borde solo marca fallo. Base de 4px. ---- */
+     Jerarquía: UNA cifra domina (34px/600) y todo lo demás baja. La rejilla de tarjetas
+     métricas iguales es justamente el defecto que esto rechaza: sin foco, la vista no tiene
+     dónde ir. Profundidad: solo superficies, --bg → --bg-alt, un salto. Sin sombras (no
+     leen en oscuro) ni bordes decorativos; el borde solo marca fallo. Base de 4px.
+     La cifra ERA el prestigio y se fue con la Posada el 2026-08-27; desde el 2026-08-31 es el
+     recuento del mes en curso del módulo elegido, que `/api/stats/timeline/` ya devolvía. Entre
+     una fecha y otra el panel se quedó sin foco y estas reglas sin un solo consumidor. ---- */
   #panel section { margin: 0 0 12px; padding: 14px; background: var(--bg-alt); }
   /* h2 y no h3: el único h1 de la página es TRANSMISOR, en la cabecera, y estos bloques son
      sus pares directos. Saltarse un nivel rompe el recorrido de un lector de pantalla. */
   #panel h2 { font: inherit; font-size: 11px; font-weight: 500; letter-spacing: .12em;
               color: var(--dim); margin: 0 0 10px; text-wrap: balance; }
   #panel p, #panel li { text-wrap: pretty; }
-  .p-bloque { margin: 0 0 18px; }
-  .p-bloque:last-child { margin-bottom: 0; }
 
   /* El foco de la pantalla. `tabular-nums` porque la cifra cambia y no debe saltar de ancho. */
   .p-cifra { font-size: 34px; font-weight: 600; line-height: 1.1; margin: 0;
              font-variant-numeric: tabular-nums; }
-  .p-delta { display: block; font-size: 13px; font-weight: 500; margin-top: 2px; }
+  /* El estado NUNCA es solo color: el validador de `dataviz` reprobó --green/--yellow/--red
+     como paleta categórica (ΔE 3.6 en protanopia entre verde y amarillo). Aquí el SIGNO va en
+     el texto ('+5' / '-3' / '0'); el color solo le da la razón. */
+  /* `inline-block` + su propio --bg, como TODA regla de esta hoja que usa --red o --dim: sobre
+     --bg-alt miden 3.92:1 y 4.17:1, bajo el suelo de 4.5:1 que este spec fija, y `#panel section`
+     pinta --bg-alt debajo. Es la misma trampa que documentan las líneas 107-112 para los cinco
+     estados, y estas reglas cayeron en ella el día que dejaron de estar muertas. Sobre --bg:
+     --red 4.98:1 · --dim 5.30:1 · --green 7.14:1. `inline-block` para que el fondo ciña al texto
+     en vez de cruzar la tarjeta. */
+  .p-delta { display: inline-block; font-size: 13px; font-weight: 500; margin-top: 2px;
+             background: var(--bg); padding: 1px 5px; }
   .p-delta[data-signo="sube"]  { color: var(--green); }
   .p-delta[data-signo="baja"]  { color: var(--red); }
   .p-delta[data-signo="igual"] { color: var(--dim); }
 
-  .p-lista, .p-log { list-style: none; padding: 0; margin: 0; }
-  .p-lista li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 8px;
-                align-items: baseline; padding: 7px 0; font-size: 15px; }
-  /* `minmax(0, 1fr)` arriba y esto: una pista de grid tiene `min-width: auto`, así que un
-     nombre largo SIN espacios empujaba la fila fuera de su caja. Medido con un hábito de 68
-     caracteres: `li.scrollWidth > li.clientWidth`. Los dos hacen falta, ninguno solo basta. */
-  .p-lista li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
-  .p-lista li + li { border-top: 1px solid var(--bg); }
-  /* El estado NUNCA es solo color: el validador de `dataviz` reprobó --green/--yellow/--red
-     como paleta categórica (ΔE 3.6 en protanopia entre verde y amarillo). El glifo y la
-     palabra llevan el estado; el color solo les da la razón. */
-  .p-marca { font-weight: 600; }
-  li[data-marca="hecho"]      .p-marca { color: var(--green); }
-  li[data-marca="pendiente"]  .p-marca { color: var(--dim); }
-  li[data-marca="recaida"]    .p-marca { color: var(--red); }
-  li[data-marca="recaida"]    .p-meta  { color: var(--red); }
   .p-meta { color: var(--dim); font-size: 13px; }
-
-  .p-log li { font-size: 14px; padding: 5px 0 5px 12px; border-left: 2px solid var(--bg);
-              color: var(--fg); }
 
   /* Una serie, un tono, una línea base. Sin rejilla, sin ejes, sin leyenda: el título la nombra. */
   #p-serie svg { width: 100%; height: auto; display: block; }

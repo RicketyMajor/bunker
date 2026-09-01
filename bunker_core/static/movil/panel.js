@@ -4,12 +4,17 @@ import { pedir } from './estado.js';
 //
 // Design decisions worth not re-litigating:
 //
-// · ONE dominant figure (the prestige total) and everything else demoted. A grid of equal metric
-//   boxes is the default this rejects — it has no focal point, so the eye has nowhere to go.
+// · ONE dominant figure and everything else demoted. A grid of equal metric boxes is the default
+//   this rejects — it has no focal point, so the eye has nowhere to go. The figure WAS the
+//   prestige total; it left with the 2026-08-27 Posada split and the screen spent four days with
+//   no focus at all, its `.p-cifra`/`.p-delta` rules still in app.html with zero consumers. Since
+//   2026-08-31 it is `cifra()`: the selected module's current month and its delta.
 // · Gruvbox, the system the TUI and the PWA already share. Not a new palette.
 // · Status is NEVER colour alone. `dataviz`'s validator was run on --yellow/--green/--red/--blue
 //   as a categorical set and FAILED: green↔yellow is ΔE 3.6 under protanopia and 10.2 with normal
-//   vision. So `[✓]`/`[ ]`/`[!]` and a word carry the state; the colour only agrees with them.
+//   vision. The `[✓]`/`[ ]`/`[!]` glyphs that used to carry this went with the Posada blocks on
+//   2026-08-27; what carries it now is the SIGN inside `.p-delta`'s own text ('+5' / '-3' / '0'),
+//   and the colour only agrees with it.
 // · The chart is ONE series in ONE hue, no legend (the title names it), no gridlines, no axes,
 //   two direct labels. A second series here would need a categorical palette this one cannot pass.
 
@@ -71,7 +76,54 @@ async function cargarSerie(modulo) {
   // said `rechazado`: the attribute was right and the screen was blank.
   if (!datos) return;
   destino.innerHTML = '';
-  destino.append(barras(datos.series, modulo), lectura());
+  destino.append(cifra(datos.series), barras(datos.series, modulo), lectura());
+}
+
+/** El foco de la pantalla: el mes en curso y su delta contra el anterior.
+ *
+ * La cifra dominante del panel era el prestigio y se fue con la Posada el 2026-08-27; `.p-cifra`
+ * y `.p-delta` se quedaron escritas y sin un solo consumidor hasta hoy. Se reusan tal cual — el
+ * `tabular-nums` y los tres colores de signo ya estaban decididos y validados. El dato tampoco es
+ * nuevo: `count` viene en la misma respuesta que pinta las barras, sin una peticion mas.
+ *
+ * Sin esto el panel era UN grafico y ninguna cifra, que es el mismo "sin foco" que el comentario
+ * de jerarquia de app.html lleva rechazando desde que se escribio.
+ */
+export function cifra(serie) {
+  const caja = document.createElement('div');
+  const ultimo = serie[serie.length - 1];
+
+  const n = document.createElement('p');
+  n.className = 'p-cifra';
+  n.textContent = ultimo.count;
+  caja.append(n);
+
+  // Con un solo periodo no hay delta que calcular, y "+3 vs nada" es peor que callar.
+  if (serie.length >= 2) {
+    const previo = serie[serie.length - 2];
+    const d = ultimo.count - previo.count;
+    const marca = document.createElement('span');
+    marca.className = 'p-delta';
+    marca.dataset.signo = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
+    // El color NUNCA lleva el estado solo (la regla de app.html): el signo va en el texto.
+    marca.textContent = `${d > 0 ? '+' : ''}${d} vs ${mes(previo.period)}`;
+    caja.append(marca);
+  }
+  return caja;
+}
+
+/** '2026-08' -> 'agosto'. `Intl` y no una tabla a mano; no lee el reloj, formatea el periodo.
+ *
+ * Devuelve el periodo TAL CUAL si no es mensual. `/api/stats/timeline/` tambien sirve
+ * `period=weekly`, cuyas claves son '2026-W34' (bunker_core/timeline.py), y ahi `Number('W34')`
+ * es `NaN`: sin esta guarda el delta se leia '+5 vs Invalid Date'. Llega por el override
+ * `?serie=` que `override()` existe para permitir — `barras()` sobrevive a lo semanal porque
+ * imprime la clave cruda, asi que esta era la unica suposicion nueva que se rompia.
+ */
+function mes(periodo) {
+  const m = /^(\d{4})-(\d{2})$/.exec(periodo);
+  if (!m) return periodo;
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString('es', { month: 'long' });
 }
 
 /** Twelve monthly counts as a bare bar strip: one hue, one baseline, two direct labels. */

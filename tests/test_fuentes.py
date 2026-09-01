@@ -287,6 +287,26 @@ def _las_tres_sedes():
               f'{etiqueta}: un alta MANUAL (solo title, sin {campo}) se ACEPTA')
         L.objects.filter(title=aMano).delete()
 
+    # POR QUE LA RAMA DE SUBCADENA DE `enriquecer` NO SE BORRA — la ASIMETRIA, no el mecanismo.
+    #
+    # ⚠ Esto NO comprueba `enriquecer`, y decir que si era el error de la primera version de este
+    # bloque. `enriquecer` vive en scraper/book_radar.config.js:23 y lo invoca radar.js:122; nada
+    # de aqui lo carga. Quien comprueba que CORRE es `tests/test_radar.js:73`, que afirma
+    # `author_string === 'Berserk'` sobre un titulo sin autor de fuente — o sea, la rama de
+    # subcadena disparando. Si `enriquecer` se borrase, esto seguiria verde y aquello no.
+    #
+    # Lo que SI fija esto es la razon por la que esa rama es load-bearing, medida el 2026-08-31
+    # capturando ANTES de que `enriquecer` corriera: `ivrea.js` y `norma.js` son las dos unicas
+    # estrategias de libros que no emiten `author_string`, 63 de 223 filas llegan sin autor, y la
+    # rama de subcadena disparo CERO veces porque ninguno de esos 63 titulos nombra a un vigilado.
+    # Dormida, no muerta: el dia que Ivrea publique un tomo vigilado es la unica via por la que
+    # entra, y con 'Desconocido' en su lugar caeria. Eso es lo de abajo.
+    serie = 'ZZPrueba BERSERK #42'
+    check(es_vigilado(serie, 'Berserk', VIGILADOS) is True,
+          'libros: con el sello de subcadena, el tomo vigilado de catalogo ENTRA')
+    check(es_vigilado(serie, 'Desconocido', VIGILADOS) is False,
+          'libros: y sin el, el MISMO tomo se descarta — por eso la rama no se borra')
+
     # La exclusion tiene que llegar por la VISTA. Un `es_vigilado` que la respeta y una vista que
     # no se la pasa dejan el tablon exactamente igual que antes. Fuera del bucle: es de musica.
     tocadas = MusicWatcher.objects.filter(keyword='Kavinsky', is_active=True).update(

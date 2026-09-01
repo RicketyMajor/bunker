@@ -192,6 +192,13 @@ def doctor():
     if not _run("tests/test_avance.js", ["node", "tests/test_avance.js"]):
         fallos += 1
 
+    # Node, on the HOST, same reason: `panel.js` imports only './estado.js', which touches no DOM
+    # at load. Guards the panel's dominant figure — the one that replaced the prestige total when
+    # it left with the Posada split, and whose `.p-cifra`/`.p-delta` rules sat in app.html with
+    # zero consumers for four days before anything used them again.
+    if not _run("tests/test_cifra.js", ["node", "tests/test_cifra.js"]):
+        fallos += 1
+
     if fallos:
         console.print(f"\n[bold red]{fallos} problema(s).[/bold red]\n")
     else:

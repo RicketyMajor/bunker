@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import Album, AlbumDirectory, MusicWatcher, MusicWishlist, MusicInbox, MusicAnnualRecord
 from bunker_core.capture import InvalidOccurredOn, parse_occurred_on
 from bunker_core.insights import feedback_terminado
-from bunker_core.dedup import ya_conocido, es_vigilado, desglosar
+from bunker_core.wishlist import GuardiaDeTablon
 from .serializers import AlbumSerializer, AlbumDirectorySerializer, MusicWatcherSerializer, MusicWishlistSerializer, MusicInboxSerializer
 from .discogs_oracle import search_album_discogs
 from .lastfm_oracle import enrich_album_data
@@ -27,49 +27,13 @@ class MusicWatcherViewSet(viewsets.ModelViewSet):
     serializer_class = MusicWatcherSerializer
 
 
-class MusicWishlistViewSet(viewsets.ModelViewSet):
+class MusicWishlistViewSet(GuardiaDeTablon, viewsets.ModelViewSet):
     queryset = MusicWishlist.objects.filter(
         is_rejected=False).order_by('-date_found')
     serializer_class = MusicWishlistSerializer
-
-    def create(self, request, *args, **kwargs):
-        """Sobreescritura del POST para garantizar la idempotencia.
-
-        Mismo contrato que MovieWishlistViewSet: un título repetido responde 200 sin
-        guardar, de modo que el radar de Node no ve un error y sigue barriendo, y la
-        lista negra (is_rejected=True) también cuenta como 'ya conocido'.
-        """
-        title = request.data.get('title')
-
-        if title:
-            exists = ya_conocido(MusicWishlist.objects.all(), title)
-            if exists:
-                return Response(
-                    {"message": f"'{title}' ya está en el radar o fue rechazado. Ignorando."},
-                    status=status.HTTP_200_OK
-                )
-
-        # La misma sede unica de relevancia que libros (bunker_core/dedup.py:es_vigilado). Casa
-        # por titulo O por artist, y el segundo no es un extra: los vigilados de musica son
-        # una BANDA ('Daft Punk'), y un nombre asi no aparece dentro del titulo. Medido el
-        # 2026-08-30 sobre las filas vivas: 7 de 10 NO mencionan a su vigilado en el titulo
-        # ('Random Access Memories', 'Discovery' y 'Homework' son las tres de Daft Punk), asi
-        # que un filtro que solo mirase ahi borraria practicamente el tablon.
-        vigilados, exclusiones = desglosar(
-            MusicWatcher.objects.filter(is_active=True).values_list('keyword', 'exclusiones'))
-        persona = request.data.get('artist')
-        # La guardia juzga la manguera del scraper, que SIEMPRE etiqueta (0 de 519 filas
-        # producidas sin campo de persona, libros incluidos via `enriquecer`). Un POST que
-        # OMITE el campo es un alta a mano desde el movil (movil/app.js:571 postea solo
-        # {title}) y no se juzga: rechazarla devuelve 200, la cola lo lee como transmitido y
-        # la fila se pierde en silencio.
-        if vigilados and persona is not None and not es_vigilado(title, persona, vigilados,
-                                                                 exclusiones):
-            return Response(
-                {"message": "No menciona a ningún vigilado."},
-                status=status.HTTP_200_OK
-            )
-        return super().create(request, *args, **kwargs)
+    watcher_model = MusicWatcher
+    campo_persona = 'artist'
+    genero_rechazo = 'o'   # el disco fue rechazadO
 
 
 class MusicInboxViewSet(viewsets.ModelViewSet):

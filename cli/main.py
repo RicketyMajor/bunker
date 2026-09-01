@@ -6,19 +6,14 @@ import subprocess
 import time
 import httpx
 import sys
-import pyfiglet
 import socket
 import sys
 import platform
 import qrcode
-from prompt_toolkit.formatted_text import HTML
 from click_repl import repl
 from pathlib import Path
 from rich.console import Console
-from rich.panel import Panel
 from rich.align import Align
-from rich.text import Text
-from rich.columns import Columns
 from rich.prompt import Prompt
 from rich.table import Table
 from rich import box
@@ -135,59 +130,6 @@ def get_dashboard_stats():
     except Exception:
         pass
     return {}
-
-
-def show_welcome_screen():
-    """Genera la cabecera visual y el dashboard dinámico de la aplicación."""
-
-    ascii_art = pyfiglet.figlet_format("BUNKER", font="slant")
-    ascii_text = Text(ascii_art, style="bold cyan")
-
-    # Obtiene los datos dinámicos a través del BFF
-    stats = get_dashboard_stats()
-    
-    books = stats.get("books", {})
-    movies = stats.get("movies", {})
-    music = stats.get("music", {})
-    feed = stats.get("feed", [])
-
-    # Top Rated text formatting
-    top_book_txt = f"\n  [yellow]⭐ Top: {books['top_rated']['title']} ({books['top_rated']['rating']})[/yellow]" if books.get("top_rated") else ""
-    top_movie_txt = f"\n  [yellow]⭐ Top: {movies['top_rated']['title']} ({movies['top_rated']['rating']})[/yellow]" if movies.get("top_rated") else ""
-    top_music_txt = f"\n  [yellow]⭐ Top: {music['top_rated']['title']} ({music['top_rated']['rating']})[/yellow]" if music.get("top_rated") else ""
-
-    # Panel de Búnker (Medios)
-    inv_text = f"""[cyan]▤[/cyan] Libros: [bold cyan]{books.get('total', 0)}[/bold cyan] ({books.get('read', 0)} leídos)
-[green]📖[/green] Racha de Lectura: [bold green]{books.get('streak', 0)} días[/bold green]{top_book_txt}
-[yellow]🎬[/yellow] Cine: [bold yellow]{movies.get('total', 0)}[/bold yellow] ({movies.get('watched', 0)} vistos){top_movie_txt}
-[magenta]🎵[/magenta] Discos: [bold magenta]{music.get('total', 0)}[/bold magenta] ({music.get('listened', 0)} oídos) | [bold magenta]{music.get('albums_week', 0)} esta semana[/bold magenta]{top_music_txt}"""
-
-    # Panel de Comandos Rápidos
-    cmd_text = """[cyan]⌘[/cyan] Entrar a la TUI: [bold cyan]enter[/bold cyan]
-[green]▤[/green] Escanear QR: [bold cyan]scanner[/bold cyan]
-[magenta]✔[/magenta] Ver Sistema: [bold cyan]ls[/bold cyan]
-[yellow]▶[/yellow] Sincronizar: [bold cyan]sync[/bold cyan]"""
-
-    # Panel de Activity Feed
-    feed_lines = feed[:4] if feed else ["[dim]Sin actividad reciente...[/dim]"]
-    feed_text = "\n".join(feed_lines)
-
-    # Ensambla los paneles. Eran cuatro: «La Posada» salió el 2026-08-27 con su repositorio.
-    p_inv = Panel(inv_text, title="[bold cyan]Colecciones[/bold cyan]", border_style="cyan", padding=(0, 2))
-    p_cmd = Panel(cmd_text, title="[bold yellow]Atajos Rápidos[/bold yellow]", border_style="yellow", padding=(0, 2))
-    p_mod = Panel(feed_text, title="[bold magenta]Activity Feed[/bold magenta]", border_style="magenta", padding=(0, 2))
-
-    grid = Table.grid(expand=True, padding=(0, 2))
-    grid.add_column(ratio=1)  # Columna Izquierda
-    grid.add_column(ratio=1)  # Columna Derecha
-
-    grid.add_row(p_inv, p_cmd)
-    grid.add_row(p_mod, Panel("", border_style="black"))
-
-    console.print(Align.center(ascii_text))
-    console.print(grid)
-    console.print("[dim]Atajos: \\[Tab] Autocompletar | \\[exit] Cerrar sesión[/dim]", justify="center")
-    console.print()
 
 
 @app.command(name="scanner")
