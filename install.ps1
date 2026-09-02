@@ -181,8 +181,9 @@ if (-not $Capsula) {
     if (-not (Test-Path $Capsula)) { Write-Host "  No existe: $Capsula" -ForegroundColor Red; exit 1 }
     # --ignorenonexistent NO es opcional: toda capsula anterior al 2026-08-27 nombra modelos de
     # `posada`/`chess_study`, que ya no viven aqui. 6 de 6 fallaban sin el.
-    # Se COPIA al contenedor: el bind de .:/app solo cubre el repositorio, y `.\backups\` es
-    # peor todavia porque el volumen `bunker_backups` se monta ENCIMA de /app/backups.
+    # It is COPIED into the container: the .:/app bind only covers the repository, so a capsule
+    # outside the repo would not be there. (The `bunker_backups` volume, which also mounted over
+    # /app/backups, was retired on 2026-09-02.)
     docker compose cp $Capsula web:/tmp/capsula.json
     Abortar-Si-Fallo 'copiar la capsula al contenedor'
     docker compose exec -T web python manage.py loaddata --ignorenonexistent /tmp/capsula.json

@@ -832,20 +832,21 @@ class MovieMainScreen(ColeccionScreen):
         if self.query_one("#movie_tabs", TabbedContent).active != "tab_wishlist":
             return
 
-        def do_watch(keyword: str | None) -> None:
-            if keyword:
-                self.process_add_watcher(keyword)
+        def do_watch(datos: dict | None) -> None:
+            if datos:
+                self.process_add_watcher(datos)
 
         # Le pasa los parámetros cinematográficos
         self.app.push_screen(WatcherModal(
             "Vigilar Director/Saga", "Ej: Denis Villeneuve"), do_watch)
 
     @work(thread=True)
-    def process_add_watcher(self, keyword: str) -> None:
+    def process_add_watcher(self, datos: dict) -> None:
         try:
-            if sede.post(API_MOVIE_WATCHERS, json={"keyword": keyword, "is_active": True}, timeout=5.0).status_code == 201:
+            if sede.post(API_MOVIE_WATCHERS, json={**datos, "is_active": True},
+                         timeout=5.0).status_code == 201:
                 self.app.call_from_thread(
-                    self.app.notify, f"Vigilando: {keyword}", title="Radar Activado")
+                    self.app.notify, f"Vigilando: {datos['keyword']}", title="Radar Activado")
         except Exception as e:
             self.app.call_from_thread(
                 self.app.notify, f"Error: {e}", severity="error")

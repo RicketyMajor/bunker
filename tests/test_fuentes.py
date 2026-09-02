@@ -36,6 +36,29 @@ from music.views import MusicWishlistViewSet  # noqa: E402
 
 VIGILADOS = ['Yusuke Murata', 'Berserk', 'Mariana Enriquez']
 
+# THE WATCHER THIS SUITE MANUFACTURES, and why it exists.
+#
+# The three end-to-end halves demanded LIVE watchers — a non-empty `filter(is_active=True)` on all
+# three boards, and a SPECIFIC `MusicWatcher(keyword='Kavinsky')` for the exclusion. On a
+# freshly-migrated database that fails, and with it the whole of `doctor`: the portable install
+# could not go green on the very machine it targets, which is exactly where there is no data. The
+# suite now manufactures what it needs INSIDE `rollback`, so nothing survives the run.
+#
+# LIVE watchers are still read and still passed to `es_vigilado`: what is manufactured is ADDED to
+# whatever is there, it does not replace it. Against Alonso's database this asks exactly what it
+# asked before; against an empty one, it asks the code instead of giving up.
+#
+# The name carries a space on purpose (`_libros_end_to_end` picks a watcher with a space to test
+# the AUTHOR path) and appears inside no ZZPrueba title, or the row would get in by title and the
+# test would claim "matches by author" without having tested it.
+_VIGILADO_DE_PRUEBA = 'ZZVigilado De Prueba'
+
+# The exclusion is tested on a MANUFACTURED Kavinsky, not the live one. And the live one is
+# deleted first — inside the rollback — because otherwise two rows share the keyword: Alonso's,
+# WITHOUT exclusions, would accept the namesake and the test would fail on a populated database
+# and pass on an empty one. A fixture that only works in one environment is not a fixture.
+_EXCLUSION_DE_PRUEBA = ('Kavinsky', 'M!das, Mdas, Finesse Ngara')
+
 # (titulo, autor, esperado, por que)
 CASOS = [
     ('ZZPrueba Berserk 42', 'Berserk', True,
@@ -191,8 +214,12 @@ def run_tests():
 def _libros_end_to_end():
     # La guardia tiene que estar EN EL CAMINO DE ESCRITURA, no solo existir. Un `es_vigilado`
     # correcto que nadie llama deja el tablon exactamente como estaba.
+    Watcher.objects.create(keyword=_VIGILADO_DE_PRUEBA, is_active=True)
     vivos = list(Watcher.objects.filter(is_active=True).values_list('keyword', flat=True))
-    check(bool(vivos), f'hay vigilados vivos contra los que probar: {len(vivos)}')
+    # Anti-vacuity floor, not a check on Alonso's configuration: the row above guarantees it.
+    # What it catches is a `create` that never landed — without it everything below is evaluated
+    # against an empty list and `es_vigilado` says False to everything, which is vacuously green.
+    check(bool(vivos), f'there are watchers to test against: {len(vivos)}')
 
     basura = 'ZZPrueba Incluye paginas a color y un panteon'
     # BORRAR ANTES DE POSTEAR, y no solo despues. La vista responde 200 por DOS motivos —
@@ -219,7 +246,9 @@ def _libros_end_to_end():
     # "casa por autor" sin haberlo probado. Paso exactamente eso en la primera version: eligio
     # 'Chainsaw Man' como autor y lo metio dentro del titulo. La linea de abajo es lo que
     # impide que vuelva a ser vacua.
-    autor_vivo = next((v for v in vivos if ' ' in v), vivos[0])
+    # The manufactured one and not `vivos[0]`: against Alonso's database the first entry changes
+    # with whatever he has registered, and this test would come to depend on that.
+    autor_vivo = _VIGILADO_DE_PRUEBA
     relevante = 'ZZPrueba Tomo Suelto Sin Serie Reconocible 99'
     check(es_vigilado(relevante, '', vivos) is False,
           'el titulo de la prueba no casa por si solo: lo que se prueba es el AUTOR')
@@ -252,9 +281,10 @@ def _las_tres_sedes():
     son todas de Daft Punk. Un filtro por titulo aqui borraria practicamente el tablon entero.
     """
     for etiqueta, postear, W, L, campo in SEDES:
+        W.objects.create(keyword=_VIGILADO_DE_PRUEBA, is_active=True)
         vivos = list(W.objects.filter(is_active=True).values_list('keyword', flat=True))
-        check(bool(vivos), f'{etiqueta}: hay vigilados vivos ({len(vivos)})')
-        persona = vivos[0]
+        check(bool(vivos), f'{etiqueta}: there are watchers to test against ({len(vivos)})')
+        persona = _VIGILADO_DE_PRUEBA
 
         basura = f'ZZPrueba Recopilatorio Ajeno {etiqueta} 99'
         check(es_vigilado(basura, '', vivos) is False,
@@ -309,10 +339,13 @@ def _las_tres_sedes():
 
     # La exclusion tiene que llegar por la VISTA. Un `es_vigilado` que la respeta y una vista que
     # no se la pasa dejan el tablon exactamente igual que antes. Fuera del bucle: es de musica.
-    tocadas = MusicWatcher.objects.filter(keyword='Kavinsky', is_active=True).update(
-        exclusiones='M!das, Mdas, Finesse Ngara')
+    palabra, exclusiones = _EXCLUSION_DE_PRUEBA
+    MusicWatcher.objects.filter(keyword=palabra).delete()
+    MusicWatcher.objects.create(keyword=palabra, is_active=True, exclusiones=exclusiones)
+    tocadas = MusicWatcher.objects.filter(keyword=palabra, is_active=True,
+                                          exclusiones=exclusiones).count()
     check(tocadas == 1,
-          'hay un vigilado Kavinsky VIVO al que ponerle la exclusion (si no, lo de abajo es vacuo)')
+          f"there is ONE '{palabra}' watcher with the exclusion set (else the below is vacuous)")
     homonimo = 'ZZPrueba Tingisha (feat. Kavinsky, Mchina & Mdas)'
     MusicWishlist.objects.filter(title=homonimo).delete()
     postear_musica = SEDES[1][1]

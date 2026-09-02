@@ -261,12 +261,298 @@ def test_la_tecla_x_revierte_en_las_tres():
             f"{cls.__name__}: 'x' no invoco revert_record en la pestaña Registro")
 
 
+def test_ctrl_g_vuelve_al_launcher():
+    """The global shortcut back to the command centre, and why it is NOT `ctrl+h`.
+
+    The backlog proposed `ctrl+h`. Measured on Textual 8.2.1: most terminals send 0x08 when ctrl+h
+    is pressed and `_ansi_sequences.py` translates it to `Keys.Backspace`, so that binding would
+    never fire — and if it did, it would swallow deletion in every `Input`. Same for `ctrl+i`
+    (tab), `ctrl+m` (enter) and `ctrl+j`. `ctrl+g` is used, which arrives as itself.
+
+    The KEY is pressed, the action is not called: a correct `action_al_launcher` that no key
+    reaches is exactly the defect `a1eed5d` fixed in this TUI's BINDINGS — a BINDINGS string is
+    text, not a symbol.
+
+    And it is checked over a stack of TWO screens above the Launcher, because the single-screen
+    version cannot tell "goes back to the Launcher" from "does one pop".
+    """
+    from cli.tui.app import BunkerApp
+    from cli.tui.movie_screens import MovieMainScreen
+    from cli.tui.music_screens import MusicMainScreen
+    from cli.tui.screens import BunkerLauncherScreen
+
+    async def ir_y_volver():
+        app = BunkerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await app.push_screen(MovieMainScreen())
+            await pilot.pause()
+            await app.push_screen(MusicMainScreen())
+            await pilot.pause()
+            antes = type(app.screen).__name__
+            await pilot.press("ctrl+g")
+            await pilot.pause()
+            return antes, type(app.screen).__name__, len(app.screen_stack)
+
+    antes, despues, altura = asyncio.run(ir_y_volver())
+    assert antes != "BunkerLauncherScreen", (
+        f"the test is vacuous: we were already on the Launcher before pressing ({antes})")
+    assert despues == "BunkerLauncherScreen", (
+        f"ctrl+g left the TUI on {despues}, not on the command centre")
+    assert altura >= 1, "the stack emptied: pop_screen overshot"
+
+
+def test_ctrl_g_no_vacia_una_pila_sin_launcher():
+    """The loop's guard. With no Launcher in the stack, the action must do NOTHING.
+
+    Without it the `while` would pop until the app sits on the base screen — blank and with no
+    keys — and no other check would see that: the TUI would still be "alive".
+    """
+    from cli.tui.app import BunkerApp
+    from cli.tui.movie_screens import MovieMainScreen
+    from cli.tui.screens import BunkerLauncherScreen
+
+    async def sin_launcher():
+        app = BunkerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            # The Launcher is taken out of the stack on purpose: it is the state the guard covers.
+            while any(isinstance(p, BunkerLauncherScreen) for p in app.screen_stack):
+                app.pop_screen()
+            await app.push_screen(MovieMainScreen())
+            await pilot.pause()
+            altura_antes = len(app.screen_stack)
+            app.action_al_launcher()
+            await pilot.pause()
+            return altura_antes, len(app.screen_stack), type(app.screen).__name__
+
+    antes, despues, arriba = asyncio.run(sin_launcher())
+    assert antes == despues, (
+        f"with no Launcher in the stack the action popped {antes - despues} screens (ended on {arriba})")
+
+
+def test_las_exclusiones_llegan_de_la_TUI_a_la_API():
+    """The `WatcherModal`'s new field and the THREE writers that forward it.
+
+    Both halves are tested because one alone says nothing: a modal that collects `exclusiones` and
+    three `process_add_watcher` that throw them away leaves the field exactly as unreachable as
+    when it lived only in `/admin/`. Here the WRITER is interrogated — the body that goes out
+    through `sede.post` — which is the half that gets forgotten.
+
+    `sede.post` is replaced by a spy: this test must not write to the live board, and what is
+    asked is what the TUI SENDS, not what the server does with it (that is covered by
+    `tests/test_fuentes.py`, which drives the real view).
+    """
+    from cli import sede
+    from cli.tui.library_screen import LibraryMainScreen
+    from cli.tui.movie_screens import MovieMainScreen
+    from cli.tui.music_screens import MusicMainScreen
+    from cli.tui.modals import WatcherModal
+
+    # -- half 1: the modal RETURNS the exclusions
+    from cli.tui.app import BunkerApp
+    from textual.widgets import Input, Button
+
+    async def rellenar():
+        app = BunkerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            devuelto = {}
+            modal = WatcherModal("Vigilar", "Ej: X")
+            app.push_screen(modal, lambda r: devuelto.update({"r": r}))
+            await pilot.pause()
+            modal.query_one("#inp_keyword", Input).value = "Kavinsky"
+            modal.query_one("#inp_exclusiones", Input).value = "M!das, Mdas"
+            modal.query_one("#btn_add", Button).press()
+            await pilot.pause()
+            return devuelto.get("r")
+
+    devuelto = asyncio.run(rellenar())
+    assert isinstance(devuelto, dict), f"el modal devolvio {devuelto!r}, no un dict"
+    assert devuelto.get("keyword") == "Kavinsky", devuelto
+    assert devuelto.get("exclusiones") == "M!das, Mdas", devuelto
+
+    # And with no keyword NOTHING comes out: a POST with an empty `keyword` is a junk row that
+    # then has to be deleted from the admin that is no longer mounted.
+    async def vacio():
+        app = BunkerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            devuelto = {}
+            modal = WatcherModal("Vigilar", "Ej: X")
+            app.push_screen(modal, lambda r: devuelto.update({"r": r}))
+            await pilot.pause()
+            modal.query_one("#inp_exclusiones", Input).value = "solo exclusiones"
+            modal.query_one("#btn_add", Button).press()
+            await pilot.pause()
+            return devuelto.get("r", "SIN LLAMAR")
+
+    assert asyncio.run(vacio()) is None, "the modal accepted a watcher with no keyword"
+
+    # -- half 2: the THREE writers forward it. Three and not one: the missing consumer is always
+    # the one that writes, and here three write the same thing down different paths.
+    class _Resp:
+        status_code = 201
+
+    enviados = []
+    original = sede.post
+    sede.post = lambda url, **kw: (enviados.append((url, kw.get("json"))), _Resp())[1]
+    try:
+        for cls in (LibraryMainScreen, MovieMainScreen, MusicMainScreen):
+            # The screen is NOT instantiated: `Screen.app` is a property with no setter, and
+            # really mounting it would drag the whole app in to interrogate four lines. The
+            # worker's body only touches `self.app`, so a double with that attribute is subject
+            # enough.
+            #
+            # `@work` wraps the method and exposes the original as `__wrapped__`; that is what is
+            # called, so as not to depend on Textual's scheduler, which does not exist outside a
+            # running app. If `work` ever stopped setting `__wrapped__`, this would blow up with
+            # AttributeError — loud, not silent.
+            cls.process_add_watcher.__wrapped__(
+                _PantallaFalsa(), {"keyword": "ZZPrueba", "exclusiones": "ZZExcluido"})
+    finally:
+        sede.post = original
+
+    assert len(enviados) == 3, f"3 writers expected, {len(enviados)} wrote"
+    for url, cuerpo in enviados:
+        assert cuerpo.get("exclusiones") == "ZZExcluido", (
+            f"{url} sent {cuerpo!r}: it lost the exclusions on the way")
+        assert cuerpo.get("keyword") == "ZZPrueba", f"{url} sent {cuerpo!r}"
+        assert cuerpo.get("is_active") is True, f"{url} sent {cuerpo!r}"
+
+
+class _AppFalsa:
+    """The minimum `process_add_watcher` touches: `call_from_thread` and `notify`."""
+
+    def call_from_thread(self, fn, *a, **kw):
+        return fn(*a, **kw)
+
+    def notify(self, *a, **kw):
+        pass
+
+
+class _PantallaFalsa:
+    """A `self` with `.app`, which is all the worker's body uses."""
+
+    def __init__(self):
+        self.app = _AppFalsa()
+
+
+def test_los_workers_de_musica_avisan_de_un_codigo_malo():
+    """Un 403, un 400 o un 404 tienen que LLEGAR AL USUARIO, no dejar la TUI muda.
+
+    Los siete workers que esta sesión le dio a música eran `if resp.status_code == N:` sin `else`,
+    y `except` sólo atrapa errores de transporte. Un 403 —un `BUNKER_API_TOKEN` caducado, y el
+    middleware guarda TODA ruta bajo `/api/` desde el 2026-08-31— no producía ni aviso ni recarga:
+    el usuario pulsaba la tecla, confirmaba el diálogo, y no pasaba nada en absoluto. Encontrado
+    por `/code-review` el 2026-09-02.
+
+    Se interroga el AVISO, no el código de estado: comprobar que el `else` existe leyendo el
+    fuente no dice si el mensaje sale por `call_from_thread`.
+    """
+    from cli import sede
+    from cli.tui.music_screens import MusicMainScreen
+
+    class _Resp:
+        def __init__(self, code, cuerpo):
+            self.status_code = code
+            self._cuerpo = cuerpo
+            self.text = str(cuerpo)
+
+        def json(self):
+            return self._cuerpo
+
+    avisos = []
+
+    class _App:
+        def call_from_thread(self, fn, *a, **kw):
+            return fn(*a, **kw)
+
+        def notify(self, mensaje, **kw):
+            avisos.append((mensaje, kw.get("severity")))
+
+    class _Pantalla:
+        def __init__(self):
+            self.app = _App()
+
+        def load_data(self):
+            avisos.append(("RECARGA", None))
+
+    originales = (sede.delete, sede.post, sede.patch)
+    sede.delete = lambda *a, **k: _Resp(403, {"error": "Acceso denegado."})
+    sede.post = lambda *a, **k: _Resp(400, {"keyword": ["This field may not be blank."]})
+    sede.patch = lambda *a, **k: _Resp(404, {"detail": "No encontrado."})
+    try:
+        MusicMainScreen.process_delete_inbox.__wrapped__(_Pantalla(), "9")
+        MusicMainScreen.process_add_watcher.__wrapped__(
+            _Pantalla(), {"keyword": "", "exclusiones": ""})
+        MusicMainScreen.process_delete_wishlist.__wrapped__(_Pantalla(), "7")
+    finally:
+        sede.delete, sede.post, sede.patch = originales
+
+    assert len(avisos) == 3, f"tres códigos malos produjeron {len(avisos)} avisos: {avisos}"
+    for mensaje, severidad in avisos:
+        assert severidad == "error", f"{mensaje!r} no se avisó como error, sino como {severidad!r}"
+    # El código de estado tiene que VIAJAR en el mensaje: "algo falló" sin el número obliga a
+    # adivinar si es el token, la fila o el servidor.
+    codigos = [c for c in ("403", "400", "404") if any(c in m for m, _ in avisos)]
+    assert codigos == ["403", "400", "404"], (
+        f"los avisos no nombran los tres códigos, sólo {codigos}: {avisos}")
+    # Y NINGUNO recarga: una recarga tras un fallo repinta la fila sin cambiar y parece un éxito.
+    assert not any(m == "RECARGA" for m, _ in avisos), f"un fallo disparó load_data(): {avisos}"
+
+
+def test_ctrl_g_no_atraviesa_un_modal():
+    """Y NO llega desde un `ModalScreen`. Se fija porque la afirmación contraria estaba escrita.
+
+    `Screen._modal_binding_chain` corta la cadena en el primer nodo `is_modal`, así que las
+    `BINDINGS` de la App son inalcanzables con un diálogo encima. El docstring de
+    `action_al_launcher` decía "modals included" y el README "desde cualquier pantalla": las dos
+    eran falsas, y `test_ctrl_g_vuelve_al_launcher` no podía verlo porque sólo apila pantallas
+    normales. Lo encontró `/code-review` el 2026-09-02.
+
+    Se deja como Textual lo diseña —un modal tiene una respuesta pendiente— y se ancla aquí para
+    que un cambio de comportamiento se vea, en la dirección que sea.
+    """
+    from cli.tui.app import BunkerApp
+    from cli.tui.movie_screens import MovieMainScreen
+    from cli.tui.modals import WatcherModal
+
+    async def con_modal():
+        app = BunkerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await app.push_screen(MovieMainScreen())
+            await pilot.pause()
+            app.push_screen(WatcherModal("Vigilar", "Ej: X"))
+            await pilot.pause()
+            antes = type(app.screen).__name__
+            altura = len(app.screen_stack)
+            await pilot.press("ctrl+g")
+            await pilot.pause()
+            return antes, altura, type(app.screen).__name__, len(app.screen_stack)
+
+    antes, altura_antes, despues, altura = asyncio.run(con_modal())
+    assert antes == "WatcherModal", f"la prueba es vacua: el modal no llegó a la cima ({antes})"
+    assert despues == "WatcherModal", (
+        f"ctrl+g ATRAVESÓ el modal y dejó la TUI en {despues}. Si eso es lo que se quiere ahora, "
+        "arregla también el docstring de `action_al_launcher` y el README, que dicen lo contrario")
+    assert altura == altura_antes, f"la pila cambió de {altura_antes} a {altura}"
+
+
 if __name__ == "__main__":
     test_call_from_thread_solo_en_workers()
     test_la_tui_monta()
     test_las_pantallas_de_coleccion_montan()
     test_el_mixin_resuelve_sus_cuatro_acciones()
     test_la_tecla_x_revierte_en_las_tres()
+    test_ctrl_g_vuelve_al_launcher()
+    test_ctrl_g_no_vacia_una_pila_sin_launcher()
+    test_ctrl_g_no_atraviesa_un_modal()
+    test_las_exclusiones_llegan_de_la_TUI_a_la_API()
+    test_los_workers_de_musica_avisan_de_un_codigo_malo()
     print(f"OK: {len(_metodos_que_cruzan_hilos())} metodos cruzan hilos, todos en workers; "
           "la TUI monta el Launcher; las tres pantallas de coleccion montan, sus cuatro "
-          "acciones resuelven al mixin, y 'x' revierte en las tres")
+          "acciones resuelven al mixin, 'x' revierte en las tres, y ctrl+g vuelve al "
+          "centro de mando sin vaciar una pila que no lo tiene; y las exclusiones "
+          "salen del modal y las mandan los tres escritores")

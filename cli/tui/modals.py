@@ -221,8 +221,21 @@ class SyncConsoleModal(ModalScreen):
             self.dismiss(None)
 
 
-class WatcherModal(ModalScreen[str]):
-    """Diálogo para añadir a la lista negra/vigilancia."""
+class WatcherModal(ModalScreen[dict]):
+    """Dialog for adding a watcher.
+
+    Returns a `dict` and not a string since 2026-09-02, when it gained the `exclusiones` field.
+    All three consumers (`library_screen`, `movie_screens`, `music_screens`) moved with it.
+
+    WHY `exclusiones` LIVES HERE NOW: it was editable only from `/admin/`, and `/admin/` stopped
+    being mounted by default the same day. Without this field, setting an exclusion would mean
+    switching the admin on, restarting `web` and creating a superuser.
+
+    It is the field that separates `Kavinsky` from `Kavinsky & M!das`: the radar matches the
+    watcher inside the person field, and a namesake gets in with the same credit shape. They are
+    written comma-separated, exactly as they read — `bunker_core/dedup.py` normalises both sides
+    the same way, so `M!das` works with its punctuation intact.
+    """
 
     # Añadimos parámetros dinámicos para que sirva en Biblioteca y Videoclub
     def __init__(self, title_text: str = "Vigilar Nuevo Autor/Saga", placeholder_text: str = "Ej: Tatsuki Fujimoto", **kwargs):
@@ -234,13 +247,25 @@ class WatcherModal(ModalScreen[str]):
         with Vertical(id="watcher_dialog"):
             yield Label(self.title_text, classes="modal_title")
             yield Input(placeholder=self.placeholder_text, id="inp_keyword")
+            yield Label("Excluir créditos (opcional, separados por comas):", classes="edit_label")
+            yield Input(placeholder="Ej: M!das, Finesse Ngara", id="inp_exclusiones")
             with Horizontal(classes="form_buttons"):
                 yield Button("Vigilar", variant="success", id="btn_add")
                 yield Button("Cancelar", variant="error", id="btn_cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_add":
-            self.dismiss(self.query_one("#inp_keyword", Input).value)
+            keyword = self.query_one("#inp_keyword", Input).value.strip()
+            # No keyword, no watcher: rejecting here saves all three consumers from having to
+            # remember the check, and a POST with an empty `keyword` is a junk row that then has
+            # to be deleted by hand from the admin that is no longer mounted.
+            if not keyword:
+                self.dismiss(None)
+                return
+            self.dismiss({
+                "keyword": keyword,
+                "exclusiones": self.query_one("#inp_exclusiones", Input).value.strip(),
+            })
         else:
             self.dismiss(None)
 
@@ -545,7 +570,14 @@ class WatchersListModal(ModalScreen[int]):
                 if not self.watchers:
                     yield Label("No estás vigilando a nadie actualmente.", classes="edit_label")
                 for w in self.watchers:
-                    yield Label(f"[cyan]ID {w['id']}[/cyan] - {w['keyword']} (Desde: {w.get('created_at', '')[:10]})")
+                    # `exclusiones` is PAINTED here because this is the only place in the TUI
+                    # where it can be seen: it used to live only in `/admin/`, which since
+                    # 2026-09-02 is not mounted unless asked for. An exclusion nobody can read is
+                    # an exclusion nobody knows is still set.
+                    excl = (w.get('exclusiones') or '').strip()
+                    cola = f" [yellow]· excluye: {excl}[/yellow]" if excl else ""
+                    yield Label(f"[cyan]ID {w['id']}[/cyan] - {w['keyword']} "
+                                f"(Desde: {w.get('created_at', '')[:10]}){cola}")
 
             yield Label("Para dejar de vigilar a alguien, ingresa su ID:", classes="edit_label")
             yield Input(placeholder="Ej: 3 (Deja en blanco para solo salir)", id="inp_del_id")

@@ -7,6 +7,7 @@ guardia es un MIDDLEWARE y no `DEFAULT_PERMISSION_CLASSES`, que solo alcanza a v
 
 Run: docker compose exec -T web python -m tests.test_auth_api
 """
+import io
 import os
 import pathlib
 
@@ -15,10 +16,13 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bunker_core.settings')
 django.setup()
 
+from django.core.handlers.wsgi import WSGIRequest    # noqa: E402
+from django.http import HttpResponse                 # noqa: E402
 from django.test import Client                       # noqa: E402
 from django.urls import get_resolver                 # noqa: E402
 
 from bunker_core.auth import ABIERTAS as ABIERTAS_DEL_CODIGO   # noqa: E402
+from bunker_core.auth import TokenDeBunker           # noqa: E402
 
 # LITERAL, y no la del middleware. Importar `ABIERTAS` y comprobar contra ella hace que la prueba
 # se mueva CON el codigo: vaciar la allowlist salia VERDE porque la expectativa se vaciaba a la
@@ -63,7 +67,7 @@ c = Client()
 
 # VACUIDAD PRIMERO. Si el recorrido no encuentra rutas, TODO lo de abajo es verdad por vacio —
 # y este fichero entero diria que la API esta protegida sin haber pedido una sola URL.
-check(len(rutas) >= 40, f'el resolvedor encontro {len(rutas)} rutas concretas bajo /api/ (medidas 50)')
+check(len(rutas) >= 40, f'el resolvedor encontro {len(rutas)} rutas concretas bajo /api/ (medidas 49 el 2026-09-02, tras retirar /api/backups/)')
 check(any(r.startswith('/api/movil/') for r in rutas),
       'el recorrido incluye las vistas Django PLANAS (/api/movil/), que es el agujero que '
       'una permission_class de DRF habria dejado abierto')
@@ -95,6 +99,78 @@ check(c.get('/api/stats/timeline/?module=books', headers=cab).status_code == 200
 # Un token EQUIVOCADO no es lo mismo que ninguno, y las dos tienen que dar 403.
 check(c.get('/api/books/library/', headers={'X-Bunker-Api-Token': 'no-soy'}).status_code == 403,
       'un token equivocado tambien da 403')
+
+# --- /admin/ IS NOT MOUNTED UNLESS ASKED FOR ---
+#
+# 41 routes this middleware does NOT cover — they are not under `/api/` — which the `0.0.0.0`
+# port publishes to the whole LAN. The only thing between them and the collection was Django's
+# login, inert only because there are no accounts. See `bunker_core/urls.py` for why it is closed
+# by NOT mounting it rather than with an IP guard.
+#
+# The expectation is tied to the FLAG, not to "404 always": turning the admin on is legitimate
+# (it is the watchers' only UI) and a suite that goes red for using it would push towards not
+# running it. What it pins is that the mount and the flag cannot diverge.
+_admin_pedido = os.environ.get('BUNKER_ADMIN') == '1'
+_admin_montado = any(str(p.pattern).startswith('admin/') for p in get_resolver().url_patterns)
+check(_admin_montado == _admin_pedido,
+      f'/admin/ mounted={_admin_montado} and BUNKER_ADMIN=1 asked={_admin_pedido}: they agree')
+check(c.get('/admin/').status_code == (302 if _admin_pedido else 404),
+      f'and /admin/ answers accordingly ({c.get("/admin/").status_code})')
+
+# --- THE REPEATED-SLASH VECTOR ---
+#
+# `//api/books/library/` does not start with `/api/`. Un-normalised, the guard's `startswith` lets
+# it through whole.
+#
+# ⚠ THIS CANNOT BE MEASURED WITH THE `Client`, which is why handoff 049 recorded it backwards as
+# "gives 404, the resolver saves it". The `Client` parses `//api/x` as a PROTOCOL-RELATIVE URL: it
+# takes `api` as the host and requests `/x`. That 404 was the harness. Verified 2026-09-02 by
+# spying on the middleware: under the `Client`, `request.path` arrives as `/books/library/`.
+#
+# It is invisible against the live server too, for the opposite reason: `runserver`'s WSGI layer
+# collapses the slashes and `PATH_INFO` arrives already clean (raw request line in the log, 403 in
+# the response). That is a property of the DEVELOPMENT server. Behind a WSGI that does not
+# collapse, `request.path` keeps both slashes — checked by building the `WSGIRequest` by hand,
+# which is what `_al_guardia` does. It is measured where the defect can exist, not where the
+# environment already hides it.
+_PASA = 299   # sentinel: NOT a code any view returns, so a 299 can only come from the
+              # `get_response` below — that is, "the guard let it through".
+
+
+def _al_guardia(path_info, token=None):
+    entorno = {'REQUEST_METHOD': 'GET', 'PATH_INFO': path_info, 'SCRIPT_NAME': '',
+               'SERVER_NAME': 'testserver', 'SERVER_PORT': '80', 'wsgi.input': io.BytesIO()}
+    if token is not None:
+        entorno['HTTP_X_BUNKER_API_TOKEN'] = token
+    guardia = TokenDeBunker(lambda _req: HttpResponse('paso', status=_PASA))
+    return guardia(WSGIRequest(entorno)).status_code
+
+
+# VACUITY FIRST, IN BOTH DIRECTIONS: if the sentinel were unreachable, everything below would be
+# "403 always" and would come out green with the guard shutting the door on everyone.
+check(_al_guardia('/movil/') == _PASA,
+      'the sentinel is reachable: what is not /api/ passes through the guard')
+check(_al_guardia('/api/books/library/') == 403,
+      'positive control: the canonical route with no header gives 403')
+check(_al_guardia('/api/books/library/', tok) == _PASA,
+      'and WITH the header it passes through (otherwise the 403s below would say nothing)')
+
+# ⚠ `/api//books/library/` IS THE ONE THAT ATTRIBUTES NOTHING, and that is measured: with the
+# normalisation removed by hand, 3 of these 4 go red and that one stays GREEN — it already starts
+# with `/api/`, so its internal slash never entered the decision. It stays as a regression guard on
+# the "still passes" side, not as proof of the normalisation. The ones that prove it start `//`.
+for vector in ['//api/books/library/', '///api/books/library/', '/api//books/library/',
+               '//api//books//library/']:
+    check(_al_guardia(vector) == 403,
+          f'{vector} does NOT bypass the guard (repeated slashes normalised before deciding)')
+    check(_al_guardia(vector, tok) == _PASA,
+          f'{vector} WITH the header passes: the guard normalises to DECIDE, not to route')
+
+# The allowlist is compared against the already-normalised path, or `//api/health/` would become
+# paid-for and `web`'s healthcheck — which the three scrapers wait on to start — would begin
+# failing.
+check(_al_guardia('//api/health/') == _PASA,
+      '//api/health/ stays open: the allowlist is read against the normalised path')
 
 # EL RESPALDO NECESITA LOS DOS TOKENS, y son cabeceras distintas a proposito: `X-Bunker-Token` lo
 # lee bunker_core/views.py contra BUNKER_BACKUP_TOKEN, y este middleware lee la suya. Compartir

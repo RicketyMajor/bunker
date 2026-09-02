@@ -91,6 +91,30 @@ class MusicDetailsScreen(Screen):
         self.app.pop_screen()
 
 
+def _fallo(pantalla, resp, que: str) -> None:
+    """Reports a non-happy status code from inside a worker.
+
+    THE SEVEN WORKERS BELOW USED TO HAVE NO `else`, and `except` only catches transport errors:
+    a 403 (a stale `BUNKER_API_TOKEN` — the middleware guards every `/api/` route since
+    2026-08-31), a 400, or a 404 on a row someone deleted meanwhile produced NO notification and
+    NO reload. The user pressed the key, confirmed the dialog, and the TUI showed nothing at all.
+    Found by `/code-review` 2026-09-02; the shape is `screens.py:process_backup`'s.
+
+    A MODULE-LEVEL FUNCTION AND NOT A METHOD, and the project's own gate is why: as a method it
+    tripped `test_tui_arranca.py:test_call_from_thread_solo_en_workers`, which requires every
+    METHOD calling `call_from_thread` to be a thread worker — because one that is not kills the
+    app on mount. This one is only ever called FROM a worker, which that check cannot see across
+    a call boundary. `cli/tui/tabs.py:cargar_serie` is the same shape for the same reason.
+    """
+    try:
+        cuerpo = resp.json()
+        detalle = cuerpo.get('error') or cuerpo.get('detail') or resp.text[:120]
+    except Exception:
+        detalle = resp.text[:120]
+    pantalla.app.call_from_thread(
+        pantalla.app.notify, f"{que}: {resp.status_code} · {detalle}", severity="error")
+
+
 class MusicMainScreen(ColeccionScreen):
     """Controlador central de la Disquera (Búnker Musical)."""
 
@@ -531,11 +555,21 @@ class MusicMainScreen(ColeccionScreen):
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
             if row_key:
-                sede.delete(f"{API_MUSIC_INBOX}{row_key}/", timeout=5.0)
-                self.app.notify("Escaneo descartado.")
-                self.load_data()
+                self.process_delete_inbox(row_key)
         except Exception:
             pass
+
+    @work(thread=True)
+    def process_delete_inbox(self, inbox_id: str) -> None:
+        try:
+            resp = sede.delete(f"{API_MUSIC_INBOX}{inbox_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(self.app.notify, "Escaneo descartado.", title="Éxito")
+                self.app.call_from_thread(self.load_data)
+            else:
+                _fallo(self, resp, "No se pudo descartar el escaneo")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     # --- ÁRBOL DE DIRECTORIOS ---
     def populate_tree(self, dirs: list) -> None:
@@ -579,10 +613,21 @@ class MusicMainScreen(ColeccionScreen):
 
         def do_create(payload: dict | None) -> None:
             if payload:
-                sede.post(API_MUSIC_DIRS, json=payload, timeout=5.0)
-                self.app.notify(f"Estante '{payload['name']}' construido.")
-                self.load_data()
+                self.process_create_dir(payload)
         self.app.push_screen(DirModal(), do_create)
+
+    @work(thread=True)
+    def process_create_dir(self, payload: dict) -> None:
+        try:
+            resp = sede.post(API_MUSIC_DIRS, json=payload, timeout=5.0)
+            if resp.status_code == 201:
+                self.app.call_from_thread(
+                    self.app.notify, f"Estante '{payload['name']}' construido.", title="Éxito")
+                self.app.call_from_thread(self.load_data)
+            else:
+                _fallo(self, resp, "No se pudo construir el estante")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     def action_move_album(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_disquera":
@@ -595,14 +640,24 @@ class MusicMainScreen(ColeccionScreen):
             def do_move(dest_val: str) -> None:
                 if dest_val != "cancel":
                     target = None if dest_val == "root" else int(dest_val)
-                    sede.patch(f"{API_MUSIC}{row_key}/",
-                                json={"directory": target}, timeout=5.0)
-                    self.app.notify("Disco movido.")
-                    self.load_data()
+                    self.process_move_album(row_key, target)
             self.app.push_screen(MoveToDirModal(
                 getattr(self, 'all_dirs', [])), do_move)
         except Exception:
             pass
+
+    @work(thread=True)
+    def process_move_album(self, album_id: str, dest_dir: int | None) -> None:
+        try:
+            resp = sede.patch(f"{API_MUSIC}{album_id}/",
+                              json={"directory": dest_dir}, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, "Disco movido.", title="Éxito")
+                self.app.call_from_thread(self.load_data)
+            else:
+                _fallo(self, resp, "No se pudo mover el disco")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     def action_delete_dir(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_disquera":
@@ -612,13 +667,25 @@ class MusicMainScreen(ColeccionScreen):
             if dir_id != "cancel" and dir_id is not None:
                 def do_confirm(confirm: bool) -> None:
                     if confirm:
-                        sede.delete(f"{API_MUSIC_DIRS}{dir_id}/", timeout=5.0)
-                        self.app.notify("Estante destruido.")
-                        self.load_data()
+                        self.process_delete_dir(dir_id)
                 self.app.push_screen(ConfirmModal(
                     "¿Seguro que deseas destruir este estante?"), do_confirm)
         self.app.push_screen(DeleteDirModal(
             getattr(self, 'all_dirs', [])), do_select)
+
+    @work(thread=True)
+    def process_delete_dir(self, dir_id: str) -> None:
+        try:
+            resp = sede.delete(f"{API_MUSIC_DIRS}{dir_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Estante destruido. Los discos volvieron a la raíz.",
+                    title="Éxito")
+                self.app.call_from_thread(self.load_data)
+            else:
+                _fallo(self, resp, "No se pudo destruir el estante")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     # --- PRÉSTAMOS ---
     def action_lend_album(self) -> None:
@@ -631,10 +698,9 @@ class MusicMainScreen(ColeccionScreen):
 
             def handle_lend(friend_name: str | None) -> None:
                 if friend_name:
-                    sede.patch(f"{API_MUSIC}{row_key}/", json={"is_loaned": True,
-                                "friend_name": friend_name}, timeout=5.0)
-                    self.app.notify("Álbum prestado.")
-                    self.load_data()
+                    self.update_album_status(
+                        row_key, {"is_loaned": True, "friend_name": friend_name},
+                        "Álbum prestado.")
             self.app.push_screen(LendModal(), handle_lend)
         except Exception:
             pass
@@ -646,12 +712,24 @@ class MusicMainScreen(ColeccionScreen):
         try:
             row_key = table.coordinate_to_cell_key(
                 table.cursor_coordinate).row_key.value
-            sede.patch(f"{API_MUSIC}{row_key}/",
-                        json={"is_loaned": False, "friend_name": ""}, timeout=5.0)
-            self.app.notify("Álbum recuperado.")
-            self.load_data()
+            self.update_album_status(
+                row_key, {"is_loaned": False, "friend_name": ""}, "Álbum recuperado.")
         except Exception:
             pass
+
+    @work(thread=True)
+    def update_album_status(self, album_id: str, payload: dict, aviso: str) -> None:
+        """Lending and returning are the same PATCH with a different payload. One worker for
+        both, the same shape as `update_movie_status` on the movie side."""
+        try:
+            resp = sede.patch(f"{API_MUSIC}{album_id}/", json=payload, timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(self.app.notify, aviso, title="Éxito")
+                self.app.call_from_thread(self.load_data)
+            else:
+                _fallo(self, resp, "No se pudo actualizar el disco")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     # --- TRACKER MUSICAL ---
     def action_finish_album(self) -> None:
@@ -713,28 +791,54 @@ class MusicMainScreen(ColeccionScreen):
         if self.query_one("#music_tabs", TabbedContent).active != "tab_wishlist":
             return
 
-        def do_watch(keyword: str | None) -> None:
-            if keyword:
-                sede.post(API_MUSIC_WATCHERS, json={
-                           "keyword": keyword, "is_active": True}, timeout=5.0)
-                self.app.notify(f"Vigilando: {keyword}")
+        def do_watch(datos: dict | None) -> None:
+            if datos:
+                self.process_add_watcher(datos)
         self.app.push_screen(WatcherModal(
             "Vigilar Artista/Sello", "Ej: Pink Floyd"), do_watch)
+
+    @work(thread=True)
+    def process_add_watcher(self, datos: dict) -> None:
+        try:
+            resp = sede.post(API_MUSIC_WATCHERS, json={**datos, "is_active": True}, timeout=5.0)
+            if resp.status_code == 201:
+                self.app.call_from_thread(
+                    self.app.notify, f"Vigilando: {datos['keyword']}", title="Radar")
+            else:
+                _fallo(self, resp, "No se pudo dar de alta el vigilado")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     def action_view_watchers(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_wishlist":
             return
+        self.app.notify("Consultando base de datos...", timeout=1)
+        self.fetch_and_show_watchers()
+
+    @work(thread=True)
+    def fetch_and_show_watchers(self) -> None:
         try:
             watchers = sede.get(API_MUSIC_WATCHERS, timeout=5.0).json()
 
             def do_delete_watcher(w_id: int | None) -> None:
                 if w_id:
-                    sede.delete(f"{API_MUSIC_WATCHERS}{w_id}/", timeout=5.0)
-                    self.app.notify("Objetivo eliminado del radar.")
-            self.app.push_screen(WatchersListModal(
-                watchers), do_delete_watcher)
-        except Exception:
-            pass
+                    self.process_delete_watcher(w_id)
+            self.app.call_from_thread(
+                self.app.push_screen, WatchersListModal(watchers), do_delete_watcher)
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
+
+    @work(thread=True)
+    def process_delete_watcher(self, watcher_id: int) -> None:
+        try:
+            resp = sede.delete(f"{API_MUSIC_WATCHERS}{watcher_id}/", timeout=5.0)
+            if resp.status_code == 204:
+                self.app.call_from_thread(
+                    self.app.notify, "Objetivo eliminado del radar.", title="Éxito")
+            else:
+                _fallo(self, resp, "No se pudo quitar el vigilado")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     def action_delete_wishlist(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_wishlist":
@@ -746,14 +850,25 @@ class MusicMainScreen(ColeccionScreen):
 
             def check_delete(confirm: bool | None) -> None:
                 if confirm:
-                    sede.patch(f"{API_MUSIC_WISHLIST}{row_key}/",
-                                json={"is_rejected": True}, timeout=5.0)
-                    self.app.notify("Lanzamiento oculto.")
-                    self.load_data()
+                    self.process_delete_wishlist(row_key)
             self.app.push_screen(ConfirmModal(
                 "¿Añadir a la lista negra del scraper?"), check_delete)
         except Exception:
             pass
+
+    @work(thread=True)
+    def process_delete_wishlist(self, item_id: str) -> None:
+        try:
+            resp = sede.patch(f"{API_MUSIC_WISHLIST}{item_id}/", json={"is_rejected": True},
+                              timeout=5.0)
+            if resp.status_code == 200:
+                self.app.call_from_thread(
+                    self.app.notify, "Lanzamiento oculto para siempre.", title="Éxito")
+                self.app.call_from_thread(self.load_data)
+            else:
+                _fallo(self, resp, "No se pudo ocultar el lanzamiento")
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")
 
     def action_clear_wishlist(self) -> None:
         if self.query_one("#music_tabs", TabbedContent).active != "tab_wishlist":
@@ -761,11 +876,20 @@ class MusicMainScreen(ColeccionScreen):
 
         def do_clear(confirm: bool | None) -> None:
             if confirm:
-                items = sede.get(API_MUSIC_WISHLIST, timeout=5.0).json()
-                for item in items:
-                    sede.patch(
-                        f"{API_MUSIC_WISHLIST}{item['id']}/", json={"is_rejected": True}, timeout=5.0)
-                self.app.notify(f"Limpieza completa.")
-                self.load_data()
+                self.process_clear_wishlist()
         self.app.push_screen(ConfirmModal(
             "¿Ocultar TODOS los lanzamientos del tablón?"), do_clear)
+
+    @work(thread=True)
+    def process_clear_wishlist(self) -> None:
+        try:
+            items = sede.get(API_MUSIC_WISHLIST, timeout=5.0).json()
+            for item in items:
+                sede.patch(f"{API_MUSIC_WISHLIST}{item['id']}/",
+                           json={"is_rejected": True}, timeout=5.0)
+            self.app.call_from_thread(
+                self.app.notify, f"{len(items)} lanzamientos enviados a lista negra.",
+                title="Limpieza")
+            self.app.call_from_thread(self.load_data)
+        except Exception as e:
+            self.app.call_from_thread(self.app.notify, f"Error: {e}", severity="error")

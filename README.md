@@ -192,27 +192,53 @@ ssh-keygen -t ed25519 -N "" -f ~/.ssh/library_cli_key
 
 </details>
 
-### Un usuario de `/admin/`, sólo si lo necesitas
+### `/admin/`, sólo mientras lo necesites
+
+**No va montado.** Sin `BUNKER_ADMIN=1` en `.env`, `/admin/` responde **404 desde cualquier
+sitio** — no existe la ruta. Para encenderlo:
 
 ```bash
-docker compose exec web python manage.py createsuperuser
+echo 'BUNKER_ADMIN=1' >> .env
+docker compose up -d web
+docker compose exec web python manage.py createsuperuser   # sólo la primera vez
 ```
 
-**No lo hace el instalador, y es deliberado.** `/admin/` no está bajo `/api/`, así que el guardia
-del token no lo cubre: en cuanto exista una cuenta, ese login queda alcanzable desde la Wi-Fi
-sobre HTTP plano. Sin cuentas, esas 41 rutas no llevan a ninguna parte. La TUI y la API no
-necesitan superusuario para nada.
+Y para apagarlo, quita la línea y vuelve a levantar `web`. **El valor tiene que ser exactamente
+`1`**: `true` o `si` dejan el admin cerrado en silencio, y por eso `bunker doctor` dice en cada
+corrida si está montado o no.
+
+**Por qué está apagado por defecto.** `/admin/` no está bajo `/api/`, así que el guardia del token
+no lo cubre, y el puerto es `0.0.0.0`: montado, sus 41 rutas quedan alcanzables desde la Wi-Fi
+sobre HTTP plano y lo único que las separa de la colección es ese login. No se cierra con una
+guardia por IP porque no la hay que funcione: con Docker publicando el puerto, el contenedor ve la
+puerta de enlace del bridge para lo que entra por el loopback del host y la IP real para lo que
+entra por la LAN, así que `REMOTE_ADDR` no distingue tu portátil de un vecino.
+
+Enciéndelo para editar la lista de vigilados —es su única interfaz gráfica— y apágalo al terminar.
+La TUI y la API no necesitan superusuario para nada.
 
 ## Uso
 
 ```bash
 source .venv/bin/activate
-bunker enter     # la TUI
-bunker doctor    # la compuerta: suites + API + Transmisor + Android + migraciones
+bunker enter                      # la TUI
+bunker doctor                     # la compuerta: suites + API + Transmisor + Android + migraciones
+bunker export musica -f md        # una colección a Markdown, por la salida estándar
+bunker export libros -f csv > libros.csv
 ```
 
 `bunker doctor` es la compuerta: si sale verde, la pila está sana. Córrelo antes de dar por buena
-cualquier sesión de trabajo.
+cualquier sesión de trabajo. **Exporta `BUNKER_API_TOKEN` antes**, o su ✓ de Android puede venir de
+una tarea que Gradle dio por *up-to-date* sin ejecutarla.
+
+`bunker export` acepta `libros`, `cine` y `musica`, en `csv` o `md`. Escribe a la salida estándar
+para que el destino lo elijas tú (`> fichero.csv`, `| less`). Las celdas que empiezan por `=`, `+`,
+`-` o `@` salen con una comilla delante **sólo en el CSV**: son fórmulas para Excel, y los títulos
+vienen de terceros (los oráculos de código de barras y las fichas raspadas).
+
+Dentro de la TUI, **`ctrl+g`** vuelve al centro de mando desde cualquier pantalla. **No funciona
+con un diálogo abierto** —Textual corta la cadena de atajos en el primer modal, y es deliberado:
+un diálogo tiene una respuesta pendiente—. Ciérralo con Escape primero.
 
 *(Alias sugerido en tu `.bashrc`)*:
 
@@ -234,5 +260,11 @@ día jamás, así que sólo disparaba las noches que el portátil velaba. **Prod
 el 22 de agosto y pasó siete noches en blanco sin que nada lo dijera.** Borrado, con
 `bunker_crontab` y `scripts/backup.sh`.
 
-Las cápsulas que dejó siguen en el volumen `bunker_backups_data` y se leen desde
-`GET /api/backups/`; `POST /api/restore/` las acepta.
+Las cápsulas que dejó están en `~/dev/respaldos/bunker-historico/` desde el 2026-09-02, cuando se
+retiró el volumen `bunker_backups_data`: nadie escribía en él **y nadie lo leía** —`/api/backups/`
+no tenía un solo llamador—. Para cargar una:
+
+```bash
+docker compose cp <capsula>.json web:/tmp/c.json
+docker compose exec -T web python manage.py loaddata --ignorenonexistent /tmp/c.json
+```

@@ -166,8 +166,8 @@ else
     [ -f "$CAPSULA" ] || { echo -e "${RED}  No existe: $CAPSULA${NC}"; exit 1; }
     # Se COPIA al contenedor en vez de asumir que `/app/<basename>` la contiene. El bind de
     # `.:/app` solo cubre el repositorio, asi que una capsula en ~/Descargas no estaria ahi — y
-    # `./backups/` es todavia peor: `docker-compose.yml` monta el volumen `bunker_backups`
-    # ENCIMA de `/app/backups`, asi que lo que hay en el host ahi dentro no se ve.
+    # (Until 2026-09-02 `./backups/` was worse still: the `bunker_backups` volume mounted ON TOP
+    # of `/app/backups`. That volume was retired; the `cp` is still the right move.)
     docker compose cp "$CAPSULA" web:/tmp/capsula.json
     # --ignorenonexistent NO es opcional: toda capsula anterior al 2026-08-27 nombra modelos de
     # `posada`/`chess_study`, que ya no viven aqui. 6 de 6 fallaban sin el.

@@ -23,11 +23,25 @@ logger = logging.getLogger(__name__)
 # BunkerState le dio su primer modelo: sin el, un restore devuelve la fecha de ultima entrada
 # vacia y el briefing vuelve a anunciar todos los logros como nuevos.
 BACKUP_APPS = ('catalog', 'movies', 'disquera', 'bunker_core')
-# Las capsulas automaticas historicas (volumen bunker_backups_data). NADIE ESCRIBE AQUI
-# desde el 2026-08-29: el cron de la imagen que las producia se borro por no dispararse
-# las noches con el portatil apagado — 7 seguidas la ultima vez. Se sigue leyendo para
-# que las capsulas ya escritas sean restaurables; el respaldo vivo es el timer del host.
-BACKUP_DIR = '/app/backups'
+# DELETED 2026-09-02: `BACKUP_DIR = '/app/backups'` and the `bunker_backups_data` volume.
+#
+# Nothing had written there since 2026-08-29 (the in-image cron was removed because it never fired
+# on nights the laptop was off) and — counted 2026-09-02 across the whole tree — nothing READ it
+# either: `list_backups` had not ONE consumer (there is no `API_BACKUPS` constant, in the TUI, the
+# PWA, the APK or the scripts), and the only live call to `/api/restore/` is
+# `cli/tui/screens.py:686`, which does NOT send `filename` and therefore always restored
+# `ROOT_BACKUP`. The branch that read the volume was unreachable from day one.
+#
+# The 8 historical capsules (2026-07-17 to 2026-08-29) were copied first to
+# `~/dev/respaldos/bunker-historico/`, md5-verified one by one. The volume still exists in Docker:
+# `docker volume rm bunker_backups_data` whenever Alonso wants, nothing mounts it any more.
+#
+# THE 8th ONE WAS ONLY VISIBLE ONCE THE MOUNT WENT: `./backups/` exists on the host, is gitignored
+# and root-owned, and the volume was mounted ON TOP of it. Unmounting revealed a capsule from
+# 2026-07-17 that no listing of the volume could ever have shown.
+#
+# The live backup is `scripts/respaldo_pilas.sh` under its user timer, writing to
+# `~/dev/respaldos/bunker/` — outside the container on purpose, so it survives a `down -v`.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Lo que escribe el backup manual de la TUI, y el destino por defecto de restore.
 ROOT_BACKUP = os.path.join(PROJECT_ROOT, 'bunker_backup.json')
@@ -184,34 +198,15 @@ def backup_database(request):
 
 
 @csrf_exempt
-def list_backups(request):
-    """Lista las cápsulas automáticas del volumen, de la más reciente a la más antigua."""
-    rejected = _reject_if_bad_token(request)
-    if rejected:
-        return rejected
-
-    try:
-        names = sorted(
-            (n for n in os.listdir(BACKUP_DIR) if n.endswith('.json')), reverse=True)
-        archivos = [{
-            "filename": n,
-            "size_bytes": os.path.getsize(os.path.join(BACKUP_DIR, n)),
-        } for n in names]
-    except FileNotFoundError:
-        archivos = []
-
-    return JsonResponse({
-        "automaticos": archivos,
-        "manual": os.path.basename(ROOT_BACKUP) if os.path.exists(ROOT_BACKUP) else None,
-    }, status=200)
-
-
-@csrf_exempt
 def restore_database(request):
-    """Restaura el Búnker desde una cápsula.
+    """Restores the Bunker from `bunker_backup.json`, in the repository root.
 
-    Sin `filename` usa el backup manual de la raíz (comportamiento histórico). Con `filename`
-    restaura una de las cápsulas automáticas del volumen, que hasta ahora eran inalcanzables.
+    It no longer accepts `filename`: the branch that read the `bunker_backups_data` volume had not
+    a single caller, and nothing fed that volume. To restore ANOTHER capsule, the live path — and
+    the one `install.sh` uses — is to copy it into the container and load it:
+
+        docker compose cp <capsula>.json web:/tmp/c.json
+        docker compose exec -T web python manage.py loaddata --ignorenonexistent /tmp/c.json
     """
     if request.method != 'POST':
         return JsonResponse({"error": "Método no permitido."}, status=405)
@@ -220,20 +215,24 @@ def restore_database(request):
     if rejected:
         return rejected
 
-    filename = request.POST.get('filename') or ''
-    if not filename and request.body:
+    # REFUSE `filename` LOUDLY instead of ignoring it. Nothing sends it today, but a caller that
+    # did would be asking for capsule X and would silently get the WHOLE DATABASE REPLACED from
+    # `bunker_backup.json` instead. That is the one failure mode this endpoint must not have:
+    # `loaddata` over live rows is not undoable from here.
+    pedido = (request.POST.get('filename') or '').strip()
+    if not pedido and request.body:
         try:
-            filename = json.loads(request.body).get('filename') or ''
+            pedido = (json.loads(request.body).get('filename') or '').strip()
         except (ValueError, AttributeError):
-            filename = ''
-    filename = filename.strip()
-    if filename:
-        # basename() corta cualquier "../": el nombre viene de fuera y solo puede
-        # referirse a un archivo dentro del directorio de backups.
-        safe_name = os.path.basename(filename)
-        backup_path = os.path.join(BACKUP_DIR, safe_name)
-    else:
-        backup_path = ROOT_BACKUP
+            pedido = ''
+    if pedido:
+        return JsonResponse(
+            {"error": "Esta ruta ya no acepta `filename`: restaura siempre desde "
+                      f"{os.path.basename(ROOT_BACKUP)}. Para otra cápsula, cárgala con "
+                      "`docker compose cp` + `manage.py loaddata --ignorenonexistent`."},
+            status=400)
+
+    backup_path = ROOT_BACKUP
 
     if not os.path.exists(backup_path):
         return JsonResponse({"error": f"No se encontró la cápsula '{os.path.basename(backup_path)}'."}, status=404)

@@ -94,6 +94,29 @@ def doctor():
     if not _reachable("/api/health/", f"{BASE_URL}/api/health/"):
         fallos += 1
 
+    # `/admin/` is not mounted unless `BUNKER_ADMIN=1` (see bunker_core/urls.py). The SERVER is
+    # asked, not this process's environment: the CLI runs on the host and Django inside the
+    # container, so reading `os.environ` here would answer for the wrong machine.
+    #
+    # YELLOW AND NOT RED: turning it on is legitimate — it is the only UI the watchers have — and
+    # making it red would push towards leaving `doctor` red, which is worse than the warning line.
+    # What this covers is forgetting: switching it on for a while and leaving it on.
+    # WRAPPED, like every other probe here. The first version called `sede.get` bare and
+    # `bunker doctor` DIED with a `ConnectError` traceback when the server was down — aborting
+    # the Transmisor checks, the migrations and all fifteen suites. `doctor` is precisely the
+    # command you run when the Bunker is not answering, so no probe in it may raise.
+    try:
+        _admin = sede.get(f"{BASE_URL}/admin/", timeout=5).status_code
+    except Exception:
+        _admin = None
+    if _admin is None:
+        console.print("  [yellow]○[/yellow] /admin/ sin comprobar: la API no responde")
+    elif _admin == 404:
+        console.print("  [green]✓[/green] /admin/ NO montado (BUNKER_ADMIN apagado)")
+    else:
+        console.print(f"  [yellow]○[/yellow] /admin/ MONTADO y alcanzable desde la LAN "
+                      f"(→ {_admin}): quita BUNKER_ADMIN=1 de .env al terminar")
+
     console.print("\n[bold cyan]Transmisor[/bold cyan]")
     if not _reachable("/movil/", f"{BASE_URL}/movil/"):
         fallos += 1
@@ -161,6 +184,15 @@ def doctor():
         if not _run(modulo, ["docker", "compose", "exec", "-T", "web",
                              "python", "-m", modulo]):
             fallos += 1
+    # On the HOST: reads the `cli/tui/` tree with `ast`, imports neither Django nor Textual.
+    if not _run("tests.test_hilo_ui",
+                [sys.executable, "-m", "tests.test_hilo_ui"]):
+        fallos += 1
+    # On the HOST too: drives `bunker export` with `sede.get` swapped out, touching neither the
+    # live collection nor Django.
+    if not _run("tests.test_export",
+                [sys.executable, "-m", "tests.test_export"]):
+        fallos += 1
     if not _run("tests.test_cli_imports",
                 [sys.executable, "-m", "tests.test_cli_imports"]):
         fallos += 1

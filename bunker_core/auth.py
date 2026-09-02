@@ -17,6 +17,7 @@ satisfacer con dos secretos distintos — la salida facil (igualarlos) convierte
 reparte a tres scrapers, la PWA y el APK en la llave de `loaddata`.
 """
 import os
+import re
 import secrets
 
 from django.http import JsonResponse
@@ -28,6 +29,20 @@ ABIERTAS = frozenset({'/api/health/'})
 
 CABECERA = 'X-Bunker-Api-Token'
 
+# `//api/books/library/` does not start with `/api/`, so without this the `startswith` below lets
+# it through whole. It is NOT exploitable today, and the reason is not this guard: measured
+# 2026-09-02 against the live server, the request line arrives raw — `GET //api/books/library/` is
+# what the access log shows — but `runserver`'s WSGI layer collapses the slashes and `PATH_INFO`
+# reaches Django already as `/api/...`. That is a property of the DEVELOPMENT server, not of the
+# Bunker: build a `WSGIRequest` by hand with `PATH_INFO='//api/x/'` and `request.path` DOES keep
+# both slashes. The day this runs behind gunicorn the hole is real, and it costs one substitution.
+#
+# ⚠ THE TEST `Client` CANNOT MEASURE THIS VECTOR, which is why handoff 049 recorded it backwards.
+# It parses `//api/x` as a protocol-relative URL: it takes `api` as the HOST and requests `/x`,
+# which 404s. That 404 was the harness, not the guard. It is checked in `tests/test_auth_api.py`
+# by calling the middleware with `PATH_INFO` set by hand.
+_BARRAS = re.compile(r'/{2,}')
+
 
 class TokenDeBunker:
     """Exige `X-Bunker-Api-Token` en todo `/api/`, salvo `ABIERTAS`."""
@@ -36,7 +51,10 @@ class TokenDeBunker:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith('/api/') and request.path not in ABIERTAS:
+        # Normalised to DECIDE, never to route: the resolver still sees `request.path` untouched,
+        # so this cannot make reachable a route that is not reachable today.
+        ruta = _BARRAS.sub('/', request.path)
+        if ruta.startswith('/api/') and ruta not in ABIERTAS:
             # Se lee por peticion y no al importar: asi apagar la variable es una inversion que
             # se puede correr sin reconstruir el contenedor, y el coste es un dict lookup.
             esperado = os.environ.get('BUNKER_API_TOKEN')

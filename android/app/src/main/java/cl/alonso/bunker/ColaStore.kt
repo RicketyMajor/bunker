@@ -1,6 +1,5 @@
 package cl.alonso.bunker
 
-import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -142,8 +141,9 @@ class ColaStore(private val context: Context) {
      * The KDoc here used to add "and outlives an uninstall", which was the whole reason this
      * exists. **The file does; the app's access to it does not** — measured on the phone
      * 2026-08-17. See `crearRespaldo`. What this buys today is a copy readable by the user and by
-     * other apps, and one that survives clearing the app's data. It does not buy a restore, and
-     * nothing calls `leerRespaldo()`.
+     * other apps, and one that survives clearing the app's data. It does not buy a restore:
+     * nothing reads this file, and the reader that existed (`leerRespaldo()`) was deleted on
+     * 2026-09-02 for having no callers.
      *
      * Returns false rather than throwing: a backup that cannot be written must never cost a
      * capture. The queue is the source of truth; this is a copy.
@@ -193,7 +193,8 @@ class ColaStore(private val context: Context) {
      * ponytail: a `Uri` that goes stale — the user deletes the file from Documents/ — silently
      * stops backing up for ever. Deliberately not retried: a retry that re-inserts turns a full
      * disk into the very unbounded growth this replaced. Upgrade the day something actually reads
-     * the backup, because today nothing calls `leerRespaldo()`.
+     * the backup; nothing reads it today (the `leerRespaldo()` that existed was deleted
+     * 2026-09-02).
      */
     private fun crearRespaldo(): Uri? {
         val nuevo = context.contentResolver.insert(
@@ -208,20 +209,16 @@ class ColaStore(private val context: Context) {
         return nuevo
     }
 
-    fun leerRespaldo(): String = try {
-        val resolver = context.contentResolver
-        val uri = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        resolver.query(uri, arrayOf(MediaStore.MediaColumns._ID),
-            "${MediaStore.MediaColumns.DISPLAY_NAME} = ?", arrayOf(NOMBRE_RESPALDO), null)
-            .use { c ->
-                if (c != null && c.moveToFirst()) {
-                    val f = ContentUris.withAppendedId(uri, c.getLong(0))
-                    resolver.openInputStream(f)!!.bufferedReader().readText()
-                } else ""
-            }
-    } catch (e: Exception) {
-        ""
-    }
+    // DELETED 2026-09-02: `leerRespaldo()`, 14 lines with not one caller since it was written.
+    // Its own code said so in two KDoc blocks ("nothing calls leerRespaldo()"), and a grep over
+    // the whole of `android/` confirms it: the only three hits were those two comments and the
+    // definition. It looked the backup up by DISPLAY_NAME, which is EXACTLY the probe
+    // `crearRespaldo` documents as broken after a reinstall — it would have returned "" and said
+    // nothing.
+    //
+    // The backup is still WRITTEN (`respaldar()`, which does have callers): what it buys is a
+    // user-readable copy in Documents/, not a restore. The day something needs to read it, the
+    // path is SAF (`ACTION_OPEN_DOCUMENT`), not a lookup by name.
 
     companion object {
         /** logcat tag for the backup's failure paths. `adb logcat -s ColaStore`. */

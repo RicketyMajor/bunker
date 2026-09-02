@@ -28,7 +28,6 @@ services:
     # la imagen cada vez que se edite una línea de código en Python.
     volumes:
       - .:/app
-      - bunker_backups:/app/backups
     # 0.0.0.0 desde el 2026-09-01, y SOLO porque `bunker_core/auth.py` exige el token en toda
     # ruta bajo /api/: 49 de 50 responden 403 sin cabecera, y `tests/test_auth_api.py` lo
     # recorre desde el resolvedor. Hasta el 2026-08-31 este binding era la UNICA autenticacion
@@ -125,5 +124,14 @@ services:
 volumes:
   postgres_data:
     name: library_manager_postgres_data
-  bunker_backups:
-    name: bunker_backups_data
+
+# The `bunker_backups` volume (`bunker_backups_data`) was retired on 2026-09-02. Nothing had
+# written to it since 2026-08-29 and — consumers counted across the whole tree — nothing read it:
+# `/api/backups/` had not one caller, and the only live call to `/api/restore/`
+# (`cli/tui/screens.py:686`) never sent `filename`. Its capsules (2026-07-17 to 2026-08-29) are in
+# `~/dev/respaldos/bunker-historico/`, copied and md5-verified one by one — 8 of them, because
+# unmounting the volume revealed a host `./backups/` it had been masking since July.
+# The volume STILL EXISTS in Docker until `docker volume rm bunker_backups_data` is run; this file
+# neither mounts nor declares it any more.
+# The LIVE backup is `scripts/respaldo_pilas.sh` under its user timer, writing outside the
+# container precisely so it survives a `docker compose down -v`.
