@@ -43,6 +43,10 @@ const enviados = [];
 // {keywords:[…]} y los otros [{keyword}]. Esa diferencia es justo lo que `cfg.claves` existe
 // para absorber, asi que el stub sirve la forma que le toque a cada uno.
 let formaWatchers = [{ keyword: 'objetivo' }];
+// Los reales, ANTES de apuñalarlos: la comprobacion del token los necesita de vuelta, porque
+// sustituir `axios.get` entero SALTA los interceptores, que es justo donde vive el token.
+const getReal = axios.get.bind(axios);
+const postReal = axios.post.bind(axios);
 axios.get = async () => ({ data: formaWatchers });
 axios.post = async (url, item) => { enviados.push({ url, item }); return { status: 201 }; };
 
@@ -198,7 +202,49 @@ module.exports = {
         console.log('OK: los tres radares comparten cuerpo, y cada uno manda lo suyo por el cable');
         console.log('OK: soloCatalogo excluye del ciclo de 12 h y despliega en --catalogo');
         console.log('OK: el agente y el interceptor compartidos estan puestos y son portantes');
+        // --- EL TOKEN DE LA API: al Bunker si, a los TERCEROS NO --------------------------
+        // Va por el adaptador y no sustituyendo `axios.get`, porque el token lo pone un
+        // INTERCEPTOR y sustituir el verbo entero se lo salta: la comprobacion saldria verde
+        // con el interceptor borrado. Nada sale de la maquina: el adaptador corta al final.
+        axios.get = getReal;
+        axios.post = postReal;
+        const vistas = [];
+        axios.defaults.adapter = async (config) => {
+            vistas.push({ url: config.url, tok: config.headers['X-Bunker-Api-Token'] });
+            return { data: '', status: 200, statusText: 'OK', headers: {}, config };
+        };
+        // VACUIDAD PRIMERO, y esta mordio: sin esta linea el test salia VERDE con radar.js
+        // intacto, porque `process.env.BUNKER_API_TOKEN` y la cabecera ausente eran las dos
+        // `undefined` y `undefined === undefined`. Un verde en las dos direcciones a la vez.
+        assert.ok(process.env.BUNKER_API_TOKEN,
+            'BUNKER_API_TOKEN no llega al contenedor: compose no se lo pasa a este servicio, '
+            + 'y sin el las comprobaciones de abajo se comparan undefined con undefined');
+
+        const TERCEROS = ['https://www.amazon.com/s?k=dune',
+                          'https://api.discogs.com/database/search',
+                          'https://www.buscalibre.cl/libros/x',
+                          'https://musicbrainz.org/ws/2/release'];
+        await axios.get(movie.apiWatchers);
+        await axios.post(books.apiWishlist, { title: 'x' });
+        for (const u of TERCEROS) await axios.get(u);
+
+        const alBunker = vistas.filter(v => !TERCEROS.includes(v.url));
+        assert.strictEqual(alBunker.length, 2, 'las peticiones al Bunker no llegaron al adaptador');
+        for (const v of alBunker) {
+            assert.strictEqual(v.tok, process.env.BUNKER_API_TOKEN,
+                `una peticion al Bunker salio sin el token de la API: ${v.url}`);
+        }
+        // LA OTRA DIRECCION, que es la que importa: `axios.defaults.headers.common` se lo habria
+        // mandado a los 13 hosts de terceros que barren las estrategias — Amazon, Discogs y los
+        // ocho catalogos editoriales — en cada barrido de 12 h. Medido plantandolo: 4 de 5.
+        const fugas = vistas.filter(v => TERCEROS.includes(v.url) && v.tok);
+        assert.strictEqual(fugas.length, 0,
+            `el token del Bunker viaja a terceros: ${fugas.map(f => f.url).join(', ')}`);
+        assert.strictEqual(axios.defaults.headers.common['X-Bunker-Api-Token'], undefined,
+            'el token volvio a axios.defaults.headers.common, que lo manda a TODOS los hosts');
+
         console.log('OK: ninguna estrategia inventa el año de lanzamiento');
+        console.log('OK: el token va al Bunker y NO a los cuatro hosts de terceros probados');
     } finally {
         fs.rmSync(dirSonda, { recursive: true, force: true });
     }

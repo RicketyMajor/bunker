@@ -19,6 +19,32 @@ axios.defaults.httpsAgent = new https.Agent({ autoSelectFamily: false });
 // asi que el fallo de arriba se imprimia como una linea en blanco —
 // `[!] Error en Vinyl Store para 'Daft Punk': ` — y costo una sesion entera diagnosticarlo.
 // `err.code` traia ETIMEDOUT desde el principio y nadie lo miraba.
+// EL TOKEN DE LA API — y NO en `axios.defaults.headers.common`, que es lo que el plan pedia.
+// `defaults.headers.common` viaja en TODA peticion de esta instancia, y esta instancia es la que
+// las 12 estrategias usan para barrer trece hosts de TERCEROS: Amazon, Discogs, iTunes,
+// MusicBrainz, JustWatch, blu-ray.com y los siete catalogos editoriales. Medido plantandolo: de
+// 5 peticiones, 4 salian a terceros con el token del Bunker dentro, y una de ellas por la via
+// real (`anagrama.js` con su propio require('axios')). Cada barrido de 12 h se lo habria
+// regalado a trece dominios.
+//
+// Un interceptor de peticion lo pone SOLO si el destino es el Bunker, y conserva la propiedad
+// que el plan buscaba: las 13 estrategias lo heredan sin editar ninguna, igual que el agente y
+// el interceptor de respuesta de aqui arriba.
+//
+// El origen sale de la config del propio radar (`cfg.apiWatchers`), no de una variable nueva:
+// las tres configs ya apuntan a `http://web:8000` y una segunda fuente de verdad deriva.
+let origenBunker = null;
+
+axios.interceptors.request.use((config) => {
+    if (!origenBunker || !config.url) return config;
+    let destino;
+    try { destino = new URL(config.url, origenBunker).origin; } catch { return config; }
+    if (destino === origenBunker) {
+        config.headers.set('X-Bunker-Api-Token', process.env.BUNKER_API_TOKEN || '');
+    }
+    return config;
+});
+
 axios.interceptors.response.use(null, (error) => {
     if (!error.message) {
         const subs = error.errors ? error.errors.map(e => e.code || e.message).join(', ') : '';
@@ -55,6 +81,10 @@ async function obtenerVigilados(cfg) {
 }
 
 async function barrer(cfg) {
+    // El origen del Bunker, para el interceptor del token. Si `barrer` no ha corrido, el
+    // interceptor no pone nada: prefiere un 403 ruidoso a mandarle el token a un tercero.
+    try { origenBunker = new URL(cfg.apiWatchers).origin; } catch { origenBunker = null; }
+
     console.log("==================================================");
     console.log(`[${cfg.banner}] Iniciando patrullaje global`);
     console.log("==================================================");

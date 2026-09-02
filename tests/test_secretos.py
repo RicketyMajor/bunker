@@ -115,8 +115,16 @@ def test_compose_no_exige_variables_opcionales():
     18 `docker compose exec` that cli/doctor.py:130 makes. A fresh clone could not boot the
     stack because an OPTIONAL scraper key was missing.
     """
+    # SIN LAS LINEAS DE COMENTARIO. La sonda leia el fichero entero como texto, asi que un
+    # comentario que CITA un marcador contaba como si lo usara: el 2026-08-31, un comentario que
+    # explicaba por que NO se usa `${DISCOGS_API_KEY:?falta en .env}` puso la suite en rojo y
+    # acuso a una linea de configuracion que no existe. Se descartan solo las lineas cuyo primer
+    # caracter no blanco es `#` — un comentario al final de una linea de configuracion se sigue
+    # mirando, que es el lado seguro: un `:?` de verdad JAMAS vive dentro de un comentario, asi
+    # que esto no puede perder ninguno.
     texto = _COMPOSE.read_text(encoding='utf-8')
-    exigidas = set(re.findall(r'\$\{([A-Za-z_]\w*):\?', texto))
+    configuracion = '\n'.join(l for l in texto.splitlines() if not l.lstrip().startswith('#'))
+    exigidas = set(re.findall(r'\$\{([A-Za-z_]\w*):\?', configuracion))
     check(bool(exigidas), f"la sonda VE marcadores ${{VAR:?}} en compose ({exigidas})")
     check(exigidas <= _REQUERIDAS_EN_COMPOSE,
           f"sólo las variables sin las que el stack no arranca usan ${{VAR:?}}; "

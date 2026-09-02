@@ -70,6 +70,10 @@ services:
     build: ./scraper
     restart: unless-stopped
     command: npm run start:books
+    # Solo el token de la API. Sin `:?`: `${DISCOGS_API_KEY:?falta en .env}` tumbo TODO
+    # `docker compose` el 2026-08-23, no solo el scraper. Vacio = 403 ruidoso tras la Tarea 5.
+    environment:
+      - BUNKER_API_TOKEN=${BUNKER_API_TOKEN:-}
     volumes:
       - ./scraper:/app
       - /app/node_modules
@@ -82,6 +86,8 @@ services:
     build: ./scraper
     restart: unless-stopped
     command: npm run start:movies
+    environment:
+      - BUNKER_API_TOKEN=${BUNKER_API_TOKEN:-}
     # Sin env_file a proposito. El comentario que habia aqui decia "Pasa la clave
     # TMDB_API_KEY" y era falso: ningun fichero del scraper lee TMDB_API_KEY (grep
     # process.env en scraper/ = 4 coincidencias, ninguna es esa). Lo unico que lee este
@@ -105,6 +111,7 @@ services:
     # entregaba POSTGRES_PASSWORD y DJANGO_SECRET_KEY sin que las necesite.
     environment:
       - DISCOGS_API_KEY=${DISCOGS_API_KEY:-}
+      - BUNKER_API_TOKEN=${BUNKER_API_TOKEN:-}
     volumes:
       - ./scraper:/app
       - /app/node_modules
