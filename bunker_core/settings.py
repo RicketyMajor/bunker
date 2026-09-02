@@ -136,6 +136,9 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    # Despues de CommonMiddleware (que resuelve APPEND_SLASH) y antes de todo lo que toca la
+    # base: una peticion sin token no debe llegar a abrir una sesion ni a consultar un usuario.
+    'bunker_core.auth.TokenDeBunker',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

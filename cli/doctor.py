@@ -44,6 +44,9 @@ CHECKS_IN_CONTAINER = (
     "tests.test_backup_apps",
     "tests.test_panel",
     "tests.test_secretos",
+    # Recorre el RESOLVEDOR de Django, no una lista a mano: 50 rutas concretas bajo /api/, y las
+    # 49 que no estan en la allowlist tienen que responder 403 sin la cabecera.
+    "tests.test_auth_api",
 )
 
 

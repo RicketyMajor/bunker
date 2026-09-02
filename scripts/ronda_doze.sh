@@ -76,8 +76,19 @@ if [ "$ENCHUFADO" != "0" ]; then
   exit 1
 fi
 
-curl -s -o /dev/null --max-time 10 localhost:8009/api/movil/assets/ || {
-  echo "ABORTA: Django no responde en localhost:8009"; exit 1; }
+# El quinto consumidor de /api/, y el unico que no es uno de los cuatro productores del plan de
+# instalacion portable. Desde que el middleware `bunker_core.auth.TokenDeBunker` lee la cabecera,
+# esto necesita el token — y el `curl -s -o /dev/null` de antes NO lo habria delatado: sin `-f`,
+# curl devuelve 0 con un 403, asi que la comprobacion se habria vuelto MUDA en vez de romperse.
+# Ahora se mira el codigo, que es lo que esta linea creia estar mirando desde el principio.
+RAIZ_BUNKER="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TOKEN_API="$(grep -m1 '^BUNKER_API_TOKEN=' "$RAIZ_BUNKER/.env" | cut -d= -f2-)"
+[ -n "$TOKEN_API" ] || { echo "ABORTA: BUNKER_API_TOKEN no esta en $RAIZ_BUNKER/.env"; exit 1; }
+CODIGO=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+  -H "X-Bunker-Api-Token: $TOKEN_API" localhost:8009/api/movil/assets/)
+[ "$CODIGO" = "200" ] || {
+  echo "ABORTA: /api/movil/assets/ respondio $CODIGO (403 = el token de .env no es el que corre"
+  echo "        en el contenedor; recuerda que 'docker compose restart' NO relee .env)"; exit 1; }
 
 # El job se descubre AQUI y no donde se usa. Estaba despues de sembrar, asi que un aborto por
 # "no encontre el job" — que es el normal cuando el proceso lleva rato muerto — dejaba la cola del

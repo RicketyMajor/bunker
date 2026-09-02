@@ -68,10 +68,20 @@ def test_el_panel_no_escribe_nada():
 
     cliente = Client()
     antes = censo()
-    for url in ('/panel/', '/api/stats/timeline/?module=books'):
-        respuesta = cliente.get(url)
+    # `/panel/` se pide SIN cabecera y `/api/…` CON ella, y esa asimetria es el diseño, no un
+    # descuido: `bunker_core.auth.TokenDeBunker` guarda `/api/`, y `/panel/` tiene que seguir
+    # cargandose sin token para que la pagina pueda PEDIRLO. En el navegador lo manda
+    # `estado.js:cabeceras()`; aqui se manda a mano lo mismo.
+    import os
+    cabecera = {'X-Bunker-Api-Token': os.environ['BUNKER_API_TOKEN']}
+    for url, cab in (('/panel/', {}), ('/api/stats/timeline/?module=books', cabecera)):
+        respuesta = cliente.get(url, headers=cab)
         check(respuesta.status_code == 200,
               f"{url} responde 200, dio {respuesta.status_code}")
+    # Y la otra direccion, que es la que este fichero no podia ver antes de que hubiera guardia:
+    # sin cabecera, esa misma ruta NO debe servir la serie.
+    check(cliente.get('/api/stats/timeline/?module=books').status_code == 403,
+          "sin cabecera, /api/stats/timeline/ responde 403")
     despues = censo()
     movidas = {k: (antes[k], despues[k]) for k in antes if antes[k] != despues[k]}
     check(not movidas, f"el panel escribió: {movidas}")
