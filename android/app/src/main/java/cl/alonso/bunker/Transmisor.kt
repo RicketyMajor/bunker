@@ -122,6 +122,9 @@ class Transmisor(
             val con = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
+                // El token de la API. Va aqui y no en `vaciar` porque este es el UNICO sitio por
+                // el que el APK postea: `SyncWorker` y el puente entran los dos por `vaciar`.
+                setRequestProperty("X-Bunker-Api-Token", BuildConfig.BUNKER_TOKEN)
                 doOutput = true
                 connectTimeout = 10_000
                 readTimeout = 15_000

@@ -229,4 +229,48 @@ class AssetStoreTest {
         assertFalse(s.refrescarEstado())
         assertTrue("piso el snapshot bueno", s.estadoCacheado().contains("\"libros\""))
     }
+
+    @Test
+    fun `la peticion de assets lleva el token de la API`() {
+        // La SEGUNDA salida HTTP del APK, y la que se queda sin cubrir si uno se cree la lista
+        // de ficheros del plan: situaba esto en AssetStore.kt:73,96,112, lineas que ya no
+        // existen — la real es `leerReal`. Sin el token, tras la Tarea 5 los assets responden
+        // 403 y el telefono se queda con la generacion empaquetada SIN DECIR POR QUE.
+        //
+        // Vacuidad primero, por lo mismo que en TransmisorTest: con BuildConfig.BUNKER_TOKEN
+        // vacio, `setRequestProperty` manda la cabecera vacia y comparar "" con "" sale verde.
+        assertTrue(
+            "BUNKER_API_TOKEN no estaba en el entorno del build: esta comprobacion no puede " +
+            "distinguir un token puesto de uno ausente.",
+            BuildConfig.BUNKER_TOKEN.isNotEmpty())
+
+        val cabeceras = mutableListOf<String>()
+        val server = ServerSocket(0)
+        thread {
+            runCatching {
+                server.accept().use { sock ->
+                    val entrada = sock.getInputStream()
+                    while (true) {
+                        val linea = StringBuilder()
+                        var b = entrada.read()
+                        while (b != -1 && b != '\n'.code) {
+                            if (b != '\r'.code) linea.append(b.toChar())
+                            b = entrada.read()
+                        }
+                        if (linea.isEmpty() || b == -1) break
+                        cabeceras.add(linea.toString())
+                    }
+                    sock.getOutputStream().apply {
+                        write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".toByteArray()); flush()
+                    }
+                }
+            }
+        }
+        server.use { AssetStore.leerReal("http://127.0.0.1:${it.localPort}/api/movil/assets/") }
+        val token = cabeceras
+            .firstOrNull { it.startsWith("X-Bunker-Api-Token:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()
+        assertEquals("la peticion de assets salio sin el token de la API",
+                     BuildConfig.BUNKER_TOKEN, token)
+    }
 }

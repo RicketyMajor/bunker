@@ -225,6 +225,10 @@ class AssetStore(
         fun leerReal(url: String): String {
             val con = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000
+                // La otra salida HTTP del APK, y la que el plan situaba en tres lineas que ya no
+                // existen. Sin esto, tras la Tarea 5 los assets responden 403 y el telefono se
+                // queda con la generacion empaquetada sin decir por que.
+                setRequestProperty("X-Bunker-Api-Token", BuildConfig.BUNKER_TOKEN)
                 // Redirects off, for the same reason postReal turns them off. A captive portal
                 // answering 200 with an HTML login page passes every check this class makes —
                 // the three files are non-empty — so that page gets written as app.js and served

@@ -213,6 +213,15 @@ def doctor():
     if not _run("tests/test_token_pwa.js", ["node", "tests/test_token_pwa.js"]):
         fallos += 1
 
+    # Node, on the HOST, and it EXECUTES `dist/main.js` in a vm against a DOM shim rather than
+    # reading the source. `main.js` is the entry point: no test imports it, so its one piece of
+    # logic — open the dialog when there is no token, and NEVER inside the APK — was pinned only
+    # by a regex over the file. This project has shipped a green suite over a blank screen three
+    # times; `37a9359` was a TUI that died on mount and stayed dead two days. It also proves the
+    # BUILD carried the wiring, which a source-level check cannot see.
+    if not _run("tests/test_dialogo_token.js", ["node", "tests/test_dialogo_token.js"]):
+        fallos += 1
+
     if fallos:
         console.print(f"\n[bold red]{fallos} problema(s).[/bold red]\n")
     else:

@@ -19,6 +19,13 @@ android {
         // place; a phone talking to the wrong host fails silently for days.
         buildConfigField("String", "BUNKER_URL",
             "\"https://alonso-inspiron-5570.tail834684.ts.net\"")
+        // El token de la API, cocido en el build igual que la URL. NO va en el repositorio: sale
+        // del entorno, y vacio si no esta — con lo que el APK habla sin credencial y el servidor
+        // le responde 403 en voz alta, en vez de llevar un token de relleno que si funcionaria.
+        // `cli/doctor.py` lo hereda de `.env` sin hacer nada: `_run` no toca el entorno.
+        // Esto es lo que hace que el APK NO sea distribuible: cada instalacion tiene el suyo.
+        buildConfigField("String", "BUNKER_TOKEN",
+            "\"${System.getenv("BUNKER_API_TOKEN") ?: ""}\"")
     }
 
     buildFeatures { buildConfig = true }

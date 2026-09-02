@@ -192,6 +192,8 @@ class TransmisorTest {
     // `IOException: Error writing to server` — a defect in this helper, not in `postReal`.
     // Measured 2026-08-18: the first draft of the check below failed with that exception whether
     // redirects were on or off, which is the signature of a check that proves nothing.
+    private val cabecerasVistas = mutableListOf<String>()
+
     private fun contestar(server: ServerSocket, respuesta: String) {
         server.accept().use { sock ->
             val entrada = sock.getInputStream()
@@ -209,6 +211,7 @@ class TransmisorTest {
                     b = entrada.read()
                 }
                 if (linea.isEmpty() || b == -1) break
+                cabecerasVistas.add(linea.toString())
                 if (linea.startsWith("Content-Length:", ignoreCase = true)) {
                     largo = linea.substring(15).trim().toString().toInt()
                 }
@@ -254,5 +257,42 @@ class TransmisorTest {
         // Reading a non-2xx body is the other half of what only a socket proves: `errorStream` is
         // null for a 3xx, and the `?: ""` is what stops that from throwing here.
         assertEquals("HTTP 302", s.items()[0].error)
+    }
+
+    @Test
+    fun `cada POST lleva el token de la API`() {
+        // Sobre un socket de verdad, porque lo que se prueba es lo que sale AL CABLE: una
+        // aserción sobre `BuildConfig` sólo probaría que la constante existe.
+        //
+        // VACUIDAD PRIMERO, y aquí muerde de verdad: si `BUNKER_API_TOKEN` no está en el entorno
+        // del build, `BuildConfig.BUNKER_TOKEN` es "" y `setRequestProperty` manda la cabecera
+        // VACÍA — con lo que comparar la cabecera con la constante sería comparar "" con "" y
+        // saldría verde con el token sin llegar nunca al teléfono. Es el mismo verde en las dos
+        // direcciones que la Tarea 2 se comió. `cli/doctor.py` hereda la variable de `.env`
+        // porque `_run` no toca el entorno; un `./gradlew` a mano sin ella falla aquí, y debe.
+        assertTrue(
+            "BUNKER_API_TOKEN no estaba en el entorno del build: BuildConfig.BUNKER_TOKEN esta " +
+            "vacio, y entonces esta comprobacion no puede distinguir un token puesto de uno " +
+            "ausente. Compila con BUNKER_API_TOKEN=... (cli/doctor.py lo hereda de .env).",
+            BuildConfig.BUNKER_TOKEN.isNotEmpty())
+
+        cabecerasVistas.clear()
+        val server = ServerSocket(0, 0, InetAddress.getLoopbackAddress())
+        thread { runCatching { contestar(server, "HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n") } }
+        val s = store()
+        s.encolar("paginas", """{"pages":12}""")
+        server.use { srv ->
+            Transmisor(s) { _, cuerpo ->
+                Transmisor.postReal("http://127.0.0.1:${srv.localPort}/api/books/tracker/pages/", cuerpo)
+            }.vaciar()
+        }
+        val token = cabecerasVistas
+            .firstOrNull { it.startsWith("X-Bunker-Api-Token:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()
+        assertEquals("el POST del Transmisor salio sin el token de la API",
+                     BuildConfig.BUNKER_TOKEN, token)
+        // Y no a costa del Content-Type, que es lo que hace que Django lea el cuerpo como JSON.
+        assertTrue("el POST perdio su Content-Type al ganar el token",
+                   cabecerasVistas.any { it.startsWith("Content-Type: application/json", true) })
     }
 }
