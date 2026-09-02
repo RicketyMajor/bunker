@@ -96,67 +96,119 @@ respaldo.
 
 ## Instalación
 
-Backend en Docker, cliente de terminal nativo.
+Un instalador por sistema. **Ninguno de los dos necesita `sudo`**, y los dos generan los secretos
+de *esa* instalación: nada del Búnker de otra persona sirve en el tuyo.
 
 ### Requisitos
 
-- Python 3.10+ · [Docker](https://docs.docker.com/get-docker/) y Docker Compose
-- Clave gratuita de [TMDB](https://developer.themoviedb.org/docs/getting-started)
+- **Docker y Docker Compose (V2)** — y nada más de la parte de Node: el bundle del móvil se
+  construye dentro de un contenedor, así que no hace falta instalar Node en la máquina.
+- **Python 3.10+**
+- Clave gratuita de [TMDB](https://developer.themoviedb.org/docs/getting-started) si quieres que
+  el radar de cine funcione. El resto arranca sin ella.
 
-### Paso 1 — Clonar y configurar el entorno
+### Instalar en Linux o macOS
 
 ```bash
 git clone https://github.com/RicketyMajor/bunker.git
 cd bunker
-cp .env.example .env
+./install.sh                      # o ./install.sh <capsula.json> para restaurar de paso
 ```
 
-**Edita `.env` antes de seguir. Tres variables no tienen valor por defecto y el arranque falla
-en voz alta sin ellas** — a propósito: las que había antes están publicadas en este repositorio.
+Seis pasos, en este orden: **requisitos → entorno → secretos → levantar → migrar → restaurar.**
 
-```ini
-DJANGO_SECRET_KEY=     # genérala, ver el comentario en .env.example
-POSTGRES_PASSWORD=     # la tuya; vacía hace fallar a docker compose, que es lo que se quiere
-TMDB_API_KEY=          # tu clave
-```
+> **Edita `.env` después de instalar si quieres los radares.** `.env.example` trae *marcadores de
+> posición* en las claves de API (`your_google_books_key_here` y compañía), y el código pregunta
+> `if GOOGLE_BOOKS_KEY:` — un marcador es **verdadero**, así que el oráculo no cae a su rama
+> simulada: llama a Google con una clave inválida. Déjalas **vacías** o pon las tuyas.
+El de *secretos* genera `POSTGRES_PASSWORD`, `DJANGO_SECRET_KEY`, `BUNKER_BACKUP_TOKEN` y
+`BUNKER_API_TOKEN` con `secrets`, y añade tu IP de LAN a `DJANGO_ALLOWED_HOSTS`.
 
-Genera la `SECRET_KEY` con:
+Si `.env` ya existe **no se toca**: bórralo si quieres secretos nuevos.
+
+Al terminar:
 
 ```bash
-python -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(50)))"
+.venv/bin/bunker enter            # la TUI
+.venv/bin/bunker doctor           # la compuerta; ella dice cuantas son
 ```
 
-### Paso 2 — Levantar el backend
+### Instalar en Windows
 
-```bash
-docker compose up -d --build
-docker ps
+```powershell
+git clone https://github.com/RicketyMajor/bunker.git
+cd bunker
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-### Paso 3 — Migraciones y usuario
+Los mismos seis pasos, en el mismo orden — y eso no es una promesa, lo comprueba
+`tests/test_instaladores.py`, que falla si los dos ficheros dejan de declarar los mismos pasos.
+
+> **Lo que esa comprobación NO prueba: que la versión de PowerShell funcione.** Se escribió en
+> una máquina Linux, donde no se puede ejecutar. La primera corrida real en Windows es su primera
+> prueba de verdad.
+
+### Llegar desde el móvil
+
+El camino por defecto es la **LAN**: el puerto `8009` escucha en `0.0.0.0` y toda ruta bajo
+`/api/` exige la cabecera `X-Bunker-Api-Token`.
+
+1. Averigua la IP que el instalador ya escribió en `DJANGO_ALLOWED_HOSTS` (la imprime al acabar).
+2. Abre `http://<esa-IP>:8009/movil/` en el navegador del teléfono, en la misma Wi-Fi.
+3. La primera vez sale un diálogo pidiendo el token. Pégale el valor de `BUNKER_API_TOKEN`:
+
+   ```bash
+   grep '^BUNKER_API_TOKEN=' .env
+   ```
+
+   Vive en el `localStorage` de ese navegador. Django **no** lo inyecta en la página — si lo
+   hiciera, cualquiera en la Wi-Fi que abriera `/movil/` se lo llevaría.
+
+`/movil/` es la captura; `/panel/` es la consulta. Las dos cargan sin token a propósito: la página
+tiene que poder pedírtelo.
+
+**El APK no es distribuible.** Lleva `BUNKER_URL` *y* su token cocidos en el build
+(`BuildConfig`), así que cada instalación necesita el suyo. Compílalo con:
 
 ```bash
-docker compose exec web python manage.py migrate
+cd android && BUNKER_API_TOKEN=$(grep '^BUNKER_API_TOKEN=' ../.env | cut -d= -f2) ./gradlew assembleDebug
+```
+
+Quien no compile, usa la PWA en `/movil/` desde el navegador: hace lo mismo salvo la cola nativa.
+
+<details>
+<summary>Opcional: llegar desde fuera de casa (Tailscale, o un QR efímero)</summary>
+
+`tailscale serve` proxea desde `http://127.0.0.1:8009` y sigue funcionando igual que antes.
+
+El escáner por QR efímero es lo único que aún necesita una llave SSH dedicada, y **el instalador
+ya no la crea**. Eso no es sólo documentación: `cli/main.py` y `cli/tui/modals.py` la usan sin
+comprobar que exista, así que en una instalación nueva el modal del escáner se queda colgado en
+«Negociando túnel cifrado» sin decir por qué. Genérala a mano antes de usarlo:
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/library_cli_key
+```
+
+</details>
+
+### Un usuario de `/admin/`, sólo si lo necesitas
+
+```bash
 docker compose exec web python manage.py createsuperuser
 ```
 
-### Paso 4 — Instalar la TUI
-
-Se instala en un `.venv` aislado para no romper las dependencias del sistema (PEP 668):
-
-```bash
-chmod +x install.sh
-./install.sh
-```
-
----
+**No lo hace el instalador, y es deliberado.** `/admin/` no está bajo `/api/`, así que el guardia
+del token no lo cubre: en cuanto exista una cuenta, ese login queda alcanzable desde la Wi-Fi
+sobre HTTP plano. Sin cuentas, esas 41 rutas no llevan a ninguna parte. La TUI y la API no
+necesitan superusuario para nada.
 
 ## Uso
 
 ```bash
 source .venv/bin/activate
 bunker enter     # la TUI
-bunker doctor    # 12 checks + API + Transmisor + Android + migraciones
+bunker doctor    # la compuerta: suites + API + Transmisor + Android + migraciones
 ```
 
 `bunker doctor` es la compuerta: si sale verde, la pila está sana. Córrelo antes de dar por buena

@@ -8,6 +8,7 @@ guardia es un MIDDLEWARE y no `DEFAULT_PERMISSION_CLASSES`, que solo alcanza a v
 Run: docker compose exec -T web python -m tests.test_auth_api
 """
 import os
+import pathlib
 
 import django
 
@@ -106,6 +107,54 @@ check(c.post('/api/backup/', headers=respaldo).status_code == 200,
 
 # Lo que NO es /api/ no lo toca: el telefono tiene que poder cargar el caparazon sin token.
 check(c.get('/movil/').status_code == 200, '/movil/ sigue abierta (el telefono pide el token ahi)')
+
+# EL TOKEN NO PUEDE APARECER EN NADA QUE SE SIRVA SIN TOKEN. `/movil/` y `/panel/` quedan abiertas
+# para que el telefono cargue el caparazon y le PIDA el token; si el token viaja dentro de esa
+# pagina, cualquiera en la LAN que la abra se lo lleva y el mecanismo entero no protege nada. Desde
+# que el puerto es 0.0.0.0 (2026-09-01) «cualquiera en la LAN» dejo de ser hipotetico.
+#
+# SON CINCO SUPERFICIES, NO UNA. El plan nombraba `/movil/`. Contadas contra el servidor vivo:
+# `/movil/`, `/panel/` y `/movil/asset/app.html` responden 200 sin cabecera (24269 bytes, el mismo
+# HTML las tres), y los dos bundles bajo `/static/`.
+#
+# LOS BUNDLES SE LEEN DEL DISCO A PROPOSITO: el Client de test NO sirve `/static/` — devuelve un
+# 404 de 179 bytes, y `token not in cuerpo` sobre ese 404 sale VERDE sin haber mirado el bundle.
+# El disco vale como sujeto porque es byte a byte lo que se sirve: md5 comparados contra
+# `curl` el 2026-09-01 (main.js a022821e…, selftest.js 680698c9…).
+RAIZ = pathlib.Path(__file__).resolve().parent.parent
+
+# SON OCHO RUTAS, NO TRES. `/movil/sw.js`, `/movil/manifest.json` y `/movil/selftest/` tambien
+# se sirven sin cabecera y tambien son plantillas renderizadas: un `{{ token }}` en el service
+# worker se distribuiria a cada telefono que lo cachee, y esta comprobacion no lo veria.
+for ruta in ['/movil/', '/panel/', '/movil/asset/app.html',
+             '/movil/sw.js', '/movil/manifest.json', '/movil/selftest/']:
+    r = c.get(ruta)
+    # VACUIDAD PRIMERO: un 404, un redirect o un cuerpo vacio tampoco contienen el token, y
+    # pasarian la comprobacion de abajo sin haber servido la pagina.
+    # El umbral es 200 bytes y no 1000: `manifest.json` es legitimamente pequeno. Lo que la
+    # guardia tiene que descartar es un 404 (179 bytes) o un cuerpo vacio, no una pagina corta.
+    check(r.status_code == 200 and len(r.content) > 200,
+          f'{ruta} se sirve de verdad sin cabecera ({r.status_code}, {len(r.content)} bytes)')
+    check(tok.encode() not in r.content, f'el token NO viaja en {ruta}')
+
+# Los BUNDLES y TAMBIEN LAS FUENTES SIN EMPAQUETAR. `runserver --insecure` sirve todo lo que
+# hay bajo `static/`, asi que `estado.js` y sus hermanos se descargan igual que el bundle: una
+# build que inlinease el token en la fuente pasaria una comprobacion que solo mire `dist/`.
+_ESTATICOS = ['dist/main.js', 'dist/selftest.js',
+              'app.js', 'estado.js', 'panel.js', 'queue.js', 'main.js', 'selftest.js']
+for nombre in _ESTATICOS:
+    ruta = RAIZ / 'bunker_core/static/movil' / nombre
+    # NO `read_bytes()` a pelo: `dist/` esta en .gitignore, asi que en un clon recien instalado
+    # —antes del paso del bundle— esto lanzaba FileNotFoundError y MATABA el modulo a media
+    # comprobacion. El traceback ocultaba que faltaba el bundle y las comprobaciones de despues
+    # no llegaban a correr. Un fichero que falta es un FALLO con nombre, no una excepcion.
+    if not ruta.exists():
+        check(False, f'{nombre} existe (falta el bundle: corre `npm run build`)')
+        continue
+    datos = ruta.read_bytes()
+    check(len(datos) > 200, f'{nombre} tiene contenido ({len(datos)} bytes)')
+    check(tok.encode() not in datos, f'el token NO viaja en {nombre}')
+
 
 print(f"\ntest_auth_api: {len(rutas)} rutas · {'0 fallos' if not fallos else f'{fallos} FALLOS'}")
 raise SystemExit(1 if fallos else 0)

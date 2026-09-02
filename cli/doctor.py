@@ -183,6 +183,14 @@ def doctor():
     if not _run("tests.test_bundle",
                 [sys.executable, "-m", "tests.test_bundle"]):
         fallos += 1
+    # On the HOST: it reads `install.sh` and `install.ps1` as text, so it needs neither a
+    # database nor a container. It is the mitigation of a decision, not decoration — two native
+    # installers were chosen over one in Python on 2026-08-31, and two files that do the same
+    # thing drift. Nothing here can prove the PowerShell one RUNS; this proves both declare the
+    # same steps in the same order.
+    if not _run("tests.test_instaladores",
+                [sys.executable, "-m", "tests.test_instaladores"]):
+        fallos += 1
     # Node, and INSIDE `scraper-movies`: the two radars share one body since the three cuts, and
     # the only thing the merge could silently change is which extra fields each one attaches
     # before POSTing. `MovieWishlist` has `priority`/`added_by`; `MusicWishlist` has neither.

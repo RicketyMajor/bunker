@@ -29,15 +29,17 @@ services:
     volumes:
       - .:/app
       - bunker_backups:/app/backups
-    # 127.0.0.1, no 0.0.0.0: `tailscale serve` proxea desde http://127.0.0.1:8009 (verificado
-    # con `tailscale serve status`), asi que el telefono sigue llegando y la LAN deja de
-    # llegar. Eso cierra de una linea el vector LAN de los 50 endpoints de escritura, los 23
-    # GET y /admin/, sin tocar ni un permission_class. Lo que queda expuesto es el tailnet,
-    # que son sus propios dispositivos.
-    # El APK postea a https://alonso-inspiron-5570.tail834684.ts.net (build.gradle.kts:20-21)
-    # y la TUI a BUNKER_API_URL=http://localhost:8009. Ninguno usa la IP de LAN.
+    # 0.0.0.0 desde el 2026-09-01, y SOLO porque `bunker_core/auth.py` exige el token en toda
+    # ruta bajo /api/: 49 de 50 responden 403 sin cabecera, y `tests/test_auth_api.py` lo
+    # recorre desde el resolvedor. Hasta el 2026-08-31 este binding era la UNICA autenticacion
+    # que existia — 18 ModelViewSet con AllowAny, DELETE incluido — y por eso estuvo cerrado.
+    # SI ALGUIEN QUITA EL MIDDLEWARE, ESTA LINEA VUELVE A 127.0.0.1 EN EL MISMO COMMIT.
+    # `/admin/` NO esta bajo /api/ y el middleware no lo cubre: lo protege su propio login de
+    # Django, que es lo mismo que lo protegia en el tailnet.
+    # Lo que gana: instalar el Bunker en otra maquina y llegar desde el movil por LAN, sin
+    # depender de Tailscale. `tailscale serve` sigue proxeando desde 127.0.0.1:8009 igual.
     ports:
-      - "127.0.0.1:8009:8000"
+      - "0.0.0.0:8009:8000"
     depends_on:
       db:
         condition: service_healthy
