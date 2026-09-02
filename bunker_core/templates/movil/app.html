@@ -123,6 +123,11 @@
   #panel [data-estado="roto"]       { color: var(--red); background: var(--bg); border-left: 3px solid var(--red); }
   #panel [data-estado="vacio"]      { color: var(--dim); background: var(--bg); font-style: italic; }
   #panel [data-estado="listo"]      { color: var(--fg); }
+  /* El sexto. `--yellow` sobre su PROPIO --bg (8.69:1; sobre --bg-alt seria 6.84, tambien
+     pasa, pero la regla de esta hoja es declarar el fondo y no heredarlo). No es --red: esto
+     no es un error del Bunker, es una credencial que falta y que el dueño puede teclear. */
+  #panel [data-estado="sin-token"]  { color: var(--yellow); background: var(--bg);
+                                      border-left: 3px solid var(--yellow); cursor: pointer; }
 
   /* Ships in the same block as the motion it disables, per the spec — never audited in later. */
   @media (prefers-reduced-motion: no-preference) {
@@ -346,6 +351,23 @@
           style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">CANCELAR</button>
 </dialog>
 
+
+<!-- El token NO lo inyecta Django: se teclea aqui y vive en localStorage. `/movil/` tiene que
+     cargarse sin token para que este dialogo pueda aparecer, asi que escribirlo en esta pagina
+     seria regalarselo a cualquiera en la LAN que la abra. `type="password"` para que no quede
+     en pantalla mientras se teclea. -->
+<dialog id="pedir-token" aria-labelledby="t-token">
+  <h2 id="t-token" style="margin:0 0 12px;font-size:19px">Token del Búnker</h2>
+  <p style="color:var(--dim);font-size:15px;margin:0 0 12px">
+    Este Búnker no te conoce. Pégale su token — lo genera su instalador, una vez.</p>
+  <label for="tk-valor" style="color:var(--dim);font-size:15px">Token</label>
+  <input id="tk-valor" type="password" autocomplete="off" inputmode="text" spellcheck="false"
+         style="width:100%;font:inherit;font-size:19px;padding:14px;margin-top:6px;
+                background:var(--bg-alt);color:var(--fg);border:1px solid var(--dim)">
+  <button class="act" id="tk-guardar" style="margin-top:12px">GUARDAR</button>
+  <button class="act" id="tk-cerrar"
+          style="background:none;border:1px solid var(--bg-alt);color:var(--fg);margin-top:8px">AHORA NO</button>
+</dialog>
 
 <div id="toast" role="status"></div>
 

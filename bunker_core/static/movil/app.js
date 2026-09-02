@@ -1,6 +1,7 @@
 // Screens, sheets and rendering. All capture goes through Cola.encolar; nothing here talks
 // to the network except cargarEstado() and the flush it triggers.
 import * as Cola from './queue.js';
+import { cabeceras } from './estado.js';
 // The lists every sheet reads. Cached in localStorage because /api/movil/estado/ is the one
 // thing the app cannot fetch with the desktop off, and without a copy a cold start offline
 // opens an app with no book, no habits and nothing to finish — which is every capture except
@@ -135,7 +136,7 @@ async function cargarEstado() {
     return;
   }
   try {
-    const r = await fetch('/api/movil/estado/', { cache: 'no-store' });
+    const r = await fetch('/api/movil/estado/', { cache: 'no-store', headers: cabeceras() });
     if (!r.ok) throw new Error(r.status);
     estado = await r.json();
     sincronizado = new Date().toISOString();

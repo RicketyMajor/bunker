@@ -206,6 +206,13 @@ def doctor():
     if not _run("tests/test_cifra.js", ["node", "tests/test_cifra.js"]):
         fallos += 1
 
+    # Node, on the HOST: estado.js, queue.js and app.js touch no DOM at load. Guards the token
+    # across the PWA's THREE HTTP exits — the plan named only `pedir()`, and the one it left out
+    # (`queue.js:vaciar`) is the one that WRITES the captures. Without it, Task 5's middleware
+    # would 403 every capture, re-queue it, and pin the chip at "N SIN TRANSMITIR" for ever.
+    if not _run("tests/test_token_pwa.js", ["node", "tests/test_token_pwa.js"]):
+        fallos += 1
+
     if fallos:
         console.print(f"\n[bold red]{fallos} problema(s).[/bold red]\n")
     else:

@@ -12,7 +12,47 @@ const ESTADOS = {
   ROTO: 'roto',
   VACIO: 'vacio',
   LISTO: 'listo',
+  // El sexto. Un 403 no es `roto` (el servidor está bien) ni `rechazado` (la petición está
+  // bien): es "este Búnker no te conoce". Separarlo es lo que permite que el diálogo del token
+  // aparezca solo, en vez de pedirle al dueño que interprete un "Rechazado (403)".
+  SIN_TOKEN: 'sin-token',
 };
+
+// EL TOKEN DE LA API. Se TECLEA y se guarda aquí; Django NO lo inyecta en la página.
+// `/movil/` tiene que seguir cargándose sin token para que el teléfono pueda pedirlo, así que
+// un token escrito en ese HTML —como `window.CSRF_TOKEN` en app.html:352— sería un token
+// regalado a cualquiera en la LAN que abra la página. El CSRF puede ir ahí porque es por
+// sesión y no abre nada; éste abre los 18 ViewSets.
+const LLAVE_TOKEN = 'bunker_token';
+
+export const token = () => {
+  try { return localStorage.getItem(LLAVE_TOKEN) || ''; } catch { return ''; }
+};
+
+// Devuelve si PERSISTIÓ. No se traga el fallo: en modo privado `setItem` lanza, el token no
+// sobrevive a la recarga, y recargar igualmente lo perdería sin decir nada — que es justo el
+// fallo silencioso que `test_panel.py` existe para prohibir.
+export const guardarToken = (t) => {
+  try { localStorage.setItem(LLAVE_TOKEN, t || ''); return true; } catch { return false; }
+};
+
+/**
+ * Las cabeceras de `extra` MÁS la del token.
+ *
+ * Existe porque la PWA tiene TRES salidas HTTP, no una: `pedir()` aquí, `cargarEstado()` en
+ * app.js y `vaciar()` en queue.js — y la tercera es la que ESCRIBE las capturas. Ponerlo sólo
+ * en `pedir()` dejaba las capturas en 403 tras la Tarea 5, devueltas a la cola, con el chip
+ * clavado en "N SIN TRANSMITIR" — el modo de fallo que queue.js:96 describe.
+ *
+ * Las del llamador ganan, como en `cli/sede.py`: el mismo módulo no debe poder pisar en
+ * silencio un valor que el llamador puso a propósito.
+ */
+export const cabeceras = (extra = {}) => ({ 'X-Bunker-Api-Token': token(), ...extra });
+
+// Un hueco, no un `document.querySelector`: este módulo se prueba sin DOM y `pedir()` no debe
+// saber que existe un diálogo. main.js lo rellena; si nadie lo rellena, no pasa nada.
+let alSinToken = () => {};
+export const cuandoFalteToken = (fn) => { alSinToken = fn || (() => {}); };
 
 function pintar(destino, estado, mensaje) {
   destino.dataset.estado = estado;
@@ -30,7 +70,7 @@ export async function pedir(url, destino, { vacio = (d) => !d || d.length === 0 
   pintar(destino, ESTADOS.CARGANDO, 'Cargando…');
   let respuesta;
   try {
-    respuesta = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    respuesta = await fetch(url, { headers: cabeceras({ 'Accept': 'application/json' }) });
   } catch (err) {
     // The ONLY catch in the panel that swallows nothing: it produces a state, not a console line.
     // `err` is named in the message because "sin enlace" with no detail is what made the m-key
@@ -40,6 +80,14 @@ export async function pedir(url, destino, { vacio = (d) => !d || d.length === 0 
   }
   if (respuesta.status >= 500) {
     pintar(destino, ESTADOS.ROTO, `El servidor falló (${respuesta.status}).`);
+    return null;
+  }
+  // El 403 se separa ANTES del caso general: si no, cae en `rechazado` y el dueño lee
+  // "Rechazado (403)" en vez de que le pidan el token. Sólo el 403 — un 400 sigue siendo
+  // `rechazado`, porque mapear todo no-ok aquí borraría el quinto estado.
+  if (respuesta.status === 403) {
+    pintar(destino, ESTADOS.SIN_TOKEN, 'Este Búnker no te conoce. Introduce su token.');
+    alSinToken();
     return null;
   }
   if (!respuesta.ok) {

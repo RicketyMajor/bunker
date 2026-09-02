@@ -16,6 +16,8 @@
 // The ponytail marker that used to sit here is discharged: its stated upgrade was "when captures
 // must sync without the app being opened", which is the whole reason the APK exists. The
 // localStorage store did not become better; it stopped being the only one.
+import { cabeceras } from './estado.js';
+
 const LLAVE = 'transmisor_cola';
 
 // Bound once, at load. The bridge is injected before the first script runs, so this is not a
@@ -104,7 +106,8 @@ async function vaciar(fetchImpl) {
       try {
         const resp = await enviar(RUTAS[item.verbo], {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN || '' },
+          headers: cabeceras({ 'Content-Type': 'application/json',
+                               'X-CSRFToken': window.CSRF_TOKEN || '' }),
           body: JSON.stringify(item.payload),
         });
         alcanzoElServidor = true;
